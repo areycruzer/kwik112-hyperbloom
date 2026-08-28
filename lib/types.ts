@@ -7,12 +7,12 @@
 // Call Types
 // ============================================================================
 
-export type CallStatus = 'active' | 'processing' | 'pending_approval' | 'dispatched' | 'resolved' | 'closed';
-export type CallTwilioStatus = 'initiated' | 'ringing' | 'in-progress' | 'completed' | 'failed' | 'no-answer';
-export type IncidentType = 'fire' | 'medical_emergency' | 'accident' | 'crime' | 'public_safety' | 'other';
+export type CallStatus = 'active' | 'processing' | 'pending' | 'pending_approval' | 'triage' | 'incoming' | 'awaiting_approval' | 'dispatched' | 'en-route' | 'on_scene' | 'mitigating' | 'resolved' | 'completed' | 'closed';
+export type CallTwilioStatus = 'initiated' | 'ringing' | 'in-progress' | 'completed' | 'ended' | 'failed' | 'no-answer';
+export type IncidentType = 'fire' | 'medical_emergency' | 'accident' | 'crime' | 'public_safety' | 'medical' | 'traffic' | 'utility' | 'other' | string;
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type CallerCondition = 'calm' | 'distressed' | 'injured' | 'panicked' | 'unclear';
-export type PriorityCode = 'Code 3' | 'Code 2' | 'Code 1';
+export type PriorityCode = 'P1' | 'P2' | 'P3' | 'P4' | 'Code 3' | 'Code 2' | 'Code 1';
 
 export interface Location {
   address?: string;
@@ -24,6 +24,8 @@ export interface Location {
   latitude?: number;
   longitude?: number;
   confidence?: number;
+  accuracy_radius?: number;
+  source?: 'gps' | 'network' | 'manual' | 'caller' | string;
 }
 
 // Removed: NetworkLocation interface - no longer using network-based location services
@@ -33,6 +35,7 @@ export interface EmergencyCall {
   caller_number: string;
   status: CallStatus;
   call_status: CallTwilioStatus;
+  language?: string;
   
   // Twilio data
   twilio_call_sid?: string;
@@ -47,6 +50,7 @@ export interface EmergencyCall {
   // Incident data
   incident_type?: IncidentType;
   incident_subtype?: string;
+  chief_complaint?: string;
   severity?: Severity;
   severity_score?: number;
   
@@ -59,6 +63,19 @@ export interface EmergencyCall {
   // AI triage results
   ai_summary?: string;
   ai_confidence?: number;
+  ai_triage?: {
+    severity?: Severity;
+    confidence?: number;
+    summary?: string;
+    incident_type?: IncidentType;
+    priority_code?: PriorityCode;
+    persons_involved?: number;
+    flags?: string[];
+    emotion_analysis?: {
+      top_emotions?: Array<{ emotion: string; intensity: number }>;
+      distress_level?: number;
+    };
+  };
   ai_recommendation?: AIRecommendation | string;
   persons_involved?: number;
   immediate_threats?: string[];

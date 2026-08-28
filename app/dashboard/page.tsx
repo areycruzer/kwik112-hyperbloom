@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { EmergencyCall } from '@/lib/types';
+import { CallStatus, EmergencyCall } from '@/lib/types';
 import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +38,8 @@ import {
   LayoutGrid,
   Map as MapIcon,
   Columns3,
+  HelpCircle,
+  Languages,
 } from 'lucide-react';
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentWorkflowOverlay from '@/components/IncidentWorkflowOverlay';
@@ -67,6 +69,7 @@ export default function DashboardPage() {
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [dataDashboardOpen, setDataDashboardOpen] = useState(false);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
+  const [language, setLanguage] = useState('English');
   const [currentTime, setCurrentTime] = useState({ local: '', utc: '' });
 
   // Update clock every second
@@ -118,7 +121,7 @@ export default function DashboardPage() {
     return () => window.removeEventListener('kwik-call-updated', handleCallUpdated);
   }, [loadCalls]);
 
-  const handleUpdateCallStatus = (callId: string, newStatus: string) => {
+  const handleUpdateCallStatus = (callId: string, newStatus: CallStatus) => {
     setCalls((prev) => {
       const updated = prev.map((c) => (c.id === callId ? { ...c, status: newStatus } : c));
       try {
@@ -136,6 +139,25 @@ export default function DashboardPage() {
   };
 
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
+  const selectedPriority = selectedCall?.priority_code || (selectedCall?.severity === 'critical' ? 'P1' : selectedCall?.severity === 'high' ? 'P2' : 'P3');
+  const selectedLocationConfidence = selectedCall?.caller_location?.confidence
+    ? `${Math.round(selectedCall.caller_location.confidence * 100)}%`
+    : selectedCall?.location_confidence
+    ? `${Math.round(selectedCall.location_confidence * 100)}%`
+    : 'Pending verification';
+  const selectedLanguage = selectedCall?.language || 'English / Hindi-ready';
+  const selectedMissingQuestions = selectedCall?.immediate_threats?.length
+    ? ['Confirm exact floor/landmark', 'Confirm victim count', 'Confirm responder access route']
+    : ['Confirm caller safety', 'Confirm precise location', 'Confirm immediate hazards'];
+  const selectedRecommendedUnits = selectedCall?.recommended_units?.length
+    ? selectedCall.recommended_units
+    : selectedCall?.incident_type === 'fire'
+    ? ['Fire engine', 'Rescue ladder', 'EMS ambulance']
+    : selectedCall?.incident_type === 'medical_emergency'
+    ? ['ALS ambulance', 'Nearest patrol assist']
+    : selectedCall?.incident_type === 'crime'
+    ? ['Police patrol', 'Supervisor escalation']
+    : ['Nearest available unit', 'Field supervisor'];
 
   const criticalCount = calls.filter((c) => c.severity === 'critical').length;
   const highCount = calls.filter((c) => c.severity === 'high').length;
@@ -173,10 +195,10 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <span className="font-black tracking-widest text-sm text-white font-mono">PULSE 112</span>
                 <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-mono text-[9px] font-bold border border-blue-500/30">
-                  DISPATCH CAD 2.0
+                  India 112 Control
                 </span>
               </div>
-              <p className="text-[10px] font-mono text-slate-400">STATION #04 • DELHI METRO HQ</p>
+              <p className="text-[10px] font-mono text-slate-400">Operator-first dispatch workflow - Delhi Command Desk</p>
             </div>
           </div>
 
@@ -237,6 +259,41 @@ export default function DashboardPage() {
 
         {/* Center/Right: Action Buttons & Clocks */}
         <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-xs font-mono text-slate-300">
+            <Languages className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-slate-400">Language</span>
+            <select
+              value={language}
+              onChange={(event) => setLanguage(event.target.value)}
+              className="bg-transparent text-white font-bold focus:outline-none"
+              aria-label="Language"
+            >
+              <option className="bg-slate-950" value="English">English</option>
+              <option className="bg-slate-950" value="Hindi">Hindi</option>
+              <option className="bg-slate-950" value="Regional">Regional</option>
+            </select>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden xl:flex bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
+            aria-label="Help"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Help</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden xl:flex bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
+            aria-label="Contact"
+          >
+            <Phone className="w-3.5 h-3.5 text-amber-400" />
+            <span>Contact</span>
+          </Button>
+
           <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-900 border border-white/5 font-mono text-xs text-slate-300">
             <span className="text-slate-400 font-bold text-white">{currentTime.local}</span>
             <span className="text-slate-600">|</span>
@@ -387,7 +444,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* RIGHT PANEL: Incident Telemetry & AI Action Command */}
+          {/* RIGHT PANEL: Incident Command Panel */}
           <div className="w-[340px] xl:w-[380px] shrink-0 h-full bg-slate-950/90 flex flex-col overflow-y-auto">
             {selectedCall ? (
               <div className="p-4 space-y-4">
@@ -395,7 +452,7 @@ export default function DashboardPage() {
                 <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-2">
                   <div className="flex items-center justify-between">
                     <Badge className="bg-red-500/20 text-red-300 font-mono text-[9px] uppercase border border-red-500/30">
-                      {selectedCall.severity} INCIDENT
+                      {selectedPriority} - {selectedCall.severity} incident
                     </Badge>
                     <span className="font-mono text-xs text-slate-400">ID: {selectedCall.id}</span>
                   </div>
@@ -404,7 +461,39 @@ export default function DashboardPage() {
                   </h3>
                   <div className="text-xs text-slate-300 font-mono flex items-center justify-between border-t border-white/5 pt-2">
                     <span>Caller: {selectedCall.caller_number}</span>
-                    <span className="text-emerald-400">Live Stream</span>
+                    <span className="text-emerald-400">Operator review</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold font-mono text-slate-200 text-xs">Incident Command Panel</span>
+                    <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px]">
+                      Human-in-loop
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
+                      <span className="block text-slate-500 font-mono uppercase">Verified location</span>
+                      <span className="block text-white font-semibold truncate">{selectedCall.caller_location?.address || 'Location pending'}</span>
+                      <span className="block text-sky-400 font-mono mt-1">Confidence: {selectedLocationConfidence}</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
+                      <span className="block text-slate-500 font-mono uppercase">Language</span>
+                      <span className="block text-white font-semibold">{selectedLanguage}</span>
+                      <span className="block text-sky-400 font-mono mt-1">Translation ready</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
+                      <span className="block text-slate-500 font-mono uppercase">Nearest unit ETA</span>
+                      <span className="block text-white font-semibold">3.4 min</span>
+                      <span className="block text-sky-400 font-mono mt-1">Cruiser 101 primary</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
+                      <span className="block text-slate-500 font-mono uppercase">Override reason</span>
+                      <span className="block text-white font-semibold">Required on manual change</span>
+                      <span className="block text-amber-300 font-mono mt-1">Audit enforced</span>
+                    </div>
                   </div>
                 </div>
 
@@ -447,6 +536,31 @@ export default function DashboardPage() {
                   <p className="text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-white/5">
                     {selectedCall.ai_triage?.summary || selectedCall.chief_complaint || 'Patient experiencing acute distress. High priority medical dispatch required.'}
                   </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-3 text-xs">
+                  <div>
+                    <span className="font-bold font-mono text-slate-300 block mb-2">Missing critical questions</span>
+                    <div className="space-y-1.5">
+                      {selectedMissingQuestions.map((question) => (
+                        <div key={question} className="flex items-center gap-2 rounded-lg bg-slate-950/60 border border-white/5 px-2.5 py-1.5 text-slate-300">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>{question}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="font-bold font-mono text-slate-300 block mb-2">Recommended units</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedRecommendedUnits.map((unit) => (
+                        <Badge key={unit} className="bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono text-[10px]">
+                          {unit}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Action Recommendations */}

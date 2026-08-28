@@ -50,8 +50,10 @@ interface ActionRecommendation {
   category: 'dispatch' | 'medical' | 'notification' | 'citizen';
   title: string;
   description: string;
+  rationale: string;
   confidence: number;
   approved: boolean;
+  approvalRequired: boolean;
   unitType?: string;
   priority: 'high' | 'standard' | 'optional';
 }
@@ -68,8 +70,10 @@ export default function IncidentWorkflowOverlay({
       category: 'dispatch',
       title: 'Deploy Priority 1 Fire & EMS Units',
       description: 'Dispatch Engine 204 & Medic 302 with high-priority siren authorization.',
+      rationale: 'Active fire report includes trapped occupants and heavy smoke, so fire rescue and EMS should move together.',
       confidence: 96,
       approved: true,
+      approvalRequired: true,
       unitType: 'Fire Engine + Paramedic',
       priority: 'high',
     },
@@ -78,8 +82,10 @@ export default function IncidentWorkflowOverlay({
       category: 'medical',
       title: 'Send AI-Guided CPR & First Aid Link via SMS',
       description: 'Transmit automated interactive bystander resuscitation web app with live audio pacing.',
+      rationale: 'Caller-side instructions reduce the gap before responders arrive and preserve operator attention.',
       confidence: 92,
       approved: true,
+      approvalRequired: true,
       priority: 'high',
     },
     {
@@ -87,8 +93,10 @@ export default function IncidentWorkflowOverlay({
       category: 'notification',
       title: 'Alert Regional Trauma Center (District General)',
       description: 'Pre-notify trauma resuscitation team of inbound victim with severe distress telemetry.',
+      rationale: 'Hospital pre-alert is useful when injury severity is high, but the operator should confirm patient count first.',
       confidence: 88,
       approved: false,
+      approvalRequired: true,
       priority: 'standard',
     },
     {
@@ -96,8 +104,10 @@ export default function IncidentWorkflowOverlay({
       category: 'dispatch',
       title: 'Request Traffic Incident Management Perimeter',
       description: 'Route Cruiser 101 to block oncoming intersection and clear emergency vehicle corridor.',
+      rationale: 'Traffic control can speed access and protect responders, but should match the verified incident location.',
       confidence: 84,
       approved: false,
+      approvalRequired: true,
       unitType: 'Police Patrol',
       priority: 'optional',
     },
@@ -114,8 +124,7 @@ export default function IncidentWorkflowOverlay({
     );
   };
 
-  const handleApproveAll = () => {
-    setRecommendations((prev) => prev.map((rec) => ({ ...rec, approved: true })));
+  const handleAuthorizeSelected = () => {
     setConfirmed(true);
     setActiveStage('en-route');
   };
@@ -252,17 +261,17 @@ export default function IncidentWorkflowOverlay({
                   AI Tactical Recommendations ({recommendations.filter((r) => r.approved).length}/{recommendations.length} Selected)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Select and verify actions to authorize automated dispatch & protocol triggers.
+                  Human approval required. Select actions, review AI rationale, then authorize the handoff.
                 </p>
               </div>
             </div>
 
             <Button
-              onClick={handleApproveAll}
+              onClick={handleAuthorizeSelected}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-mono text-xs px-4 py-2 rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all"
             >
               <CheckCircle2 className="w-4 h-4 mr-1.5" />
-              AUTHORIZE ALL ACTIONS
+              Authorize selected actions
             </Button>
           </div>
 
@@ -302,6 +311,14 @@ export default function IncidentWorkflowOverlay({
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed">{rec.description}</p>
+                      <p className="text-[11px] text-sky-300 leading-relaxed">
+                        AI rationale: {rec.rationale}
+                      </p>
+                      {rec.approvalRequired && (
+                        <p className="text-[10px] font-mono uppercase text-amber-300">
+                          Human approval required
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -345,9 +362,11 @@ export default function IncidentWorkflowOverlay({
             </div>
 
             <div className="flex gap-2">
+              <label className="sr-only" htmlFor="operator-override-note">Override note</label>
               <input
+                id="operator-override-note"
                 type="text"
-                placeholder="Add operator notes or manual override details..."
+                placeholder="Override note: add operator decision, correction, or manual dispatch reason..."
                 value={operatorNotes}
                 onChange={(e) => setOperatorNotes(e.target.value)}
                 className="flex-1 px-3 py-2 rounded-lg bg-slate-950/80 border border-white/10 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"

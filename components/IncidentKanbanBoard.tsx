@@ -7,7 +7,7 @@
 'use client';
 
 import { useState } from 'react';
-import { EmergencyCall } from '@/lib/types';
+import { CallStatus, EmergencyCall } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +33,7 @@ import { getTimeElapsed } from '@/lib/mock-data';
 interface IncidentKanbanBoardProps {
   calls: EmergencyCall[];
   onSelectCallAndNavigateToMap: (callId: string) => void;
-  onUpdateCallStatus: (callId: string, newStatus: string) => void;
+  onUpdateCallStatus: (callId: string, newStatus: CallStatus) => void;
   onOpenWorkflow: (call: EmergencyCall) => void;
 }
 
@@ -148,7 +148,7 @@ export default function IncidentKanbanBoard({
     e.preventDefault();
     const callId = e.dataTransfer.getData('text/plain') || draggedCallId;
     if (callId) {
-      let nextStatus = 'pending';
+      let nextStatus: CallStatus = 'pending';
       if (targetColumnId === 'approval') nextStatus = 'active';
       else if (targetColumnId === 'dispatched') nextStatus = 'dispatched';
       else if (targetColumnId === 'on_scene') nextStatus = 'on_scene';

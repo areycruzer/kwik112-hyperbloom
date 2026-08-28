@@ -235,7 +235,7 @@ export default function EmergencyMap({
 
     if (!showUnits) {
       unitMarkersRef.current.forEach((m) => m.remove());
-      unitMarkersRef.clear();
+      unitMarkersRef.current.clear();
       return;
     }
 
