@@ -280,8 +280,9 @@ export default function IncidentKanbanBoard({
                         {/* Hume Emotion & Geolocation Tags */}
                         <div className="space-y-1 pt-1 border-t border-white/5 text-[10px] font-mono">
                           <div className="flex items-center justify-between text-slate-400">
-                            <span className="truncate max-w-[140px]">
-                              📍 {call.caller_location?.address || 'GPS Fix Locked'}
+                            <span className="truncate max-w-[140px] flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              {call.caller_location?.address || 'GPS Fix Locked'}
                             </span>
                             <span className="text-emerald-400 font-bold">
                               {call.ai_triage?.confidence ? `${Math.round(call.ai_triage.confidence * 100)}%` : '96%'}

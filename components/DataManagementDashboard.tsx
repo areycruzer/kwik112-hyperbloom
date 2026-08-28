@@ -64,7 +64,7 @@ export default function DataManagementDashboard({
               <span className="text-xs font-mono uppercase tracking-widest text-slate-400">
                 PREDICTIVE ANALYTICS & FORECASTING ENGINE
               </span>
-              <span className="text-slate-600">•</span>
+              <span className="text-slate-600">|</span>
               <Badge className="bg-emerald-500/20 text-emerald-300 font-mono text-[10px]">
                 LSTM + GPT-4 HYBRID
               </Badge>
@@ -162,7 +162,7 @@ export default function DataManagementDashboard({
                   Real-time Call Volume vs LSTM Sequential Forecast
                 </h3>
                 <p className="text-xs text-slate-400 font-mono">
-                  Blue = Total Incoming Calls • Green = Offloaded Non-Emergency • Dotted = LSTM Forecast
+                  Blue = Total Incoming Calls | Green = Offloaded Non-Emergency | Dotted = LSTM Forecast
                 </p>
               </div>
 
@@ -244,13 +244,13 @@ export default function DataManagementDashboard({
               Operational Data Loop Architecture
             </h3>
             <p className="text-xs text-slate-400">
-              Continuous feedback cycle: Live Call Ingestion → Redis In-Memory State Stream → AI Triage Engine → Human Operator Confirmation → PostgreSQL Audit Archive.
+              Continuous feedback cycle: Live Call Ingestion -&gt; Redis In-Memory State Stream -&gt; AI Triage Engine -&gt; Human Operator Confirmation -&gt; PostgreSQL Audit Archive.
             </p>
 
             <div className="p-4 rounded-xl bg-slate-950/90 border border-white/10 font-mono text-xs text-slate-300 space-y-2">
-              <div className="text-emerald-400">✓ Redis Cluster: Active (0.8ms latency, 10k ops/sec)</div>
-              <div className="text-sky-400">✓ WebSocket EVI Stream: Connected (40Hz Hume Telemetry)</div>
-              <div className="text-slate-400">✓ PostgreSQL Archive: Syncing (24,810 historic incidents indexed)</div>
+              <div className="text-emerald-400">OK Redis Cluster: Active (0.8ms latency, 10k ops/sec)</div>
+              <div className="text-sky-400">OK WebSocket EVI Stream: Connected (40Hz Hume Telemetry)</div>
+              <div className="text-slate-400">OK PostgreSQL Archive: Syncing (24,810 historic incidents indexed)</div>
             </div>
           </div>
         )}

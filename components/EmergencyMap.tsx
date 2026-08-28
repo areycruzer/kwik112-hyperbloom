@@ -204,11 +204,11 @@ export default function EmergencyMap({
           </div>
           <p class="text-slate-300 text-[11px] leading-relaxed line-clamp-2">${call.chief_complaint || 'Emergency reported'}</p>
           <div class="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-            <span class="truncate">📍 ${location.address || 'Triangulated coordinate'}</span>
+            <span class="truncate">Location: ${location.address || 'Triangulated coordinate'}</span>
           </div>
           <div class="flex items-center justify-between pt-1 border-t border-white/10 text-[10px] font-mono text-slate-400">
-            <span>⏱ ${getTimeElapsed(call.created_at)}</span>
-            <span class="text-blue-400 font-semibold cursor-pointer">SELECT INCIDENT ›</span>
+            <span>Time: ${getTimeElapsed(call.created_at)}</span>
+            <span class="text-blue-400 font-semibold cursor-pointer">SELECT INCIDENT &gt;</span>
           </div>
         </div>
       `;
@@ -242,9 +242,9 @@ export default function EmergencyMap({
     tacticalUnits.forEach((unit) => {
       const getUnitIcon = () => {
         switch (unit.type) {
-          case 'police': return '🚓';
-          case 'fire': return '🚒';
-          case 'ems': return '🚑';
+          case 'police': return 'PD';
+          case 'fire': return 'FD';
+          case 'ems': return 'EMS';
         }
       };
 
@@ -283,7 +283,7 @@ export default function EmergencyMap({
             <span class="text-[9px] px-1 bg-sky-500/20 text-sky-300 rounded uppercase">${unit.status}</span>
           </div>
           <div class="text-[10px] text-slate-300">
-            Speed: <span class="font-mono text-emerald-400">${unit.speed}</span> • Unit Type: <span class="capitalize">${unit.type}</span>
+            Speed: <span class="font-mono text-emerald-400">${unit.speed}</span> | Unit Type: <span class="capitalize">${unit.type}</span>
           </div>
         </div>
       `);
@@ -348,7 +348,7 @@ export default function EmergencyMap({
             SITUATIONAL AWARENESS RADAR
           </span>
           <span className="text-[10px] text-slate-400 ml-1 font-mono">
-            ({calls.length} INCIDENTS • {tacticalUnits.length} UNITS)
+            ({calls.length} INCIDENTS | {tacticalUnits.length} UNITS)
           </span>
         </div>
 

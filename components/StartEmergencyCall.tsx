@@ -240,10 +240,11 @@ export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCall
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs px-3.5 py-2 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] flex items-center gap-2 transition-all hover:scale-105"
+        className="h-10 bg-red-600 hover:bg-red-500 text-white font-bold text-[12px] px-3 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] flex items-center gap-2 whitespace-nowrap transition-all hover:scale-[1.02]"
       >
         <Phone className="w-4 h-4 animate-bounce" />
-        <span>START 112 VOICE CALL</span>
+        <span className="hidden min-[1540px]:inline">Start 112 voice call</span>
+        <span className="min-[1540px]:hidden">112 Call</span>
       </Button>
 
       {isOpen && (
@@ -349,7 +350,7 @@ export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCall
                       }`}
                     ></span>
                     <span className="font-mono font-bold text-sm uppercase">
-                      {callActive ? `LIVE CALL • ${formatTimer(callDuration)}` : 'READY TO CONNECT'}
+                      {callActive ? `LIVE CALL | ${formatTimer(callDuration)}` : 'READY TO CONNECT'}
                     </span>
                   </div>
 
@@ -363,7 +364,7 @@ export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCall
                       }`}
                     >
                       <Globe className="w-3 h-3" />
-                      Live Translate (Hindi → En)
+                      Live Translate (Hindi to English)
                     </button>
                   </div>
                 </div>

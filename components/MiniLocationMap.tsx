@@ -6,6 +6,7 @@
 
 import { useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
+import { MapPin } from 'lucide-react';
 
 interface MiniLocationMapProps {
   latitude: number;
@@ -90,8 +91,9 @@ export default function MiniLocationMap({
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border border-white/10 bg-[#05080f]">
       <div ref={containerRef} className="w-full h-full" />
-      <div className="absolute bottom-2 left-2 right-2 z-[400] px-2 py-1 rounded bg-slate-950/90 backdrop-blur-md border border-white/10 text-[10px] font-mono text-slate-300 truncate">
-        📍 {address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`} (±{accuracyRadius}m)
+      <div className="absolute bottom-2 left-2 right-2 z-[400] px-2 py-1 rounded bg-slate-950/90 backdrop-blur-md border border-white/10 text-[10px] font-mono text-slate-300 flex items-center gap-1">
+        <MapPin className="w-3 h-3 shrink-0" />
+        <span className="truncate">{address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`} (+/-{accuracyRadius}m)</span>
       </div>
     </div>
   );

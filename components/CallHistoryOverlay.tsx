@@ -65,7 +65,7 @@ export default function CallHistoryOverlay({
               <span className="text-xs font-mono uppercase tracking-widest text-slate-400">
                 AUDIT ARCHIVE & CALL LOGS
               </span>
-              <span className="text-slate-600">•</span>
+              <span className="text-slate-600">|</span>
               <Badge className="bg-blue-500/20 text-blue-300 font-mono text-[10px]">
                 {filteredCalls.length} INCIDENTS LOGGED
               </Badge>
@@ -165,8 +165,11 @@ export default function CallHistoryOverlay({
                     <td className="p-3.5 text-slate-300 max-w-[280px] truncate">
                       {call.chief_complaint || 'Emergency reported'}
                     </td>
-                    <td className="p-3.5 text-slate-400 font-mono max-w-[200px] truncate">
-                      📍 {call.caller_location?.address || 'Triangulated GPS'}
+                    <td className="p-3.5 text-slate-400 font-mono max-w-[200px]">
+                      <span className="flex items-center gap-1 truncate">
+                        <MapPin className="w-3.5 h-3.5 shrink-0" />
+                        {call.caller_location?.address || 'Triangulated GPS'}
+                      </span>
                     </td>
                     <td className="p-3.5 font-mono text-slate-400">{call.caller_number}</td>
                     <td className="p-3.5">

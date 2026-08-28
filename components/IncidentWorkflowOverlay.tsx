@@ -142,13 +142,13 @@ export default function IncidentWorkflowOverlay({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono uppercase tracking-widest text-slate-400">MISSION DISPATCH COMMAND</span>
-              <span className="text-slate-600">•</span>
+              <span className="text-slate-600">|</span>
               <Badge className="bg-red-500/20 border border-red-500/40 text-red-300 font-mono text-[10px]">
                 INCIDENT #{call.id}
               </Badge>
             </div>
             <h2 className="text-lg font-bold text-white tracking-wide">
-              {call.incident_subtype || call.incident_type} — Action Verification & Handoff
+              {call.incident_subtype || call.incident_type} - Action Verification & Handoff
             </h2>
           </div>
         </div>
@@ -296,7 +296,7 @@ export default function IncidentWorkflowOverlay({
                           : 'border-white/20 bg-slate-950/60 text-transparent'
                       }`}
                     >
-                      ✓
+                      OK
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -384,7 +384,7 @@ export default function IncidentWorkflowOverlay({
             </div>
             {feedbackSent && (
               <p className="text-[10px] font-mono text-emerald-400 animate-in fade-in">
-                ✓ Feedback logged to active incident audit trail.
+                Feedback logged to active incident audit trail.
               </p>
             )}
           </div>
