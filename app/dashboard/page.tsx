@@ -1,88 +1,146 @@
 /**
- * Pulse112 Tactical Emergency Command Center
- * Inspired by Jasmine Wu's Berkeley AI Hackathon winning Dispatch AI platform.
- * Supports: Tactical Radar Map View, Multi-Stage Kanban Pipeline, and Split Mode.
+ * Dispatch AI — Tactical CAD console.
+ *
+ * Four-column shell: command bar across the top, then an icon module rail, the
+ * incident panel (queue + detail), and a full-bleed satellite map. "112 Pulse"
+ * badges only the emotion-aware voice-intake action in the command bar.
  */
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { CallStatus, EmergencyCall } from '@/lib/types';
-import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Phone,
-  Radio,
-  MapPin,
-  Clock,
-  Activity,
   AlertTriangle,
-  Flame,
-  Shield,
-  ShieldAlert,
-  Sparkles,
-  Layers,
-  Search,
-  CheckCircle2,
-  Navigation,
-  TrendingUp,
-  History,
-  Database,
-  Volume2,
-  Globe,
-  Sliders,
+  ArrowLeft,
   ChevronRight,
-  ExternalLink,
-  LayoutGrid,
-  Map as MapIcon,
-  Columns3,
-  HelpCircle,
-  Languages,
+  MapPin,
+  Radio,
+  Search,
 } from 'lucide-react';
+
+import { CallStatus, EmergencyCall } from '@/lib/types';
+import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
+import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
+import { deriveAlerts, readAcknowledged, type AlertInput } from '@/lib/alerts';
+import { cn } from '@/lib/utils';
+
+import { Symbol } from '@/components/ui/symbol';
+import { Chip, type ChipTone } from '@/components/ui/panel';
+import { DistressMeter } from '@/components/DistressMeter';
+import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
+
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentWorkflowOverlay from '@/components/IncidentWorkflowOverlay';
 import DataManagementDashboard from '@/components/DataManagementDashboard';
 import CallHistoryOverlay from '@/components/CallHistoryOverlay';
 import IncidentKanbanBoard from '@/components/IncidentKanbanBoard';
 
-// Dynamic import for Leaflet tactical map with SSR disabled
+// Leaflet needs the DOM; render the map client-side only.
 const EmergencyMap = dynamic(() => import('@/components/EmergencyMap'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full min-h-[450px] flex items-center justify-center bg-[#05080f]">
-      <div className="text-center font-mono">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-3"></div>
-        <p className="text-slate-400 text-xs">Initializing Situational Radar...</p>
-      </div>
+    <div className="flex h-full w-full items-center justify-center bg-deep">
+      <p className="label">Initializing situational map…</p>
     </div>
   ),
 });
 
+const CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
+
+type SeverityFilter = 'all' | 'critical' | 'high' | 'other';
+type PanelTab = 'emergencies' | 'alerts';
+type PanelView = 'queue' | 'detail';
+type MainView = 'map' | 'board';
+
+/** Severity → the design system's three-tone chip scale. */
+function severityTone(severity?: string): ChipTone {
+  if (severity === 'critical') return 'critical';
+  if (severity === 'high') return 'mild';
+  if (severity === 'medium' || severity === 'low') return 'safe';
+  return 'neutral';
+}
+
+/** The priority code a call carries, or one derived from its severity. */
+function priorityCode(call: EmergencyCall): string {
+  return (
+    call.priority_code ||
+    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
+  );
+}
+
+/**
+ * The measured distress reading, or null when prosody was never captured. Zero
+ * is a real measurement; absence is a coverage gap. `DistressMeter` renders the
+ * gap as an em-dash, which is exactly the contrast 112 Pulse is meant to show.
+ */
+function distressOf(call: EmergencyCall): number | null {
+  const level = call.ai_triage?.emotion_analysis?.distress_level;
+  return typeof level === 'number' ? level : null;
+}
+
+/**
+ * Where this call's grade came from. Only a call carrying a measured prosody
+ * reading is attributed to the live 112 Pulse voice station; a seeded or
+ * keyword-graded call is not dressed up as one.
+ */
+function triageSource(call: EmergencyCall): string {
+  if (call.ai_triage?.emotion_analysis?.distress_level != null) return '112 Pulse voice';
+  if (call.ai_confidence != null || call.ai_triage?.confidence != null) return 'AI triage';
+  return 'Manual intake';
+}
+
+/** A call still awaiting a model grade shows a REFINING chip. */
+function awaitingRefinement(call: EmergencyCall): boolean {
+  return call.ai_confidence == null && call.ai_triage?.confidence == null;
+}
+
+/** The recommended responding units drawn from real fields, never invented. */
+function recommendedUnits(call: EmergencyCall): string[] {
+  if (call.recommended_units?.length) return call.recommended_units;
+  const rec = call.ai_recommendation;
+  if (rec && typeof rec === 'object') {
+    const units = [rec.primary_unit, ...(rec.support_units ?? [])].filter(Boolean) as string[];
+    if (units.length) return units;
+  }
+  return [];
+}
+
+function confidencePercent(value?: number): string | null {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
+}
+
 export default function DashboardPage() {
   const [calls, setCalls] = useState<EmergencyCall[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'map' | 'kanban' | 'split'>('map');
-  const [filterPriority, setFilterPriority] = useState<'all' | 'critical' | 'high' | 'other'>('all');
+
+  const [activeModule, setActiveModule] = useState<ModuleId>('monitoring');
+  const [panelTab, setPanelTab] = useState<PanelTab>('emergencies');
+  const [panelView, setPanelView] = useState<PanelView>('queue');
+  const [mainView, setMainView] = useState<MainView>('map');
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [dataDashboardOpen, setDataDashboardOpen] = useState(false);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
-  const [language, setLanguage] = useState('English');
-  const [currentTime, setCurrentTime] = useState({ local: '', utc: '' });
 
-  // Update clock every second
+  const [clock, setClock] = useState('');
+
+  // Live clock, tabular so the digits do not jitter.
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime({
-        local: now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        utc: now.toISOString().substring(11, 19) + ' UTC',
-      });
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const tick = () =>
+      setClock(
+        new Date().toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }),
+      );
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -184,7 +242,7 @@ export default function DashboardPage() {
 
   const handleSelectCallAndNavigateToMap = useCallback((callId: string) => {
     setSelectedCallId(callId);
-    setViewMode('map');
+    setMainView('map');
   }, []);
 
   // Stable identities keep the Leaflet marker effect from re-running (and
@@ -196,552 +254,326 @@ export default function DashboardPage() {
     setWorkflowOpen(true);
   }, []);
 
+  const selectCall = useCallback((callId: string) => {
+    setSelectedCallId(callId);
+    setPanelView('detail');
+  }, []);
+
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
-  const selectedPriority = selectedCall?.priority_code || (selectedCall?.severity === 'critical' ? 'P1' : selectedCall?.severity === 'high' ? 'P2' : 'P3');
-  const selectedLocationConfidence = selectedCall?.caller_location?.confidence
-    ? `${Math.round(selectedCall.caller_location.confidence * 100)}%`
-    : selectedCall?.location_confidence
-    ? `${Math.round(selectedCall.location_confidence * 100)}%`
-    : 'Pending verification';
-  const selectedLanguage = selectedCall?.language || 'English / Hindi-ready';
-  const selectedMissingQuestions = selectedCall?.immediate_threats?.length
-    ? ['Confirm exact floor/landmark', 'Confirm victim count', 'Confirm responder access route']
-    : ['Confirm caller safety', 'Confirm precise location', 'Confirm immediate hazards'];
 
-  /**
-   * @description Emotion bars for the selected incident. Prefers the measured
-   *              Hume prosody ranking, then the single top emotion, and only
-   *              falls back to a neutral placeholder when the call carries no
-   *              emotion data at all.
-   */
-  const selectedEmotions: Array<{ label: string; val: number }> = (() => {
-    const ranked = selectedCall?.ai_triage?.emotion_analysis?.top_emotions;
-    if (ranked?.length) {
-      return ranked.slice(0, 4).map((e) => ({
-        label: e.emotion,
-        val: Math.round((e.intensity ?? 0) * 100),
-      }));
-    }
-    if (selectedCall?.top_emotion) {
-      return [
-        {
-          label: selectedCall.top_emotion,
-          val: Math.round((selectedCall.emotion_intensity ?? 0) * 100),
-        },
-      ];
-    }
-    return [];
-  })();
-
-  const emotionBarColor = (label: string) => {
-    const key = label.toLowerCase();
-    if (['panic', 'distress', 'terror', 'horror'].includes(key)) return '#ef4444';
-    if (['fear', 'pain', 'anxiety'].includes(key)) return '#f97316';
-    if (['anger', 'agitation', 'frustration'].includes(key)) return '#eab308';
-    if (['calmness', 'relief', 'calm'].includes(key)) return '#10b981';
-    return '#38bdf8';
-  };
-
-  const selectedDistress = selectedCall?.ai_triage?.emotion_analysis?.distress_level;
-  const selectedConfidence =
-    selectedCall?.ai_confidence ?? selectedCall?.ai_triage?.confidence ?? null;
-  const selectedSummary =
-    selectedCall?.ai_summary ||
-    selectedCall?.ai_triage?.summary ||
-    selectedCall?.chief_complaint ||
-    'No AI triage summary is available for this incident yet.';
-  const selectedRecommendedUnits = selectedCall?.recommended_units?.length
-    ? selectedCall.recommended_units
-    : selectedCall?.incident_type === 'fire'
-    ? ['Fire engine', 'Rescue ladder', 'EMS ambulance']
-    : selectedCall?.incident_type === 'medical_emergency'
-    ? ['ALS ambulance', 'Nearest patrol assist']
-    : selectedCall?.incident_type === 'crime'
-    ? ['Police patrol', 'Supervisor escalation']
-    : ['Nearest available unit', 'Field supervisor'];
-
+  // Stat-row figures, all computed from the live board.
+  const totalCount = calls.length;
   const criticalCount = calls.filter((c) => c.severity === 'critical').length;
   const highCount = calls.filter((c) => c.severity === 'high').length;
-  const activeCount = calls.filter((c) => c.status === 'active' || c.call_status === 'in-progress').length;
+  const resolvedCount = calls.filter((c) =>
+    CLOSED_STATUSES.has((c.status ?? '').toLowerCase()),
+  ).length;
 
-  const filteredCalls = calls.filter((c) => {
-    const matchesSearch =
-      (c.chief_complaint || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.incident_subtype || c.incident_type || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.caller_location?.address || '').toLowerCase().includes(searchQuery.toLowerCase());
+  // Operational alerts are derived from call state, then reduced by whatever the
+  // operator has already acknowledged. The count feeds the rail's Alerts badge.
+  const alerts = useMemo(() => {
+    const now = Date.now();
+    const input: AlertInput[] = calls.map((c) => ({
+      id: c.id,
+      severity: c.severity,
+      status: c.status,
+      created_at: c.created_at,
+      ai_confidence: c.ai_confidence,
+      caller_location: c.caller_location,
+    }));
+    const acknowledged = readAcknowledged();
+    return deriveAlerts(input, now).filter((a) => !acknowledged.has(a.key));
+    // `calls` identity only changes when the fingerprint changes, so this is stable
+    // between polls that see no real change.
+  }, [calls]);
 
-    const matchesPriority =
-      filterPriority === 'all'
+  const filteredCalls = calls.filter((call) => {
+    const haystack = [
+      call.ai_summary,
+      call.chief_complaint,
+      call.incident_subtype,
+      call.incident_type,
+      call.caller_location?.address,
+    ]
+      .join(' ')
+      .toLowerCase();
+    const matchesSearch = haystack.includes(searchQuery.toLowerCase());
+
+    const matchesSeverity =
+      severityFilter === 'all'
         ? true
-        : filterPriority === 'critical'
-        ? c.severity === 'critical'
-        : filterPriority === 'high'
-        ? c.severity === 'high'
-        : c.severity === 'medium' || c.severity === 'low';
+        : severityFilter === 'critical'
+        ? call.severity === 'critical'
+        : severityFilter === 'high'
+        ? call.severity === 'high'
+        : call.severity === 'medium' || call.severity === 'low';
 
-    return matchesSearch && matchesPriority;
+    return matchesSearch && matchesSeverity;
   });
 
+  const handleModuleSelect = useCallback((id: ModuleId) => {
+    setActiveModule(id);
+    if (id === 'monitoring') {
+      setPanelTab('emergencies');
+    } else if (id === 'alerts') {
+      setPanelTab('alerts');
+      setPanelView('queue');
+    } else if (id === 'history') {
+      setCallHistoryOpen(true);
+    } else if (id === 'forecast') {
+      setDataDashboardOpen(true);
+    }
+  }, []);
+
+  // When a transient overlay module closes, return the rail highlight to the
+  // module the panel is actually showing.
+  const restoreModule = useCallback(() => {
+    setActiveModule((prev) =>
+      prev === 'history' || prev === 'forecast'
+        ? panelTab === 'alerts'
+          ? 'alerts'
+          : 'monitoring'
+        : prev,
+    );
+  }, [panelTab]);
+
+  const selectTab = useCallback((tab: PanelTab) => {
+    setPanelTab(tab);
+    setPanelView('queue');
+    setActiveModule(tab === 'alerts' ? 'alerts' : 'monitoring');
+  }, []);
+
   return (
-    <div className="h-screen w-full bg-[#060a12] text-slate-100 flex flex-col overflow-hidden font-sans select-none">
-      {/* Top Tactical HUD Header */}
-      <header className="h-14 bg-slate-950/95 border-b border-white/10 px-6 flex items-center justify-between shadow-2xl z-30 shrink-0">
-        {/* Left: Branding & Station Info */}
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-ground text-ink">
+      {/* ---- COMMAND BAR ---------------------------------------------------- */}
+      <header className="flex h-14 shrink-0 select-none items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
-              <Radio className="w-4 h-4 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black tracking-widest text-sm text-white font-mono">PULSE 112</span>
-                <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-mono text-[9px] font-bold border border-blue-500/30">
-                  India 112 Control
-                </span>
-              </div>
-              <p className="text-[10px] font-mono text-slate-400">Operator-first dispatch workflow - Delhi Command Desk</p>
+            <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-rule-strong bg-panel text-accent">
+              <Radio className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="leading-tight">
+              <div className="text-md font-semibold tracking-wide text-ink">DISPATCH AI</div>
+              <div className="text-2xs text-ink-3">Delhi Command Desk · National 112 Control</div>
             </div>
           </div>
 
-          {/* View Mode Switcher (Kanban vs Map vs Split) */}
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-900 border border-white/10 text-xs font-mono ml-3">
-            <button
-              onClick={() => setViewMode('map')}
-              className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition-all ${
-                viewMode === 'map'
-                  ? 'bg-blue-600 text-white font-bold shadow-[0_0_10px_rgba(59,130,246,0.4)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <MapIcon className="w-3.5 h-3.5" />
-              <span>Tactical Radar</span>
-            </button>
-
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition-all ${
-                viewMode === 'kanban'
-                  ? 'bg-blue-600 text-white font-bold shadow-[0_0_10px_rgba(59,130,246,0.4)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Kanban Board</span>
-            </button>
-
-            <button
-              onClick={() => setViewMode('split')}
-              className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition-all ${
-                viewMode === 'split'
-                  ? 'bg-blue-600 text-white font-bold shadow-[0_0_10px_rgba(59,130,246,0.4)]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Columns3 className="w-3.5 h-3.5" />
-              <span>Split CAD</span>
-            </button>
-          </div>
-
-          <div className="hidden xl:flex items-center gap-5 text-xs font-mono ml-2 pl-3 border-l border-white/10">
-            <div>
-              <span className="text-slate-500 text-[10px] block">ACTIVE QUEUE</span>
-              <span className="text-emerald-400 font-bold">{activeCount} Incidents</span>
+          {/* Environment telemetry — real board figures only. */}
+          <div className="hidden items-center gap-4 border-l border-rule pl-4 lg:flex">
+            <div className="leading-tight">
+              <div className="label">Incidents</div>
+              <div className="tnum text-sm text-ink-2">{totalCount}</div>
             </div>
-            <div>
-              <span className="text-slate-500 text-[10px] block">CRITICAL P1</span>
-              <span className="text-red-400 font-bold">{criticalCount} Extreme</span>
+            <div className="leading-tight">
+              <div className="label">Critical</div>
+              <div className="tnum text-sm text-critical-bright">{criticalCount}</div>
             </div>
-            <div>
-              <span className="text-slate-500 text-[10px] block">AI OFFLOAD RATE</span>
-              <span className="text-sky-400 font-bold">80.4% Non-Emerg</span>
+            <div className="leading-tight">
+              <div className="label">Open alerts</div>
+              <div className="tnum text-sm text-mild">{alerts.length}</div>
             </div>
           </div>
         </div>
 
-        {/* Center/Right: Action Buttons & Clocks */}
         <div className="flex items-center gap-3">
-          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-xs font-mono text-slate-300">
-            <Languages className="w-3.5 h-3.5 text-sky-400" />
-            <span className="text-slate-400">Language</span>
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              className="bg-transparent text-white font-bold focus:outline-none"
-              aria-label="Language"
-            >
-              <option className="bg-slate-950" value="English">English</option>
-              <option className="bg-slate-950" value="Hindi">Hindi</option>
-              <option className="bg-slate-950" value="Regional">Regional</option>
-            </select>
+          {/* Main-area view switch keeps the map and the incident board reachable. */}
+          <div className="hidden items-center gap-1 rounded-[4px] border border-rule bg-panel p-0.5 md:flex">
+            {(['map', 'board'] as MainView[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setMainView(view)}
+                className={cn(
+                  'rounded-[4px] px-2.5 py-1 text-2xs font-medium uppercase tracking-wide transition-colors',
+                  mainView === view
+                    ? 'bg-panel-raised text-ink'
+                    : 'text-ink-3 hover:text-ink-2',
+                )}
+              >
+                {view === 'map' ? 'Map' : 'Board'}
+              </button>
+            ))}
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden xl:flex bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
-            aria-label="Help"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Help</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden xl:flex bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
-            aria-label="Contact"
-          >
-            <Phone className="w-3.5 h-3.5 text-amber-400" />
-            <span>Contact</span>
-          </Button>
-
-          <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-900 border border-white/5 font-mono text-xs text-slate-300">
-            <span className="text-slate-400 font-bold text-white">{currentTime.local}</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400 text-[11px]">{currentTime.utc}</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+          <div className="hidden items-center gap-2 rounded-[4px] border border-rule bg-panel px-2.5 py-1.5 sm:flex">
+            <span className="tnum text-sm text-ink">{clock}</span>
+            <span className="inline-flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-accent-bright">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-bright" aria-hidden />
+              Live
+            </span>
           </div>
 
-          <Button
-            onClick={() => setDataDashboardOpen(true)}
-            variant="outline"
-            size="sm"
-            className="bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden lg:inline">LSTM Forecast</span>
-          </Button>
-
-          <Button
-            onClick={() => setCallHistoryOpen(true)}
-            variant="outline"
-            size="sm"
-            className="bg-slate-900/80 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs gap-1.5"
-          >
-            <History className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden lg:inline">Audit Logs</span>
-          </Button>
-
-          {/* Live Voice Simulator */}
-          <StartEmergencyCall
-            onCallCreated={(id) => {
-              setSelectedCallId(id);
-              setViewMode('map');
-            }}
-          />
+          {/* 112 PULSE — the emotion-aware voice-intake action. */}
+          <div className="flex items-center gap-2">
+            <Chip tone="accent">112 Pulse</Chip>
+            <StartEmergencyCall
+              onCallCreated={(id) => {
+                setSelectedCallId(id);
+                setMainView('map');
+                setPanelView('detail');
+              }}
+            />
+          </div>
         </div>
       </header>
 
-      {/* VIEW MODE 1: KANBAN BOARD */}
-      {viewMode === 'kanban' && (
-        <IncidentKanbanBoard
-          calls={calls}
-          onSelectCallAndNavigateToMap={handleSelectCallAndNavigateToMap}
-          onUpdateCallStatus={handleUpdateCallStatus}
-          onOpenWorkflow={handleOpenWorkflow}
-        />
-      )}
+      {/* ---- BODY: RAIL · INCIDENT PANEL · MAIN ---------------------------- */}
+      <div className="flex min-h-0 flex-1">
+        <ModuleRail active={activeModule} onSelect={handleModuleSelect} alertCount={alerts.length} />
 
-      {/* VIEW MODE 2: TACTICAL RADAR MAP (3-PANEL FIXED ROW) */}
-      {viewMode === 'map' && (
-        <div className="flex-1 flex flex-row h-[calc(100vh-3.5rem)] w-full overflow-hidden">
-          {/* LEFT PANEL: Live Incident Queue */}
-          <div className="w-[320px] xl:w-[350px] shrink-0 h-full bg-slate-950/90 border-r border-white/10 flex flex-col overflow-hidden">
-            <div className="p-3 border-b border-white/10 space-y-2 bg-slate-900/40 shrink-0">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filter calls or complaints..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950/80 border border-white/10 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 font-mono"
-                />
+        {/* Incident panel */}
+        <aside className="flex w-[360px] shrink-0 flex-col border-r border-rule-strong bg-ground xl:w-[400px]">
+          {/* Tabs */}
+          <div className="flex shrink-0 border-b border-rule-strong">
+            {(['emergencies', 'alerts'] as PanelTab[]).map((tab) => {
+              const isActive = panelTab === tab;
+              const label = tab === 'emergencies' ? 'Emergencies' : 'Alerts';
+              const count = tab === 'emergencies' ? totalCount : alerts.length;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => selectTab(tab)}
+                  className={cn(
+                    'flex-1 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'border-accent text-ink'
+                      : 'border-transparent text-ink-3 hover:text-ink-2',
+                  )}
+                >
+                  {label}
+                  <span className="tnum ml-1.5 text-ink-4">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {panelView === 'detail' && selectedCall ? (
+            <IncidentDetail
+              call={selectedCall}
+              onBack={() => setPanelView('queue')}
+              onOpenTimeline={() => {
+                setSelectedCallId(selectedCall.id);
+                setWorkflowOpen(true);
+              }}
+            />
+          ) : panelTab === 'alerts' ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {alerts.length === 0 ? (
+                <p className="p-3 text-sm text-ink-3">
+                  No open alerts. Operational alerts are computed from the live board, so this
+                  clears as incidents are located, assigned, and resolved.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {alerts.map((alert) => (
+                    <li key={alert.key}>
+                      <button
+                        type="button"
+                        onClick={() => selectCall(alert.callId)}
+                        className="flex w-full items-start gap-2 rounded-[6px] border border-rule bg-panel p-2.5 text-left transition-colors hover:border-rule-strong"
+                      >
+                        <Chip tone={severityTone(alert.severity)}>{alert.severity}</Chip>
+                        <span className="text-sm text-ink-2">{alert.message}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Search + filter */}
+              <div className="shrink-0 space-y-2 border-b border-rule-strong p-2.5">
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+                    aria-hidden
+                  />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search summary, type, address…"
+                    aria-label="Search incidents"
+                    className="w-full rounded-[4px] border border-rule bg-panel py-1.5 pl-8 pr-2.5 text-sm text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
+                  aria-label="Filter by severity"
+                  className="w-full rounded-[4px] border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink-2 focus:border-accent focus:outline-none"
+                >
+                  <option value="all">All severities</option>
+                  <option value="critical">Critical (P1)</option>
+                  <option value="high">High (P2)</option>
+                  <option value="other">Medium / Low</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-4 gap-1 text-[11px] font-mono">
+              {/* Stat row */}
+              <div className="grid shrink-0 grid-cols-3 border-b border-rule-strong">
                 {[
-                  { id: 'all', label: 'All', count: calls.length },
-                  { id: 'critical', label: 'P1', count: criticalCount },
-                  { id: 'high', label: 'P2', count: highCount },
-                  { id: 'other', label: 'P3/P4', count: calls.length - criticalCount - highCount },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setFilterPriority(tab.id as any)}
-                    className={`py-1 rounded text-center transition-all ${
-                      filterPriority === tab.id
-                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold'
-                        : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-white/5'
-                    }`}
+                  { label: 'Total', value: totalCount, tone: 'text-ink' },
+                  { label: 'Critical', value: criticalCount, tone: 'text-critical-bright' },
+                  { label: 'Resolved', value: resolvedCount, tone: 'text-safe' },
+                ].map((cell) => (
+                  <div
+                    key={cell.label}
+                    className="flex flex-col gap-0.5 border-r border-rule px-3 py-2 last:border-r-0"
                   >
-                    {tab.label} ({tab.count})
-                  </button>
+                    <span className="label">{cell.label}</span>
+                    <span className={cn('tnum text-lg font-semibold', cell.tone)}>{cell.value}</span>
+                  </div>
                 ))}
               </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-2">
-              {filteredCalls.map((call) => {
-                const isSelected = selectedCall?.id === call.id;
-                const isP1 = call.severity === 'critical';
-                const isP2 = call.severity === 'high';
+              {/* Incident queue */}
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                {filteredCalls.length === 0 ? (
+                  <p className="p-3 text-sm text-ink-3">No incidents match the current filter.</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {filteredCalls.map((call) => (
+                      <li key={call.id}>
+                        <IncidentRow
+                          call={call}
+                          selected={selectedCall?.id === call.id}
+                          onSelect={() => selectCall(call.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </aside>
 
-                const pBadgeColor = isP1
-                  ? 'bg-red-500/15 border-red-500/40 text-red-300'
-                  : isP2
-                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-300'
-                  : 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300';
-
-                return (
-                  <div
-                    key={call.id}
-                    onClick={() => setSelectedCallId(call.id)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-slate-900 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
-                        : 'bg-slate-900/40 border-white/5 hover:border-white/20 hover:bg-slate-900/60'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${pBadgeColor}`}>
-                          {call.priority_code || (isP1 ? 'P1' : isP2 ? 'P2' : 'P3')}
-                        </span>
-                        <span className="font-bold text-xs text-white truncate max-w-[150px]">
-                          {call.incident_subtype || call.incident_type}
-                        </span>
-                      </div>
-
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {getTimeElapsed(call.created_at)}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed mb-2">
-                      {call.ai_summary || call.chief_complaint || 'Emergency call in progress'}
-                    </p>
-
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                      <span className="truncate max-w-[170px]">📍 {call.caller_location?.address || 'GPS Locked'}</span>
-                      <span className="text-blue-400 font-bold">VIEW ›</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* CENTER PANEL: Tactical Situational Map */}
-          <div className="flex-1 h-full relative border-r border-white/10 flex flex-col min-w-0 overflow-hidden bg-[#05080f]">
+        {/* Main area: full-bleed map, or the incident board. */}
+        <main className="relative min-w-0 flex-1 bg-deep">
+          {mainView === 'map' ? (
             <EmergencyMap
               calls={calls}
               selectedCallId={selectedCall?.id || null}
               onMarkerClick={handleMarkerClick}
               onDispatchUnit={handleDispatchUnit}
             />
-          </div>
+          ) : (
+            <div className="flex h-full flex-col overflow-hidden">
+              <IncidentKanbanBoard
+                calls={calls}
+                onSelectCallAndNavigateToMap={handleSelectCallAndNavigateToMap}
+                onUpdateCallStatus={handleUpdateCallStatus}
+                onOpenWorkflow={handleOpenWorkflow}
+              />
+            </div>
+          )}
+        </main>
+      </div>
 
-          {/* RIGHT PANEL: Incident Command Panel */}
-          <div className="w-[340px] xl:w-[380px] shrink-0 h-full bg-slate-950/90 flex flex-col overflow-y-auto">
-            {selectedCall ? (
-              <div className="p-4 space-y-4">
-                {/* Active Incident Header */}
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge className="bg-red-500/20 text-red-300 font-mono text-[9px] uppercase border border-red-500/30">
-                      {selectedPriority} - {selectedCall.severity} incident
-                    </Badge>
-                    <span className="font-mono text-xs text-slate-400">ID: {selectedCall.id}</span>
-                  </div>
-                  <h3 className="font-bold text-white text-sm">
-                    {selectedCall.incident_subtype || selectedCall.incident_type}
-                  </h3>
-                  <div className="text-xs text-slate-300 font-mono flex items-center justify-between border-t border-white/5 pt-2">
-                    <span>Caller: {selectedCall.caller_number}</span>
-                    <span className="text-emerald-400">Operator review</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold font-mono text-slate-200 text-xs">Incident Command Panel</span>
-                    <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px]">
-                      Human-in-loop
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
-                      <span className="block text-slate-500 font-mono uppercase">Verified location</span>
-                      <span className="block text-white font-semibold truncate">{selectedCall.caller_location?.address || 'Location pending'}</span>
-                      <span className="block text-sky-400 font-mono mt-1">Confidence: {selectedLocationConfidence}</span>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
-                      <span className="block text-slate-500 font-mono uppercase">Language</span>
-                      <span className="block text-white font-semibold">{selectedLanguage}</span>
-                      <span className="block text-sky-400 font-mono mt-1">Translation ready</span>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
-                      <span className="block text-slate-500 font-mono uppercase">Nearest unit ETA</span>
-                      <span className="block text-white font-semibold">3.4 min</span>
-                      <span className="block text-sky-400 font-mono mt-1">Cruiser 101 primary</span>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/70 border border-white/5 p-2">
-                      <span className="block text-slate-500 font-mono uppercase">Override reason</span>
-                      <span className="block text-white font-semibold">Required on manual change</span>
-                      <span className="block text-amber-300 font-mono mt-1">Audit enforced</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hume Emotion Telemetry */}
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                      Hume Emotion Telemetry
-                    </span>
-                    {selectedEmotions.length > 0 && selectedDistress !== undefined ? (
-                      <span className="text-emerald-400 text-[10px]">
-                        distress {Math.round(selectedDistress)}%
-                      </span>
-                    ) : (
-                      <span className="text-slate-500 text-[10px]">no measurement</span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    {selectedEmotions.length === 0 ? (
-                      <p className="text-[10px] font-mono text-slate-500 py-2">
-                        This incident carries no prosody measurement. Emotion telemetry appears for
-                        calls captured through the live 112 voice station.
-                      </p>
-                    ) : (
-                      selectedEmotions.map((emo) => (
-                        <div key={emo.label} className="space-y-1">
-                          <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                            <span className="capitalize">{emo.label}</span>
-                            <span className="text-white font-bold">{emo.val}%</span>
-                          </div>
-                          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-300"
-                              style={{ width: `${emo.val}%`, backgroundColor: emotionBarColor(emo.label) }}
-                            ></div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* AI Triage */}
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold font-mono text-slate-300">AI Triage Assessment</span>
-                    {selectedConfidence !== null && (
-                      <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[9px]">
-                        {Math.round(selectedConfidence * 100)}% confidence
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-white/5">
-                    {selectedSummary}
-                  </p>
-                  {selectedCall.immediate_threats && selectedCall.immediate_threats.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {selectedCall.immediate_threats.map((threat) => (
-                        <Badge
-                          key={threat}
-                          className="bg-red-500/15 text-red-300 border border-red-500/30 font-mono text-[9px]"
-                        >
-                          {threat}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-3 text-xs">
-                  <div>
-                    <span className="font-bold font-mono text-slate-300 block mb-2">Missing critical questions</span>
-                    <div className="space-y-1.5">
-                      {selectedMissingQuestions.map((question) => (
-                        <div key={question} className="flex items-center gap-2 rounded-lg bg-slate-950/60 border border-white/5 px-2.5 py-1.5 text-slate-300">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>{question}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="font-bold font-mono text-slate-300 block mb-2">Recommended units</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedRecommendedUnits.map((unit) => (
-                        <Badge key={unit} className="bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono text-[10px]">
-                          {unit}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Recommendations */}
-                <div className="p-3.5 rounded-xl bg-gradient-to-b from-blue-950/40 to-slate-900/90 border border-blue-500/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs font-mono text-sky-400 flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5" />
-                      AI Action Recommendations
-                    </span>
-                    <Badge className="bg-sky-500/20 text-sky-300 text-[9px]">4 ACTIONS</Badge>
-                  </div>
-
-                  <Button
-                    onClick={() => setWorkflowOpen(true)}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold text-xs py-2.5 rounded-lg shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all flex items-center justify-center gap-2"
-                  >
-                    <Navigation className="w-4 h-4" />
-                    <span>REVIEW & DISPATCH UNITS</span>
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center p-6 text-center text-slate-500 font-mono text-xs">
-                Select an incident to view details...
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* VIEW MODE 3: SPLIT CAD (KANBAN ON LEFT, MAP ON RIGHT) */}
-      {viewMode === 'split' && (
-        <div className="flex-1 flex flex-row h-[calc(100vh-3.5rem)] w-full overflow-hidden">
-          {/* Half Kanban */}
-          <div className="w-1/2 h-full border-r border-white/10 flex flex-col overflow-hidden">
-            <IncidentKanbanBoard
-              calls={calls}
-              onSelectCallAndNavigateToMap={handleSelectCallAndNavigateToMap}
-              onUpdateCallStatus={handleUpdateCallStatus}
-              onOpenWorkflow={handleOpenWorkflow}
-            />
-          </div>
-
-          {/* Half Map */}
-          <div className="w-1/2 h-full relative flex flex-col overflow-hidden bg-[#05080f]">
-            <EmergencyMap
-              calls={calls}
-              selectedCallId={selectedCall?.id || null}
-              onMarkerClick={handleMarkerClick}
-              onDispatchUnit={handleDispatchUnit}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Incident Workflow Overlay */}
+      {/* ---- OVERLAYS ------------------------------------------------------ */}
       <IncidentWorkflowOverlay
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
@@ -749,19 +581,244 @@ export default function DashboardPage() {
         calls={calls}
       />
 
-      {/* Predictive Analytics & Data Management Modal */}
       <DataManagementDashboard
         open={dataDashboardOpen}
-        onClose={() => setDataDashboardOpen(false)}
+        onClose={() => {
+          setDataDashboardOpen(false);
+          restoreModule();
+        }}
       />
 
-      {/* Historical Calls & Audit Log Modal */}
       <CallHistoryOverlay
         open={callHistoryOpen}
-        onClose={() => setCallHistoryOpen(false)}
+        onClose={() => {
+          setCallHistoryOpen(false);
+          restoreModule();
+        }}
         calls={calls}
-        onSelectCall={(id) => handleSelectCallAndNavigateToMap(id)}
+        onSelectCall={(id) => {
+          handleSelectCallAndNavigateToMap(id);
+          selectCall(id);
+        }}
       />
+    </div>
+  );
+}
+
+/* ---- INCIDENT QUEUE ROW (Task 8) ------------------------------------------ */
+
+function IncidentRow({
+  call,
+  selected,
+  onSelect,
+}: {
+  call: EmergencyCall;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
+  const subtype = call.incident_subtype || call.incident_type || 'Unclassified incident';
+  const address = call.caller_location?.address;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        'flex w-full flex-col gap-2 rounded-[6px] border bg-panel p-3 text-left transition-colors',
+        selected ? 'border-accent' : 'border-rule hover:border-rule-strong',
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
+          <Symbol
+            spec={{ kind: 'incident', glyph, severity: call.severity, distress: distressOf(call), size: 20 }}
+            className="shrink-0"
+          />
+          <span className="text-sm font-semibold capitalize text-ink">{subtype}</span>
+        </div>
+        <span className="tnum shrink-0 text-2xs text-ink-3">{getTimeElapsed(call.created_at)}</span>
+      </div>
+
+      {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
+      <p className="text-sm leading-relaxed text-ink-2">
+        {call.ai_summary || call.chief_complaint || 'Emergency call in progress; details pending.'}
+      </p>
+
+      {address && (
+        <div className="flex items-start gap-1.5 text-xs text-ink-3">
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          {/* Address wraps rather than truncating. */}
+          <span className="break-words">{address}</span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 border-t border-rule pt-2">
+        <DistressMeter level={distressOf(call)} compact />
+        <div className="flex items-center gap-1.5">
+          {awaitingRefinement(call) && <Chip tone="mild">Refining</Chip>}
+          <span className="text-2xs uppercase tracking-wide text-ink-4">{triageSource(call)}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ---- INCIDENT DETAIL PANEL (Task 10) -------------------------------------- */
+
+function IncidentDetail({
+  call,
+  onBack,
+  onOpenTimeline,
+}: {
+  call: EmergencyCall;
+  onBack: () => void;
+  onOpenTimeline: () => void;
+}) {
+  const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
+  const subtype = call.incident_subtype || call.incident_type || 'Unclassified incident';
+  const location = call.caller_location;
+  // Confidence is shown from the stored reading; a district-centroid fix keeps
+  // its own value (e.g. 75%) and is never rounded up to 100%.
+  const confidence =
+    confidencePercent(location?.confidence) ?? confidencePercent(call.location_confidence);
+  const accuracyRadius =
+    typeof location?.accuracy_radius === 'number' ? `±${location.accuracy_radius} m` : null;
+  const threats = call.immediate_threats ?? [];
+  const units = recommendedUnits(call);
+  const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex items-center gap-2 border-b border-rule-strong px-2.5 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink-3 hover:text-ink"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          Back to queue
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-4 p-3.5">
+        {/* Header: symbol, subtype, priority */}
+        <div className="flex items-start gap-3">
+          <Symbol
+            spec={{ kind: 'incident', glyph, severity: call.severity, distress: distressOf(call), size: 28 }}
+            className="mt-0.5 shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-md font-semibold capitalize text-ink">{subtype}</h2>
+            <div className="mt-1 flex items-center gap-2">
+              <Chip tone={severityTone(call.severity)} dot>
+                {priorityCode(call)}
+              </Chip>
+              <span className="text-2xs uppercase tracking-wide text-ink-4">
+                {call.severity ?? 'ungraded'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Caller + triage source */}
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Caller">
+            <span className="tnum text-sm text-ink">{call.caller_number || '—'}</span>
+          </Field>
+          <Field label="Triage source">
+            <span className="text-sm text-ink">{triageSource(call)}</span>
+          </Field>
+        </div>
+
+        {/* Location with confidence + accuracy radius */}
+        <Field label="Location">
+          <span className="block break-words text-sm text-ink">
+            {location?.address || 'Location pending verification'}
+          </span>
+          <span className="mt-1 block text-xs text-ink-3">
+            Confidence: <span className="text-ink-2">{confidence ?? 'pending'}</span>
+            {accuracyRadius && (
+              <>
+                {' · '}Accuracy: <span className="text-ink-2">{accuracyRadius}</span>
+              </>
+            )}
+          </span>
+        </Field>
+
+        {/* Full AI summary */}
+        <Field label={confidenceGrade ? `AI summary · ${confidenceGrade} confidence` : 'AI summary'}>
+          <p className="text-sm leading-relaxed text-ink-2">
+            {call.ai_summary ||
+              call.ai_triage?.summary ||
+              call.chief_complaint ||
+              'No AI triage summary is available for this incident yet.'}
+          </p>
+        </Field>
+
+        {/* Immediate threats */}
+        {threats.length > 0 && (
+          <Field label="Immediate threats">
+            <div className="flex flex-wrap gap-1.5">
+              {threats.map((threat) => (
+                <Chip key={threat} tone="critical">
+                  {threat}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {/* Recommended units */}
+        <Field label="Recommended units">
+          {units.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {units.map((unit) => (
+                <Chip key={unit} tone="accent">
+                  {unit}
+                </Chip>
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-ink-3">No units recommended yet.</span>
+          )}
+        </Field>
+
+        {/* Distress meter */}
+        <div className="rounded-[6px] border border-rule bg-panel p-3">
+          <DistressMeter level={distressOf(call)} />
+          {distressOf(call) == null && (
+            <p className="mt-1.5 text-2xs text-ink-4">
+              No prosody captured. Distress appears for calls taken through the live 112 Pulse voice
+              station.
+            </p>
+          )}
+        </div>
+
+        {/* Primary action → incident timeline (Task 13 overlay) */}
+        <button
+          type="button"
+          onClick={onOpenTimeline}
+          className="flex w-full items-center justify-center gap-2 rounded-[4px] bg-accent px-3 py-2.5 text-sm font-semibold text-deep transition-colors hover:bg-accent-dim"
+        >
+          Open incident timeline
+          <ChevronRight className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="label flex items-center gap-1.5">
+        {label.startsWith('Immediate') && <AlertTriangle className="h-3 w-3 text-mild" aria-hidden />}
+        {label}
+      </span>
+      {children}
     </div>
   );
 }
