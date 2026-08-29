@@ -24,12 +24,20 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
-    // Return connection details for client-side WebSocket
-    // Client will connect directly to Deepgram WebSocket API
+    // Return connection details only. The API key must never leave the server:
+    // this route is unauthenticated, so returning it would publish the secret.
+    // To let the browser stream audio directly, mint a short-lived scoped key
+    // via Deepgram's Keys API and return that instead, or proxy the stream.
+    const params = new URLSearchParams({
+      model,
+      language,
+      smart_format: 'true',
+      interim_results: 'true',
+    });
+
     return NextResponse.json({
       success: true,
-      wsUrl: `wss://api.deepgram.com/v1/listen?model=${model}&language=${language}&smart_format=true&interim_results=true`,
-      apiKey: apiKey,
+      wsUrl: `wss://api.deepgram.com/v1/listen?${params.toString()}`,
       config: {
         model,
         language,

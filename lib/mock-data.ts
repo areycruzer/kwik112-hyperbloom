@@ -13,7 +13,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-1',
     caller_number: '+919876543210',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'apartment fire',
@@ -34,7 +34,6 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.94,
     persons_involved: 2,
     immediate_threats: ['active flames', 'trapped occupants', 'heavy smoke'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
     ai_recommendation: {
@@ -74,14 +73,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.9,
     persons_involved: 4,
     immediate_threats: ['blocked roadway', 'potential fuel leak'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-3',
     caller_number: '+919711223344',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'medical_emergency',
     incident_subtype: 'cardiac arrest',
@@ -102,14 +100,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.93,
     persons_involved: 1,
     immediate_threats: ['cardiac arrest', 'crowd forming'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-4',
     caller_number: '+919900112233',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'crime',
     incident_subtype: 'armed robbery',
@@ -130,15 +127,14 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.88,
     persons_involved: 3,
     immediate_threats: ['armed suspects', 'crowd panic'],
-    priority_code: 'Code 2',
     created_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-5',
     caller_number: '+919922334455',
-    status: 'active',
-    call_status: 'in-progress',
+    status: 'resolved',
+    call_status: 'completed',
     incident_type: 'public_safety',
     incident_subtype: 'gas leak',
     severity: 'medium',
@@ -158,7 +154,6 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.86,
     persons_involved: 10,
     immediate_threats: ['flammable vapors', 'crowd congestion'],
-    priority_code: 'Code 2',
     created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 5 * 60 * 1000).toISOString()
   },
@@ -186,14 +181,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.89,
     persons_involved: 1,
     immediate_threats: ['respiratory distress', 'crowd interference'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-7',
     caller_number: '+919765432109',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'accident',
     incident_subtype: 'pedestrian hit',
@@ -214,14 +208,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.92,
     persons_involved: 1,
     immediate_threats: ['severe bleeding', 'high-speed traffic', 'head injury'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
     id: 'mumbai-1',
     caller_number: '+919823456789',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'commercial building fire',
@@ -242,14 +235,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.95,
     persons_involved: 8,
     immediate_threats: ['active flames', 'trapped occupants', 'structural collapse risk', 'toxic smoke'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
   },
   {
     id: 'bangalore-1',
     caller_number: '+919880123456',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'accident',
     incident_subtype: 'bus accident',
@@ -270,14 +262,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.91,
     persons_involved: 35,
     immediate_threats: ['overturned vehicle', 'trapped passengers', 'fuel leak', 'traffic chaos'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
   },
   {
     id: 'kolkata-1',
     caller_number: '+919830567890',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'public_safety',
     incident_subtype: 'building collapse',
@@ -298,7 +289,6 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.93,
     persons_involved: 15,
     immediate_threats: ['structural collapse', 'trapped victims', 'further collapse risk', 'dust inhalation'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
   },
@@ -326,15 +316,14 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.88,
     persons_involved: 1,
     immediate_threats: ['heat exhaustion', 'dehydration', 'crowd gathering'],
-    priority_code: 'Code 2',
     created_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
   },
   {
     id: 'hyderabad-1',
     caller_number: '+919949876543',
-    status: 'active',
-    call_status: 'in-progress',
+    status: 'resolved',
+    call_status: 'completed',
     incident_type: 'crime',
     incident_subtype: 'chain snatching',
     severity: 'medium',
@@ -354,7 +343,6 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.84,
     persons_involved: 3,
     immediate_threats: ['armed suspects on vehicle', 'injury to victim'],
-    priority_code: 'Code 2',
     created_at: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 7 * 60 * 1000).toISOString()
   },
@@ -382,14 +370,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.86,
     persons_involved: 2,
     immediate_threats: ['head trauma', 'active bleeding', 'traffic obstruction'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 5 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-8',
     caller_number: '+919811234567',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'public_safety',
     incident_subtype: 'electric hazard',
@@ -410,14 +397,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.89,
     persons_involved: 50,
     immediate_threats: ['live electrical wire', 'electrocution risk', 'dense crowd', 'fire hazard'],
-    priority_code: 'Code 2',
     created_at: new Date(Date.now() - 13 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
   },
   {
     id: 'ahmedabad-1',
     caller_number: '+919879123456',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'medical_emergency',
     incident_subtype: 'allergic reaction',
@@ -438,14 +424,13 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.91,
     persons_involved: 1,
     immediate_threats: ['anaphylaxis', 'airway obstruction', 'respiratory failure'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
     id: 'jaipur-1',
     caller_number: '+919829345678',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'market fire',
@@ -466,7 +451,6 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.87,
     persons_involved: 20,
     immediate_threats: ['spreading fire', 'narrow escape routes', 'trapped shoppers', 'valuable inventory'],
-    priority_code: 'Code 3',
     created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 8 * 60 * 1000).toISOString()
   }
@@ -562,9 +546,13 @@ export const mockTranscript: TranscriptSegment[] = [
  * Get formatted time elapsed string
  */
 export function getTimeElapsed(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
+  const parsed = new Date(timestamp).getTime();
+  // An unparseable/missing timestamp yields NaN; render an em-dash rather than
+  // "NaN hrs ago".
+  if (Number.isNaN(parsed)) return '—';
+  const diff = Date.now() - parsed;
   const minutes = Math.floor(diff / 60000);
-  
+
   if (minutes < 1) return 'Just now';
   if (minutes === 1) return '1 min ago';
   if (minutes < 60) return `${minutes} min ago`;

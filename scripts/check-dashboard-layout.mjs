@@ -30,6 +30,11 @@ function findBrowserBinary() {
   return 'google-chrome';
 }
 
+// Point the check at a running dev/prod server. Defaults to the conventional
+// port, but a worktree or CI run often serves elsewhere, so allow an override.
+const DASHBOARD_URL =
+  process.env.DASHBOARD_URL || 'http://127.0.0.1:3000/dashboard';
+
 const browserPath = findBrowserBinary();
 const debugPort = 9333;
 const profilePath = await mkdtemp(join(tmpdir(), 'pulse112-layout-'));
@@ -105,7 +110,7 @@ async function inspectViewport(width, height) {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await send('Page.navigate', { url: 'http://127.0.0.1:3000/dashboard' });
+  await send('Page.navigate', { url: DASHBOARD_URL });
   await delay(2500);
 
   const evaluation = await send('Runtime.evaluate', {

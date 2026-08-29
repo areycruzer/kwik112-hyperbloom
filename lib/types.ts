@@ -73,7 +73,9 @@ export interface EmergencyCall {
     flags?: string[];
     emotion_analysis?: {
       top_emotions?: Array<{ emotion: string; intensity: number }>;
-      distress_level?: number;
+      /** Measured 0–100 distress, or null when no prosody was captured. Zero is
+       *  a real measurement (measured calm); null is a coverage gap. */
+      distress_level?: number | null;
     };
   };
   ai_recommendation?: AIRecommendation | string;
@@ -96,6 +98,25 @@ export interface EmergencyCall {
   dispatcher_id?: string;
   priority_code?: PriorityCode;
   
+  // Triage provenance
+  /** True while a local-rules grade is awaiting model refinement. */
+  refinable?: boolean;
+  /** Set when refinement graded the call above the local rules. */
+  model_escalated?: boolean;
+  /** Names the engine that produced the current grade (human-readable, e.g.
+   *  'keyword' or 'glm:glm-4.5-flash'). */
+  triage_method?: string;
+  /** Structured provenance for analytics: 'local' when keyword rules graded the
+   *  call, 'model' when the language model did. Derived from `triage_method`
+   *  so a 'model'-mode build that fell back to keyword rules reads as 'local'. */
+  triage_engine?: 'local' | 'model';
+  /** Where the prosody behind `distress_level` came from. 'measured' is a live
+   *  Hume EVI reading; 'simulated' is a scripted demo curve. Absent (undefined)
+   *  means no prosody at all — the same coverage gap that leaves
+   *  `distress_level` null. Kept distinct so a scripted curve is never passed
+   *  off as a live measurement. */
+  prosody_source?: 'measured' | 'simulated';
+
   // Metadata
   created_at: string;
   updated_at: string;

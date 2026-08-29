@@ -1,15 +1,22 @@
 /**
- * Pulse112 Tactical Emergency Map
- * High-contrast dark tactical situational awareness with live units,
- * glowing incident markers, and first responder pathfinding vectors.
+ * Situational map — satellite basemap with triangle/circle symbology.
+ *
+ * The basemap is Esri World_Imagery (bright satellite), the far more legible
+ * reference-product choice over the near-featureless dark canvas. Incidents are
+ * filled triangles (severity colour) and units are filled circles (service
+ * colour), both built by `buildSymbol` and mounted through Leaflet `divIcon`.
  */
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
+import { escapeHtml } from '@/lib/utils';
+import { buildSymbol, glyphForIncidentType } from '@/lib/design/symbols';
+import { priorityCode, distressOf } from '@/lib/incident';
+import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
 import { Navigation, Shield } from 'lucide-react';
 
 interface EmergencyMapProps {
@@ -17,24 +24,28 @@ interface EmergencyMapProps {
   selectedCallId: string | null;
   onMarkerClick: (callId: string) => void;
   onDispatchUnit?: (unitId: string, callId: string) => void;
+  /** Roster-selected unit: drawn with a 1px accent ring, like a selected incident. */
+  selectedUnitId?: string | null;
 }
 
-interface TacticalUnit {
-  id: string;
-  callsign: string;
-  type: 'police' | 'fire' | 'ems';
-  lat: number;
-  lng: number;
-  status: 'available' | 'en-route' | 'on-scene' | 'busy';
-  speed: string;
-  assignedCallId?: string;
+// Esri World_Imagery: bright satellite imagery, keyless, attribution required.
+const SATELLITE_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_ATTRIBUTION =
+  'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+
+/** Read a design token from :root so Leaflet-set colours match the JSX layer. */
+function cssToken(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }
 
 export default function EmergencyMap({
   calls,
   selectedCallId,
   onMarkerClick,
-  onDispatchUnit,
+  selectedUnitId = null,
 }: EmergencyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -43,19 +54,17 @@ export default function EmergencyMap({
   const unitMarkersRef = useRef<Map<string, any>>(new Map());
   const routePolylineRef = useRef<any>(null);
   const [showUnits, setShowUnits] = useState(true);
-  const [activeLayer, setActiveLayer] = useState<'dark' | 'satellite'>('dark');
-  const tileLayerRef = useRef<any>(null);
+  // Leaflet loads asynchronously. Effects that draw onto the map key off this so
+  // they re-run once it exists, rather than relying on a poll to retry them.
+  // Without this reactive gate the marker effects run before the map exists,
+  // bail out, and never re-run — every marker silently vanishes.
+  const [mapReady, setMapReady] = useState(false);
 
-  // Mock First Responder Fleet positioned around city
-  const [tacticalUnits, setTacticalUnits] = useState<TacticalUnit[]>([
-    { id: 'PD-101', callsign: 'Cruiser 101', type: 'police', lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
-    { id: 'FD-204', callsign: 'Engine 204', type: 'fire', lat: 28.6920, lng: 77.0850, status: 'en-route', speed: '48 km/h' },
-    { id: 'EMS-302', callsign: 'Medic 302', type: 'ems', lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
-    { id: 'PD-108', callsign: 'Intercepter 108', type: 'police', lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
-    { id: 'EMS-309', callsign: 'Air Rescue 1', type: 'ems', lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
-  ]);
+  // First Responder Fleet — the shared roster, so the map markers and the
+  // roster module can never disagree. Lifted to lib/units.ts (Task 11).
+  const tacticalUnits: TacticalUnit[] = TACTICAL_UNITS;
 
-  // Initialize Map with dark tiles
+  // Initialize the map with the satellite basemap.
   useEffect(() => {
     if (typeof window === 'undefined' || !containerRef.current || mapRef.current) return;
 
@@ -71,31 +80,26 @@ export default function EmergencyMap({
           center: [28.7041, 77.1025],
           zoom: 13,
           zoomControl: false,
-          attributionControl: false,
           preferCanvas: true,
         });
 
-        // Add dark tactical basemap
-        const darkTiles = L.default.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-          {
-            maxZoom: 19,
-            subdomains: 'abcd',
-          }
-        ).addTo(map);
+        // Bright satellite imagery. The attribution control is left on: Esri's
+        // terms require it, and a prior version stripping it was a regression.
+        L.default
+          .tileLayer(SATELLITE_TILE_URL, { maxZoom: 18, attribution: SATELLITE_ATTRIBUTION })
+          .addTo(map);
 
-        tileLayerRef.current = darkTiles;
         mapRef.current = map;
+        setMapReady(true);
 
-        // Force resize calculation
+        // Force resize calculation once the container has laid out.
         setTimeout(() => {
           map.invalidateSize();
         }, 200);
 
-        // Add zoom control at bottom right
         L.default.control.zoom({ position: 'bottomright' }).addTo(map);
       } catch (error) {
-        console.error('Error initializing tactical map:', error);
+        console.error('Error initializing situational map:', error);
       }
     });
 
@@ -114,24 +118,14 @@ export default function EmergencyMap({
         mapRef.current.remove();
         mapRef.current = null;
       }
+      incidentMarkersRef.current.clear();
+      unitMarkersRef.current.clear();
+      routePolylineRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
-  // Update Tile Layer if user toggles
-  useEffect(() => {
-    if (!mapRef.current || !tileLayerRef.current || !leafletRef.current) return;
-
-    const L = leafletRef.current;
-    mapRef.current.removeLayer(tileLayerRef.current);
-    const newTiles = activeLayer === 'dark'
-      ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' })
-      : L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
-
-    newTiles.addTo(mapRef.current);
-    tileLayerRef.current = newTiles;
-  }, [activeLayer]);
-
-  // Invalidate map size whenever selection changes or view renders
+  // Invalidate map size whenever the selection changes or the view re-renders.
   useEffect(() => {
     if (mapRef.current) {
       setTimeout(() => {
@@ -140,80 +134,78 @@ export default function EmergencyMap({
     }
   }, [selectedCallId]);
 
-  // Render Incident Markers with tactical glowing beacons
+  // Render incident markers as filled triangles built by `buildSymbol`.
+  //
+  // Depends only on `calls`, `selectedCallId`, `onMarkerClick`, and `mapReady`.
+  // The parent memoises `onMarkerClick` and only changes the `calls` identity
+  // when the data actually changed, so this must not gain unstable deps or it
+  // would rebuild every marker (and re-open the popup) on each poll tick.
   useEffect(() => {
-    if (!mapRef.current || !leafletRef.current) return;
+    if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
     const currentCallIds = new Set<string>();
 
     calls.forEach((call) => {
       const location = call.caller_location;
-      if (!location || !location.latitude || !location.longitude) return;
+      if (!location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) return;
 
       currentCallIds.add(call.id);
       const isSelected = selectedCallId === call.id;
+      const label = call.incident_subtype || call.incident_type || 'Incident';
 
-      const getPColor = () => {
-        switch (call.severity) {
-          case 'critical': return '#ef4444';
-          case 'high': return '#f97316';
-          case 'medium': return '#eab308';
-          default: return '#10b981';
-        }
-      };
+      // buildSymbol escapes its own interpolated values (label, glyph, kind)
+      // internally, so its SVG string is safe to embed directly. Incidents are
+      // filled triangles; the name label and any distress ring come from spec.
+      const svg = buildSymbol({
+        kind: 'incident',
+        glyph: glyphForIncidentType(call.incident_type),
+        severity: call.severity,
+        distress: distressOf(call),
+        label,
+        selected: isSelected,
+        size: 34,
+      });
 
-      const color = getPColor();
-      const priorityLabel = call.priority_code || (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : call.severity === 'medium' ? 'P3' : 'P4');
-
-      const customIcon = L.divIcon({
-        className: 'custom-tactical-marker',
-        html: `
-          <div class="relative flex items-center justify-center cursor-pointer transition-transform duration-200 ${isSelected ? 'scale-125 z-50' : 'hover:scale-110'}">
-            ${call.severity === 'critical' || isSelected ? `
-              <div class="absolute -inset-2 rounded-full animate-ping opacity-60" style="background-color: ${color};"></div>
-              <div class="absolute -inset-3 rounded-full opacity-25" style="border: 2px dashed ${color};"></div>
-            ` : ''}
-            <div class="relative px-2 py-1 rounded-md text-[10px] font-black font-mono shadow-2xl flex items-center gap-1 border border-white/20"
-                 style="background: rgba(10, 15, 26, 0.92); color: ${color}; box-shadow: 0 0 16px ${color}66;">
-              <span class="w-2 h-2 rounded-full" style="background-color: ${color}; box-shadow: 0 0 8px ${color};"></span>
-              <span>${priorityLabel}</span>
-            </div>
-          </div>
-        `,
-        iconSize: [40, 24],
-        iconAnchor: [20, 12],
+      const icon = L.divIcon({
+        className: 'pulse-map-marker',
+        html: svg,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
       });
 
       let marker = incidentMarkersRef.current.get(call.id);
       if (!marker) {
-        marker = L.marker([location.latitude, location.longitude], { icon: customIcon }).addTo(mapRef.current!);
+        marker = L.marker([location.latitude, location.longitude], { icon }).addTo(mapRef.current!);
         marker.on('click', () => onMarkerClick(call.id));
         incidentMarkersRef.current.set(call.id, marker);
       } else {
         marker.setLatLng([location.latitude, location.longitude]);
-        marker.setIcon(customIcon);
+        marker.setIcon(icon);
       }
 
+      // Every interpolated value below is caller-derived — incident text on this
+      // platform is LLM-transcribed caller speech, and a hostile
+      // `caller_location.address` has executed in a real browser before — so each
+      // one must pass through escapeHtml. See lib/utils#escapeHtml.
+      const summary = call.ai_summary || call.chief_complaint || 'Emergency reported';
       const popupHtml = `
-        <div class="p-1 text-slate-100 font-sans text-xs space-y-2 min-w-[220px]">
-          <div class="flex items-center justify-between border-b border-white/10 pb-1.5">
-            <span class="font-bold uppercase tracking-wider text-[11px]" style="color: ${color};">
-              ${call.incident_subtype || call.incident_type}
-            </span>
-            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 uppercase">${call.severity}</span>
+        <div class="min-w-[200px] space-y-1.5">
+          <div class="flex items-center justify-between gap-2 border-b border-rule pb-1.5">
+            <span class="text-sm font-semibold capitalize text-ink">${escapeHtml(call.incident_subtype || call.incident_type)}</span>
+            <span class="label">${escapeHtml(priorityCode(call))}</span>
           </div>
-          <p class="text-slate-300 text-[11px] leading-relaxed line-clamp-2">${call.chief_complaint || 'Emergency reported'}</p>
-          <div class="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-            <span class="truncate">Location: ${location.address || 'Triangulated coordinate'}</span>
+          <p class="text-sm leading-relaxed text-ink-2">${escapeHtml(summary)}</p>
+          <div class="text-xs text-ink-3">
+            <span class="break-words">${escapeHtml(location.address || 'Triangulated coordinate')}</span>
           </div>
-          <div class="flex items-center justify-between pt-1 border-t border-white/10 text-[10px] font-mono text-slate-400">
-            <span>Time: ${getTimeElapsed(call.created_at)}</span>
-            <span class="text-blue-400 font-semibold cursor-pointer">SELECT INCIDENT &gt;</span>
+          <div class="flex items-center justify-between gap-2 border-t border-rule pt-1.5 text-2xs text-ink-4">
+            <span class="tnum">${escapeHtml(getTimeElapsed(call.created_at))}</span>
+            <span class="uppercase tracking-wide">${escapeHtml(call.severity || 'ungraded')}</span>
           </div>
         </div>
       `;
 
-      marker.bindPopup(popupHtml, { className: 'tactical-map-popup' });
+      marker.bindPopup(popupHtml, { className: 'pulse-map-popup' });
 
       if (isSelected) {
         marker.openPopup();
@@ -226,11 +218,11 @@ export default function EmergencyMap({
         incidentMarkersRef.current.delete(id);
       }
     });
-  }, [calls, selectedCallId, onMarkerClick]);
+  }, [calls, selectedCallId, onMarkerClick, mapReady]);
 
-  // Render First Responder Fleet Markers
+  // Render the first-responder fleet as filled circles built by `buildSymbol`.
   useEffect(() => {
-    if (!mapRef.current || !leafletRef.current) return;
+    if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
 
     if (!showUnits) {
@@ -240,59 +232,54 @@ export default function EmergencyMap({
     }
 
     tacticalUnits.forEach((unit) => {
-      const getUnitIcon = () => {
-        switch (unit.type) {
-          case 'police': return 'PD';
-          case 'fire': return 'FD';
-          case 'ems': return 'EMS';
-        }
-      };
+      const svg = buildSymbol({
+        kind: 'unit',
+        glyph: unit.type,
+        service: unit.type,
+        label: unit.id,
+        selected: unit.id === selectedUnitId,
+        size: 30,
+      });
 
-      const unitColor = unit.type === 'police' ? '#38bdf8' : unit.type === 'fire' ? '#f87171' : '#4ade80';
-
-      const unitIcon = L.divIcon({
-        className: 'custom-unit-marker',
-        html: `
-          <div class="relative flex items-center justify-center group cursor-pointer">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-lg border border-white/30 backdrop-blur-md"
-                 style="background: rgba(15, 23, 42, 0.95); box-shadow: 0 0 12px ${unitColor}88;">
-              <span>${getUnitIcon()}</span>
-            </div>
-            <div class="absolute -bottom-4 px-1.5 py-0.2 rounded text-[8px] font-mono font-bold whitespace-nowrap bg-slate-950/90 text-slate-200 border border-white/10">
-              ${unit.id}
-            </div>
-          </div>
-        `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
+      const icon = L.divIcon({
+        className: 'pulse-map-marker',
+        html: svg,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
       });
 
       let marker = unitMarkersRef.current.get(unit.id);
       if (!marker) {
-        marker = L.marker([unit.lat, unit.lng], { icon: unitIcon }).addTo(mapRef.current!);
+        marker = L.marker([unit.lat, unit.lng], { icon }).addTo(mapRef.current!);
         unitMarkersRef.current.set(unit.id, marker);
       } else {
         marker.setLatLng([unit.lat, unit.lng]);
-        marker.setIcon(unitIcon);
+        marker.setIcon(icon);
       }
 
-      marker.bindPopup(`
-        <div class="p-1 text-slate-100 text-xs space-y-1.5">
-          <div class="flex items-center justify-between font-mono font-bold text-sky-400">
-            <span>${unit.id} (${unit.callsign})</span>
-            <span class="text-[9px] px-1 bg-sky-500/20 text-sky-300 rounded uppercase">${unit.status}</span>
+      // Unit fields are internal mock data, but escaping stays uniform so no
+      // string built here is ever a markup sink.
+      marker.bindPopup(
+        `
+        <div class="min-w-[180px] space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-semibold text-ink">${escapeHtml(unit.id)} · ${escapeHtml(unit.callsign)}</span>
+            <span class="label">${escapeHtml(unit.status)}</span>
           </div>
-          <div class="text-[10px] text-slate-300">
-            Speed: <span class="font-mono text-emerald-400">${unit.speed}</span> | Unit Type: <span class="capitalize">${unit.type}</span>
+          <div class="text-xs text-ink-3">
+            <span class="capitalize">${escapeHtml(unit.type)}</span> · Speed <span class="tnum text-ink-2">${escapeHtml(unit.speed)}</span>
           </div>
         </div>
-      `);
+      `,
+        { className: 'pulse-map-popup' },
+      );
     });
-  }, [tacticalUnits, showUnits]);
+  }, [tacticalUnits, showUnits, mapReady, selectedUnitId]);
 
-  // Pathfinding vector route to Selected Incident
+  // Responder vector to the selected incident. Colour is pulled from the design
+  // token so nothing hardcodes a hex here.
   useEffect(() => {
-    if (!mapRef.current || !leafletRef.current) return;
+    if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
 
     if (routePolylineRef.current) {
@@ -307,7 +294,6 @@ export default function EmergencyMap({
 
     const targetLat = selectedCall.caller_location.latitude;
     const targetLng = selectedCall.caller_location.longitude;
-
     if (!targetLat || !targetLng) return;
 
     const closestUnit = tacticalUnits[0];
@@ -320,102 +306,78 @@ export default function EmergencyMap({
     ];
 
     const polyline = L.polyline(waypoints, {
-      color: '#38bdf8',
-      weight: 4,
+      color: cssToken('--accent', '#69D2FF'),
+      weight: 3,
       opacity: 0.85,
-      dashArray: '8, 8',
-      className: 'animate-pulse',
+      dashArray: '6, 8',
     }).addTo(mapRef.current);
 
     routePolylineRef.current = polyline;
     mapRef.current.setView([targetLat, targetLng], 14, { animate: true });
-  }, [selectedCallId, calls, tacticalUnits]);
+  }, [selectedCallId, calls, tacticalUnits, mapReady]);
+
+  const toggleUnits = useCallback(() => setShowUnits((v) => !v), []);
 
   return (
-    <div className="relative w-full h-full min-h-[450px] bg-[#05080f] overflow-hidden flex-1">
-      {/* Map Element */}
+    <div className="relative h-full min-h-[450px] w-full flex-1 overflow-hidden bg-deep">
+      {/* Map surface. The inline background beats Leaflet's own
+          `.leaflet-container { background:#ddd }` rule, so no light-grey flash
+          shows through while tiles load. */}
       <div
         ref={containerRef}
-        className="w-full h-full min-h-[450px] absolute inset-0 z-0"
-        style={{ width: '100%', height: '100%' }}
+        className="absolute inset-0 z-0 h-full min-h-[450px] w-full"
+        style={{ width: '100%', height: '100%', backgroundColor: 'var(--deep)' }}
       />
 
-      {/* Tactical HUD Map Overlays (Top Left) */}
-      <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2 pointer-events-auto">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950/85 backdrop-blur-md border border-white/10 text-xs shadow-2xl">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-          <span className="font-mono font-bold text-slate-200 uppercase tracking-wider text-[11px]">
-            SITUATIONAL AWARENESS RADAR
-          </span>
-          <span className="text-[10px] text-slate-400 ml-1 font-mono">
-            ({calls.length} INCIDENTS | {tacticalUnits.length} UNITS)
+      {/* Situational HUD (top-left). */}
+      <div className="pointer-events-auto absolute left-4 top-4 z-[400] flex flex-col gap-2">
+        <div className="flex items-center gap-2 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-safe" aria-hidden />
+          <span className="label text-ink-2">Situational map</span>
+          <span className="tnum text-2xs text-ink-4">
+            {calls.length} incidents · {tacticalUnits.length} units
           </span>
         </div>
 
-        {/* Layer & Filter Buttons */}
-        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-white/10 text-[11px] shadow-xl">
+        <div className="flex items-center gap-1 rounded-[6px] border border-rule-strong bg-deep/85 p-1">
           <button
-            onClick={() => setActiveLayer(activeLayer === 'dark' ? 'satellite' : 'dark')}
-            className={`px-2.5 py-1 rounded font-mono font-medium transition-all ${
-              activeLayer === 'dark' ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40' : 'text-slate-400 hover:text-slate-200'
-            }`}
+            type="button"
+            onClick={toggleUnits}
+            aria-pressed={showUnits}
+            className={
+              showUnits
+                ? 'inline-flex items-center gap-1.5 rounded-[4px] border border-accent bg-panel px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink'
+                : 'inline-flex items-center gap-1.5 rounded-[4px] border border-transparent px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink-3 hover:text-ink-2'
+            }
           >
-            Tactical HUD
-          </button>
-          <button
-            onClick={() => setActiveLayer(activeLayer === 'satellite' ? 'dark' : 'satellite')}
-            className={`px-2.5 py-1 rounded font-mono font-medium transition-all ${
-              activeLayer === 'satellite' ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Satellite
-          </button>
-          <div className="h-3.5 w-px bg-white/10 mx-0.5"></div>
-          <button
-            onClick={() => setShowUnits(!showUnits)}
-            className={`px-2.5 py-1 rounded font-mono font-medium transition-all flex items-center gap-1 ${
-              showUnits ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'text-slate-500 line-through'
-            }`}
-          >
-            <Shield className="w-3 h-3" />
+            <Shield className="h-3 w-3" aria-hidden />
             Units ({tacticalUnits.length})
           </button>
         </div>
       </div>
 
-      {/* Pathfinding Route Info Badge */}
+      {/* Responder-vector badge (top-right). */}
       {selectedCallId && (
-        <div className="absolute top-4 right-4 z-[400] px-3.5 py-2.5 rounded-lg bg-slate-950/90 backdrop-blur-md border border-sky-500/30 text-xs shadow-2xl space-y-1">
-          <div className="flex items-center gap-2 text-sky-400 font-mono font-bold text-[11px]">
-            <Navigation className="w-3.5 h-3.5 animate-spin" />
-            <span>PATHFINDING VECTOR ACTIVE</span>
-          </div>
-          <div className="text-[11px] text-slate-300 flex items-center justify-between gap-4 font-mono">
-            <span>Primary: <b className="text-white">Cruiser 101</b></span>
-            <span>ETA: <b className="text-emerald-400">3.4 min</b></span>
-            <span>Dist: <b className="text-sky-300">1.8 km</b></span>
-          </div>
+        <div className="absolute right-4 top-4 z-[400] flex items-center gap-2 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-2">
+          <Navigation className="h-3.5 w-3.5 text-accent" aria-hidden />
+          <span className="label text-ink-2">Responder vector active</span>
         </div>
       )}
 
-      {/* Bottom Left Legend */}
-      <div className="absolute bottom-4 left-4 z-[400] px-3 py-2 rounded-lg bg-slate-950/85 backdrop-blur-md border border-white/10 text-[10px] font-mono shadow-xl flex items-center gap-3 text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]"></span>
-          <span>P1 Critical</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_#f97316]"></span>
-          <span>P2 High</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_6px_#eab308]"></span>
-          <span>P3 Standard</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
-          <span>P4 Low/Non-Emerg</span>
-        </div>
+      {/* Legend (bottom-left). */}
+      <div className="absolute bottom-4 left-4 z-[400] flex items-center gap-3 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-2 text-2xs text-ink-3">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-critical" aria-hidden />
+          P1 Critical
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-mild" aria-hidden />
+          P2 High
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-safe" aria-hidden />
+          P3 / P4
+        </span>
       </div>
     </div>
   );

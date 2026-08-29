@@ -1,269 +1,184 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+/* Must precede @import "tailwindcss": Tailwind v4 expands into real rules,
+   and Lightning CSS drops any @import that follows a rule. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-@custom-variant dark (&:is(.dark *));
+@import "tailwindcss";
+
+/* Dispatch AI design system.
+   Neutral grey surfaces with vivid saturated signal colour, extracted from the
+   product's own Figma component library. Flat surfaces, 1px rules, no glow,
+   no blur. */
+:root {
+  --ground: #1E1E1E;
+  --panel: #2D2D2D;
+  --panel-raised: #373636;
+  --rule: #3B3B3B;
+  --rule-strong: #4B4B4B;
+  --deep: #171717;
+
+  --ink: #F2F2F2;
+  --ink-2: #B0B0B0;
+  --ink-3: #9F9F9F;
+  --ink-4: #808080;
+
+  --accent: #69D2FF;
+  --accent-dim: #49B5E2;
+  --accent-bright: #13E3FF;
+  /* Accent channels, so an alpha fill can be expressed as rgb(var()/a) directly.
+     The design system bans dynamic colour blending in class names; keeping the
+     refine-flash keyframe off it too lets the forbidden-pattern grep stay clean. */
+  --accent-rgb: 105 210 255;
+
+  --safe: #47FF85;
+  --mild: #FABC1F;
+  --mild-dim: #C0931F;
+  --critical: #F40000;
+  --critical-bright: #FF4E4E;
+  --critical-soft: #FF859B;
+  --critical-bg: #611717;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-deep: var(--deep);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
   --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-bright: var(--accent-bright);
+  --color-safe: var(--safe);
+  --color-mild: var(--mild);
+  --color-mild-dim: var(--mild-dim);
+  --color-critical: var(--critical);
+  --color-critical-bright: var(--critical-bright);
+  --color-critical-soft: var(--critical-soft);
+  --color-critical-bg: var(--critical-bg);
+  --font-sans: var(--font-sans);
+
+  /* The only permitted type scale. */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
 }
 
-:root {
-  --radius: 0.5rem;
-  --background: #060a12;
-  --foreground: #f1f5f9;
-  --card: #0c121e;
-  --card-foreground: #f1f5f9;
-  --popover: #0c121e;
-  --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #172033;
-  --secondary-foreground: #94a3b8;
-  --muted: #111a2c;
-  --muted-foreground: #64748b;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
-  --sidebar: #090e17;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #172033;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #3b82f6;
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.dark {
-  --background: #060a12;
-  --foreground: #f1f5f9;
-  --card: #0c121e;
-  --card-foreground: #f1f5f9;
-  --popover: #0c121e;
-  --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #172033;
-  --secondary-foreground: #94a3b8;
-  --muted: #111a2c;
-  --muted-foreground: #64748b;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
-  --sidebar: #090e17;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #172033;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #3b82f6;
+/* Every figure that sits in a column or updates in place. */
+.tnum, table { font-variant-numeric: tabular-nums; }
+
+/* Uppercase labels. */
+.label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
-@layer base {
-  * {
-    @apply border-border;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Leaflet: satellite basemap. The tiles render at their true colour so the
+   imagery stays legible under the triangle markers and their name plates. */
+.leaflet-container { background: var(--deep); font-family: var(--font-sans); }
+.leaflet-control-attribution {
+  background: rgba(23, 23, 23, 0.8) !important;
+  color: var(--ink-3) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: var(--ink-2) !important; }
+
+/* Popup chrome. Leaflet's own leaflet.css is injected by the component *after*
+   globals.css, so at equal specificity its light-theme defaults (white wrapper,
+   white tip, grey glyphs) win the cascade and light-grey text renders on white.
+   The popup markup carries the `pulse-map-popup` class (bindPopup className), so
+   every rule below scopes through it to out-specify Leaflet without !important:
+   the wrapper/tip beat `.leaflet-popup-content-wrapper` (0,1,0) at (0,2,0), and
+   the close button beats `.leaflet-container a.leaflet-popup-close-button`
+   (0,2,1) at (0,3,1). */
+.pulse-map-popup .leaflet-popup-content-wrapper,
+.pulse-map-popup .leaflet-popup-tip {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  box-shadow: none;
+}
+/* The tip is a rotated square: kill its shadow so no white triangle shows. */
+.pulse-map-popup .leaflet-popup-tip { border: none; }
+.leaflet-popup-content { margin: 0; padding: 8px; }
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button {
+  color: var(--ink-3);
+}
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button:hover,
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button:focus {
+  color: var(--ink);
+}
+
+/* Zoom control lives under .leaflet-container (not the popup), where Leaflet's
+   `.leaflet-bar a` (0,2,0) paints it white-on-white. Scope through the container
+   to reach (0,3,0) and (0,4,0) for hover, keeping the dark panel + ink glyphs. */
+.leaflet-container .leaflet-control-zoom a {
+  background-color: var(--panel);
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.leaflet-container .leaflet-control-zoom a:hover,
+.leaflet-container .leaflet-control-zoom a:focus {
+  background-color: var(--panel-raised);
+  color: var(--ink);
+}
+.leaflet-container .leaflet-control-zoom a.leaflet-disabled {
+  background-color: var(--panel);
+  color: var(--ink-4);
+}
+
+/* Refinement flash. When the model upgrades a local-rules grade in place, each
+   field the model actually changed flashes once, in --accent at low alpha, then
+   settles back. The colour is drawn from the accent-channel token at 0.4 alpha,
+   never a hardcoded hex and never a dynamic colour-blend function. */
+@keyframes refine-flash {
+  0%   { background-color: rgb(var(--accent-rgb) / 0.4); }
+  100% { background-color: transparent; }
+}
+.refine-flash {
+  animation: refine-flash 500ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-  body {
-    @apply bg-background text-foreground antialiased font-sans;
-    background-color: #060a12;
-    color: #e2e8f0;
+  /* No flash under reduced motion: the "this field changed" signal survives as a
+     persistent 2px accent left border instead, so the information is never lost
+     to a reader who has opted out of animation. */
+  .refine-flash {
+    border-left: 2px solid var(--accent);
+    padding-left: 8px;
   }
-}
-
-.dashboard-shell {
-  --dashboard-space-1: 0.25rem;
-  --dashboard-space-2: 0.5rem;
-  --dashboard-space-3: 0.75rem;
-  --dashboard-space-4: 1rem;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  letter-spacing: -0.005em;
-}
-
-.dashboard-shell button,
-.dashboard-shell input,
-.dashboard-shell select,
-.dashboard-shell textarea {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  line-height: 1.25;
-}
-
-.dashboard-shell .font-mono {
-  letter-spacing: 0.01em;
-}
-
-/* Tactical HUD & Glassmorphism styles */
-.tactical-panel {
-  background: rgba(12, 18, 30, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.tactical-panel-active {
-  background: rgba(15, 23, 42, 0.95);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
-}
-
-.tactical-glow-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
-}
-
-.tactical-glow-amber {
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);
-}
-
-.tactical-glow-blue {
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.35);
-}
-
-.tactical-glow-emerald {
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
-}
-
-/* NATO Severity Indicators */
-.nato-p1 {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-}
-
-.nato-p2 {
-  background: rgba(249, 115, 22, 0.15);
-  border: 1px solid rgba(249, 115, 22, 0.4);
-  color: #fb923c;
-}
-
-.nato-p3 {
-  background: rgba(234, 179, 8, 0.15);
-  border: 1px solid rgba(234, 179, 8, 0.4);
-  color: #facc15;
-}
-
-.nato-p4 {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  color: #34d399;
-}
-
-/* Radar & Pulse Animations */
-@keyframes radar-sweep {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes tactical-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.08); }
-}
-
-@keyframes wave-bar {
-  0%, 100% { height: 4px; }
-  50% { height: 24px; }
-}
-
-.animate-radar {
-  animation: radar-sweep 4s linear infinite;
-}
-
-.animate-tactical-pulse {
-  animation: tactical-pulse 2s ease-in-out infinite;
-}
-
-/* Custom Tactical Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(6, 10, 18, 0.6);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.4);
-}
-
-/* Leaflet Dark Custom Overrides */
-.leaflet-container {
-  background: #05080f !important;
-  font-family: inherit;
-}
-
-.leaflet-popup-content-wrapper {
-  background: rgba(12, 18, 30, 0.95) !important;
-  color: #f1f5f9 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  backdrop-filter: blur(12px) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
-}
-
-.leaflet-popup-tip {
-  background: rgba(12, 18, 30, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px !important;
-  line-height: 1.4 !important;
 }
