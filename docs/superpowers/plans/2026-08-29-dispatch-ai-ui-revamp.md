@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the dispatch console's visual system and information architecture with a NATO/ICS design language, reframe the product as Dispatch AI with 112 Pulse as its emotion-aware voice intake layer, and stop triage blocking on the model.
+**Goal:** Replace the dispatch console's visual system and information architecture with the real Dispatch AI design language — neutral grey surfaces, vivid signal colour, a satellite basemap, labelled triangle markers, and floating draggable modules — reframe the product as Dispatch AI with 112 Pulse as its emotion-aware voice intake layer, and stop triage blocking on the model.
 
 **Architecture:** A design-token layer plus four self-contained pure modules (symbology, alerts, timeline, distress) that carry unit tests, consumed by React components that are verified in a browser. Triage splits into an instant local-rules `create` and an enriching `refine`, merged client-side.
 
@@ -12,11 +12,13 @@
 
 ## Global Constraints
 
-- Surface tokens, verbatim: `--ground #0E1116`, `--panel #161A21`, `--panel-raised #1C222B`, `--rule #2A3038`, `--rule-strong #3A424E`, `--ink #E4E8ED`, `--ink-2 #9AA5B1`, `--ink-3 #6B7684`.
-- Affiliation tokens, verbatim: `--aff-friendly #4A90B8`, `--aff-hostile #C4342B`, `--aff-neutral #5E9C6B`, `--aff-unknown #D0A81E`.
-- Severity tokens, verbatim: `--sev-p1 #C4342B`, `--sev-p2 #D08C1E`, `--sev-p3 #C9B458`, `--sev-p4 #6B8E6B`. Accent: `--accent #3E7C8C`.
+- Surface tokens, verbatim: `--ground #1E1E1E`, `--panel #2D2D2D`, `--panel-raised #373636`, `--rule #3B3B3B`, `--rule-strong #4B4B4B`, `--deep #171717`.
+- Text tokens, verbatim: `--ink #F2F2F2`, `--ink-2 #B0B0B0`, `--ink-3 #9F9F9F`, `--ink-4 #808080`.
+- Signal tokens, verbatim — vivid on purpose, and the only saturated colour on screen: `--accent #69D2FF`, `--accent-dim #49B5E2`, `--accent-bright #13E3FF`, `--safe #47FF85`, `--mild #FABC1F`, `--mild-dim #C0931F`, `--critical #F40000`, `--critical-bright #FF4E4E`, `--critical-soft #FF859B`, `--critical-bg #611717`.
+- Severity maps to three named levels: CRITICAL `#F40000`, MILD `#FABC1F`, SAFE `#47FF85`. The four-priority model maps on: P1 → CRITICAL, P2 → MILD, P3/P4 → SAFE.
 - Type scale is exactly 10, 11, 12, 14, 16, 20, 28px. No other font sizes anywhere.
-- Border radius 2px maximum. Borders 1px. Spacing on a 4px grid.
+- Typeface is **Inter** with a system fallback stack. There is no monospace anywhere.
+- Border radius: panels 6px; chips and status pills fully rounded (999px); buttons and inputs 4px. Borders 1px. Spacing on a 4px grid.
 - **No `box-shadow` glow and no `backdrop-filter` anywhere in `app/` or `components/`.**
 - `font-variant-numeric: tabular-nums` on every figure in a column or updating in place.
 - Every interactive element has a visible focus state: 2px `--accent` outline, 2px offset.
@@ -84,38 +86,40 @@ Replace the whole of `app/globals.css` with:
 ```css
 /* Must precede @import "tailwindcss": Tailwind v4 expands into real rules,
    and Lightning CSS drops any @import that follows a rule. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
 /* Dispatch AI design system.
-   Derived from NATO Joint Military Symbology and STANAG 2019 colour
-   conventions. Flat surfaces, 1px rules, no glow, no blur. */
+   Neutral grey surfaces with vivid saturated signal colour, extracted from the
+   product's own Figma component library. Flat surfaces, 1px rules, no glow,
+   no blur. */
 :root {
-  --ground: #0E1116;
-  --panel: #161A21;
-  --panel-raised: #1C222B;
-  --rule: #2A3038;
-  --rule-strong: #3A424E;
+  --ground: #1E1E1E;
+  --panel: #2D2D2D;
+  --panel-raised: #373636;
+  --rule: #3B3B3B;
+  --rule-strong: #4B4B4B;
+  --deep: #171717;
 
-  --ink: #E4E8ED;
-  --ink-2: #9AA5B1;
-  --ink-3: #6B7684;
+  --ink: #F2F2F2;
+  --ink-2: #B0B0B0;
+  --ink-3: #9F9F9F;
+  --ink-4: #808080;
 
-  --aff-friendly: #4A90B8;
-  --aff-hostile: #C4342B;
-  --aff-neutral: #5E9C6B;
-  --aff-unknown: #D0A81E;
+  --accent: #69D2FF;
+  --accent-dim: #49B5E2;
+  --accent-bright: #13E3FF;
 
-  --sev-p1: #C4342B;
-  --sev-p2: #D08C1E;
-  --sev-p3: #C9B458;
-  --sev-p4: #6B8E6B;
+  --safe: #47FF85;
+  --mild: #FABC1F;
+  --mild-dim: #C0931F;
+  --critical: #F40000;
+  --critical-bright: #FF4E4E;
+  --critical-soft: #FF859B;
+  --critical-bg: #611717;
 
-  --accent: #3E7C8C;
-
-  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 @theme inline {
@@ -124,20 +128,22 @@ Replace the whole of `app/globals.css` with:
   --color-panel-raised: var(--panel-raised);
   --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
+  --color-deep: var(--deep);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
-  --color-aff-friendly: var(--aff-friendly);
-  --color-aff-hostile: var(--aff-hostile);
-  --color-aff-neutral: var(--aff-neutral);
-  --color-aff-unknown: var(--aff-unknown);
-  --color-sev-p1: var(--sev-p1);
-  --color-sev-p2: var(--sev-p2);
-  --color-sev-p3: var(--sev-p3);
-  --color-sev-p4: var(--sev-p4);
+  --color-ink-4: var(--ink-4);
   --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-bright: var(--accent-bright);
+  --color-safe: var(--safe);
+  --color-mild: var(--mild);
+  --color-mild-dim: var(--mild-dim);
+  --color-critical: var(--critical);
+  --color-critical-bright: var(--critical-bright);
+  --color-critical-soft: var(--critical-soft);
+  --color-critical-bg: var(--critical-bg);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
 
   /* The only permitted type scale. */
   --text-2xs: 10px;
@@ -161,14 +167,13 @@ html, body {
 }
 
 /* Every figure that sits in a column or updates in place. */
-.tnum, table, .font-mono { font-variant-numeric: tabular-nums; }
+.tnum, table { font-variant-numeric: tabular-nums; }
 
-/* Uppercase mono labels. */
+/* Uppercase labels. */
 .label {
-  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
@@ -178,12 +183,11 @@ html, body {
   outline-offset: 2px;
 }
 
-/* Leaflet: tactical basemap treatment. Only the tile pane is filtered so
-   markers and popups keep their true colour. */
-.leaflet-container { background: var(--ground); font-family: var(--font-sans); }
-.leaflet-tile-pane { filter: brightness(0.45) saturate(0.6) contrast(1.25); }
+/* Leaflet: satellite basemap. The tiles render at their true colour so the
+   imagery stays legible under the triangle markers and their name plates. */
+.leaflet-container { background: var(--deep); font-family: var(--font-sans); }
 .leaflet-control-attribution {
-  background: rgba(14, 17, 22, 0.8) !important;
+  background: rgba(23, 23, 23, 0.8) !important;
   color: var(--ink-3) !important;
   font-size: 9px !important;
 }
@@ -193,7 +197,7 @@ html, body {
   background: var(--panel);
   color: var(--ink);
   border: 1px solid var(--rule-strong);
-  border-radius: 2px;
+  border-radius: 6px;
   box-shadow: none;
 }
 .leaflet-popup-content { margin: 0; padding: 8px; }
@@ -234,7 +238,7 @@ export default function RootLayout({
 }
 ```
 
-Note: the Geist font imports are removed; IBM Plex now arrives via the CSS `@import` in `globals.css`.
+Note: the Geist font imports are removed; Inter now arrives via the CSS `@import` in `globals.css`.
 
 - [ ] **Step 6: Verify build and fonts**
 
@@ -247,13 +251,13 @@ Then start the preview and confirm in the browser console:
 getComputedStyle(document.body).fontFamily
 ```
 
-Expected: a string beginning `"IBM Plex Sans"`.
+Expected: a string beginning `"Inter"`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add tsconfig.json package.json app/globals.css app/layout.tsx
-git commit -m "feat: add NATO/ICS design tokens and node test harness"
+git commit -m "feat: add Dispatch AI design tokens and node test harness"
 ```
 
 ---
@@ -291,11 +295,11 @@ import {
 } from './symbols.ts';
 
 test('severity maps to the documented signal colours', () => {
-  assert.equal(severityColor('critical'), '#C4342B');
-  assert.equal(severityColor('high'), '#D08C1E');
-  assert.equal(severityColor('medium'), '#C9B458');
-  assert.equal(severityColor('low'), '#6B8E6B');
-  assert.equal(severityColor(undefined), '#D0A81E'); // unknown affiliation
+  assert.equal(severityColor('critical'), '#F40000'); // CRITICAL
+  assert.equal(severityColor('high'), '#FABC1F');     // MILD (P2)
+  assert.equal(severityColor('medium'), '#47FF85');   // SAFE (P3)
+  assert.equal(severityColor('low'), '#47FF85');      // SAFE (P4)
+  assert.equal(severityColor(undefined), '#9F9F9F');  // ungraded → neutral ink
 });
 
 test('incident type maps onto a known glyph, unknown falls through', () => {
@@ -309,28 +313,30 @@ test('incident type maps onto a known glyph, unknown falls through', () => {
 });
 
 test('distress colour ramps calm to peak', () => {
-  assert.equal(distressColor(0), '#4A90B8');
-  assert.equal(distressColor(100), '#C4342B');
+  assert.equal(distressColor(0), '#47FF85');
+  assert.equal(distressColor(100), '#F40000');
   // Midpoint sits between the two endpoints, not equal to either.
   const mid = distressColor(50);
-  assert.notEqual(mid, '#4A90B8');
-  assert.notEqual(mid, '#C4342B');
+  assert.notEqual(mid, '#47FF85');
+  assert.notEqual(mid, '#F40000');
   assert.match(mid, /^#[0-9A-F]{6}$/i);
 });
 
-test('an incident renders a diamond frame in its severity colour', () => {
+test('an incident renders a filled triangle in its severity colour', () => {
   const svg = buildSymbol({ kind: 'incident', glyph: 'fire', severity: 'critical' });
   assert.match(svg, /<svg/);
   assert.match(svg, /data-kind="incident"/);
-  assert.match(svg, /#C4342B/);
-  // Diamond frame is drawn as a rotated square path.
+  assert.match(svg, /#F40000/);
+  // Incident frame is an upward-pointing filled triangle.
   assert.match(svg, /<polygon/);
 });
 
-test('a unit renders a rectangle frame in its service colour', () => {
+test('a unit renders a filled circle in its service colour', () => {
   const svg = buildSymbol({ kind: 'unit', glyph: 'police', service: 'police' });
   assert.match(svg, /data-kind="unit"/);
-  assert.match(svg, /<rect/);
+  assert.match(svg, /#69D2FF/);
+  // Unit frame is a filled circle.
+  assert.match(svg, /<circle/);
 });
 
 test('the distress ring appears only when prosody exists', () => {
@@ -376,9 +382,10 @@ Create `lib/design/symbols.ts`:
 ```ts
 /**
  * @module design/symbols
- * @description MIL-STD-2525-derived incident and unit symbols, emitted as SVG
- *              strings so the same function can feed both React components and
- *              Leaflet `divIcon`, which only accepts markup.
+ * @description Incident and unit symbols, emitted as SVG strings so the same
+ *              function can feed both React components and Leaflet `divIcon`,
+ *              which only accepts markup. Incidents are filled triangles in the
+ *              severity colour; units are filled circles in the service colour.
  *
  *              Self-contained on purpose: it imports nothing from the rest of
  *              the project so `node --test` can run it without a resolver.
@@ -400,21 +407,23 @@ export interface SymbolSpec {
   selected?: boolean;
 }
 
+// Severity collapses onto the product's three named levels: P1 → CRITICAL,
+// P2 → MILD, P3/P4 → SAFE.
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#C4342B',
-  high: '#D08C1E',
-  medium: '#C9B458',
-  low: '#6B8E6B',
+  critical: '#F40000',
+  high: '#FABC1F',
+  medium: '#47FF85',
+  low: '#47FF85',
 };
 
 const SERVICE_COLORS: Record<UnitService, string> = {
-  police: '#4A90B8',
-  fire: '#C4342B',
-  ems: '#5E9C6B',
+  police: '#69D2FF',
+  fire: '#F40000',
+  ems: '#47FF85',
 };
 
-/** Unknown affiliation, per STANAG 2019. */
-const UNKNOWN = '#D0A81E';
+/** Ungraded / unknown — neutral --ink-3, never a fabricated severity. */
+const UNKNOWN = '#9F9F9F';
 
 export function severityColor(severity?: string): string {
   if (!severity) return UNKNOWN;
@@ -452,11 +461,11 @@ function mix(a: string, b: string, t: number): string {
   return rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t);
 }
 
-/** @description Calm to peak distress: blue -> amber -> signal red. */
+/** @description Calm to peak distress: safe green -> mild amber -> signal red. */
 export function distressColor(level: number): string {
   const l = Math.min(100, Math.max(0, level));
-  if (l <= 50) return mix('#4A90B8', '#D0A81E', l / 50);
-  return mix('#D0A81E', '#C4342B', (l - 50) / 50);
+  if (l <= 50) return mix('#47FF85', '#FABC1F', l / 50);
+  return mix('#FABC1F', '#F40000', (l - 50) / 50);
 }
 
 export function glyphForIncidentType(incidentType?: string): IncidentGlyph {
@@ -484,9 +493,11 @@ const GLYPH_PATHS: Record<string, string> = {
 
 /**
  * @description Build an incident or unit symbol as an SVG string.
- *              Frame shape encodes entity kind (diamond = incident, rectangle =
- *              unit), stroke encodes severity or service, and the inner glyph
- *              encodes type. A distress ring is drawn only when prosody exists.
+ *              Frame shape encodes entity kind (filled triangle = incident,
+ *              filled circle = unit), fill encodes severity or service, and the
+ *              inner glyph encodes type. When a `label` is given it is set beside
+ *              the marker in --ink on a dark plate. A distress ring is drawn only
+ *              when prosody exists; selection adds a 1px accent ring.
  */
 export function buildSymbol(spec: SymbolSpec): string {
   const size = spec.size ?? 28;
@@ -498,10 +509,11 @@ export function buildSymbol(spec: SymbolSpec): string {
   const hasDistress = typeof spec.distress === 'number';
   const glyph = GLYPH_PATHS[spec.glyph] ?? GLYPH_PATHS.unknown;
 
+  // Incidents are filled triangles (point up); units are filled circles.
   const frame =
     spec.kind === 'incident'
-      ? `<polygon points="12,2.5 21.5,12 12,21.5 2.5,12" fill="${color}2E" stroke="${color}" stroke-width="1.5" />`
-      : `<rect x="3.5" y="5.5" width="17" height="13" rx="1" fill="${color}2E" stroke="${color}" stroke-width="1.5" />`;
+      ? `<polygon points="12,3 21,20 3,20" fill="${color}" stroke="${color}" stroke-width="1" />`
+      : `<circle cx="12" cy="12" r="9" fill="${color}" stroke="${color}" stroke-width="1" />`;
 
   // Distress ring: an arc swept proportional to the measurement.
   let ring = '';
@@ -517,21 +529,35 @@ export function buildSymbol(spec: SymbolSpec): string {
       `transform="rotate(-90 12 12)" opacity="0.9" />`;
   }
 
+  // Selection is a 1px --accent ring, never a scale transform.
   const selection = spec.selected
-    ? `<rect x="0.75" y="0.75" width="22.5" height="22.5" fill="none" stroke="#3E7C8C" stroke-width="1.5" />`
+    ? `<circle cx="12" cy="12" r="11.25" fill="none" stroke="#69D2FF" stroke-width="1" />`
     : '';
 
+  // Name label beside the marker, in --ink on a dark plate.
+  let plate = '';
+  let viewW = 24;
+  if (spec.label) {
+    const plateW = Math.max(24, spec.label.length * 6 + 12);
+    viewW = 28 + plateW;
+    plate =
+      `<rect x="28" y="6" width="${plateW}" height="12" rx="2" fill="#171717" stroke="#3B3B3B" stroke-width="1" />` +
+      `<text x="${28 + plateW / 2}" y="15" text-anchor="middle" font-size="9" font-weight="500" fill="#F2F2F2">${esc(spec.label)}</text>`;
+  }
+
   const title = spec.label ? `<title>${esc(spec.label)}</title>` : '';
+  const width = Math.round(size * (viewW / 24));
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" ` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewW} 24" width="${width}" height="${size}" ` +
     `data-kind="${esc(spec.kind)}"${hasDistress ? ` data-distress="${Math.round(spec.distress as number)}"` : ''} ` +
     `role="img" aria-label="${esc(spec.label ?? spec.glyph)}">` +
     title +
     selection +
     ring +
     frame +
-    `<path d="${glyph}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />` +
+    `<path d="${glyph}" fill="none" stroke="#1E1E1E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />` +
+    plate +
     `</svg>`
   );
 }
@@ -546,7 +572,7 @@ Expected: `# pass 7`, `# fail 0`.
 
 ```bash
 git add lib/design/symbols.ts lib/design/symbols.test.ts
-git commit -m "feat: add MIL-STD-2525 derived symbology module"
+git commit -m "feat: add triangle/circle incident and unit symbology module"
 ```
 
 ---
@@ -982,9 +1008,9 @@ git commit -m "feat: add human-in-the-loop decision timeline state"
 **Interfaces:**
 - Consumes: `buildSymbol`, `severityColor`, `distressColor` from `lib/design/symbols.ts`; `cn` from `lib/utils.ts`.
 - Produces:
-  - `<Panel title?: string; action?: ReactNode; className?: string; children>` — square panel, 1px `--rule-strong` border, `--panel` background, optional header row with a `.label` title.
+  - `<Panel title?: string; action?: ReactNode; className?: string; children>` — 6px-radius panel, 1px `--rule-strong` border, `--panel` background, optional header row with a `.label` title.
   - `<DataRow label: string; value: ReactNode; mono?: boolean>` — label left in `.label`, value right, `tabular-nums` when `mono`.
-  - `<Chip tone: 'p1'|'p2'|'p3'|'p4'|'accent'|'neutral'; children>` — 1px border in the tone colour, background at 18% alpha, 10px mono uppercase.
+  - `<Chip tone: 'critical'|'mild'|'safe'|'accent'|'neutral'; dot?: boolean; children>` — fully-rounded (999px) filled pill: the signal colour as text over that same colour at low alpha, 10px uppercase, no border. A status pill (`dot`) carries a leading filled dot in the signal colour.
   - `<Meter value: number; max?: number; color?: string; label?: string>` — 4px bar, no radius.
   - `<Symbol spec: SymbolSpec; className?: string>` — renders `buildSymbol` output via `dangerouslySetInnerHTML`; safe because `buildSymbol` escapes all text.
   - `<DistressMeter level: number | null | undefined; compact?: boolean>` — renders the ramp bar with the numeric value, or an `—` in `--ink-3` when `level` is null/undefined.
@@ -993,11 +1019,11 @@ git commit -m "feat: add human-in-the-loop decision timeline state"
 
 Create `components/ui/panel.tsx` exporting `Panel`, `DataRow`, `Chip`, `Meter` exactly as specified above. Rules the implementation must follow:
 
-- Square corners. `rounded-none` or no radius class at all.
+- Panels use a 6px radius (`rounded-md` / `rounded-[6px]`); chips and status pills are fully rounded (`rounded-full`); buttons and inputs 4px.
 - Borders `border border-[var(--rule-strong)]`.
 - Panel background `bg-[var(--panel)]`; nested/selected `bg-[var(--panel-raised)]`.
 - Header uses the `.label` class from `globals.css`.
-- Chip tone colours come from the severity/accent tokens; no literal hex in the component.
+- Chips are filled pills — the signal colour as text over that colour at low alpha, no border, with an optional leading dot for status pills. Tone colours come from the `--safe`/`--mild`/`--critical`/`--accent` tokens; no literal hex in the component.
 - No `shadow-*`, no `backdrop-blur-*`.
 
 Create `components/ui/symbol.tsx`:
@@ -1045,7 +1071,7 @@ Expected: no output.
 
 ```bash
 git add components/ui/panel.tsx components/ui/symbol.tsx components/DistressMeter.tsx
-git commit -m "feat: add NATO-styled UI primitives and distress meter"
+git commit -m "feat: add Dispatch AI UI primitives and distress meter"
 ```
 
 ---
@@ -1160,31 +1186,42 @@ git commit -m "feat: return local triage instantly and refine with the model sep
 
 Each task in this phase ends with a browser verification. Build, start the preview, and check the stated condition before marking done.
 
-### Task 7: Command bar, module rail, and three-tier shell
+### Task 7: Top bar, icon rail, incident panel, and four-column shell
 
 **Files:**
-- Create: `components/ModuleRail.tsx`
-- Rewrite: `app/dashboard/page.tsx` (shell only; Tier 2 content lands in Tasks 8–10)
+- Create: `components/ModuleRail.tsx` (the icon rail)
+- Rewrite: `app/dashboard/page.tsx` (shell only; map content lands in Task 9, incident-list content in Task 8)
 
 **Interfaces:**
 - Consumes: `Panel`, `Chip` from `components/ui/panel.tsx`.
 - Produces:
   - `type ModuleId = 'monitoring' | 'alerts' | 'history' | 'forecast'`
   - `<ModuleRail active: ModuleId; onSelect: (id: ModuleId) => void; alertCount: number>`
-  - The dashboard renders: command bar, then the active module. Monitoring renders Tier 1 / Tier 2 / Tier 3.
+  - The dashboard renders a four-column body, per spec §5:
+
+```
+TOP BAR    DISPATCH AI · environment telemetry · clock · LIVE · region
++------+-------------------+---------------------------+
+| icon | INCIDENT PANEL    |  MAP (satellite)          |
+| rail |  tabs: Emergencies|   labelled triangle       |
+|      |        / Alerts   |   markers, unit circles,   |
+|      |  search + filter  |   route vectors            |
+|      |  stat row         |                            |
+|      |  incident list    |   [ floating modules ]     |
++------+-------------------+---------------------------+
+```
 
 Requirements:
-- Command bar shows `DISPATCH AI` in `--ink` at 16px semibold, station name in `--ink-3`, a live clock with `tabular-nums`, and the `112 PULSE` action button.
-- Rail is 72px wide, icon over a 10px mono label, active item marked by a 2px left border in `--accent`. Alerts shows its unacknowledged count.
-- Tier 1 is a single row of stat cells: queue depth, P1 count, unassigned, oldest incident age, triage source mix. Each is a `.label` over a 20px `tabular-nums` figure.
-- Tier 3 is a fixed-height (160px) region holding the unit roster from Task 11.
-- View mode switch (Radar / Kanban / Split) rearranges Tier 2 only, per spec §5.2.
+- Top bar shows `DISPATCH AI` in `--ink` at 16px semibold, the region/station name in `--ink-3`, environment telemetry, a live clock with `tabular-nums`, a `LIVE` indicator in `--accent-bright`, and the `112 PULSE` action button.
+- Icon rail is 72px wide, icon-only with a 10px label, active item marked by a 2px left border in `--accent`. Alerts shows its unacknowledged count.
+- Incident panel carries `Emergencies` / `Alerts` tabs, a search field, a filter dropdown, a three-cell stat row (Total / Critical / Resolved) — each a `.label` over a 20px `tabular-nums` figure — then the incident list.
+- Map is full-bleed satellite imagery filling the remaining width (Task 9). The floating module board (Task 11b) sits over the map's right side.
 - Preserve the existing `loadCalls` fingerprint polling, `mergeCalls` dedupe, and `handleUpdateCallStatus` single-call persistence exactly. **Do not reintroduce writing the merged list back to storage** — that caused the queue to double on every status change.
-- Remove `select-none` from the dashboard root. It currently prevents an operator copying an address or phone number. Apply it only to the command bar and module rail, which are chrome.
+- Remove `select-none` from the dashboard root. It currently prevents an operator copying an address or phone number. Apply it only to the top bar and icon rail, which are chrome.
 
 - [ ] **Step 1: Implement `ModuleRail`**
 - [ ] **Step 2: Rewrite the dashboard shell around it**
-- [ ] **Step 3: Verify** — `npm run build`, open `/dashboard`. Expect: rail visible with four modules, command bar reading `DISPATCH AI`, Tier 1 showing real counts. Switching modules changes the main region.
+- [ ] **Step 3: Verify** — `npm run build`, open `/dashboard`. Expect: icon rail visible with four modules, top bar reading `DISPATCH AI`, the incident panel showing `Emergencies` / `Alerts` tabs and a stat row with real counts, and a full-bleed satellite map to its right. Switching tabs and rail modules changes the panel.
 - [ ] **Step 4: Verify the doubling regression has not returned**
 
 In the browser console:
@@ -1205,7 +1242,7 @@ Expected: `3`, not `48`. Queue count stays 16.
 
 ```bash
 git add components/ModuleRail.tsx app/dashboard/page.tsx
-git commit -m "feat: add module rail and three-tier dashboard shell"
+git commit -m "feat: add icon rail and four-column dashboard shell"
 ```
 
 ---
@@ -1213,7 +1250,7 @@ git commit -m "feat: add module rail and three-tier dashboard shell"
 ### Task 8: Incident queue with density pass
 
 **Files:**
-- Modify: `app/dashboard/page.tsx` (Tier 2 left column)
+- Modify: `app/dashboard/page.tsx` (incident panel list)
 
 **Interfaces:**
 - Consumes: `Symbol`, `Chip`, `DistressMeter`, `glyphForIncidentType`.
@@ -1231,16 +1268,17 @@ Requirements:
 
 ---
 
-### Task 9: Situation map with 2525 symbology
+### Task 9: Situation map with satellite basemap and triangle symbology
 
 **Files:**
 - Rewrite: `components/EmergencyMap.tsx`
 
 Requirements:
-- Markers use `buildSymbol` via `L.divIcon({ html })`. Incidents get diamond frames and distress rings where prosody exists; units get rectangle frames.
+- Basemap defaults to the Esri `World_Imagery` **satellite** layer. `EmergencyMap.tsx` already carries that layer behind an unused "Satellite" toggle, so this is a default swap, not a new integration: make satellite the default and retire the now-dead toggle plumbing.
+- Markers use `buildSymbol` via `L.divIcon({ html })`. Incidents get filled triangles with their name label and distress rings where prosody exists; units get filled circles.
 - Keep the `mapReady` state gate added previously — without it the marker effect races Leaflet's async load and no markers render.
 - Keep `escapeHtml` on every popup value.
-- Keep the Esri dark basemap and attribution; CARTO watermarks unkeyed tiles.
+- Keep the Esri satellite attribution.
 - Popups use `--panel` styling from `globals.css`, not inline colours.
 
 - [ ] **Step 1: Implement**
@@ -1260,14 +1298,14 @@ localStorage.setItem('kwik_emergency_calls', JSON.stringify([{
 After reload: `window.__X` must be `undefined`. Clear storage afterwards.
 
 - [ ] **Step 4: Verify no marker churn** — with a popup open, count recreations over 10s with a `MutationObserver`. Expected: 0.
-- [ ] **Step 5: Commit** — `git commit -m "feat: render map with MIL-STD-2525 symbology"`
+- [ ] **Step 5: Commit** — `git commit -m "feat: render map on satellite basemap with triangle symbology"`
 
 ---
 
 ### Task 10: Incident detail panel
 
 **Files:**
-- Modify: `app/dashboard/page.tsx` (Tier 2 right column)
+- Modify: `app/dashboard/page.tsx` (incident detail, shown in the incident panel when a row is selected)
 
 Requirements:
 - Shows: symbol, subtype, priority chip, caller number, location with confidence and accuracy radius, `ai_summary` in full, immediate threats as chips, recommended units, distress meter, triage source badge.
@@ -1280,7 +1318,7 @@ Requirements:
 
 ---
 
-### Task 11: Unit roster (Tier 3)
+### Task 11: Unit roster (floating module)
 
 **Files:**
 - Create: `components/UnitRoster.tsx`
@@ -1288,13 +1326,64 @@ Requirements:
 - Create: `lib/units.ts` (shared unit list, so map and roster agree)
 
 Requirements:
+- The roster is one of the floating modules on the board (Task 11b), not a fixed tier — it registers with the module board and inherits drag, collapse, close and pin.
 - `lib/units.ts` exports `TACTICAL_UNITS` and the `TacticalUnit` interface, moved verbatim out of `EmergencyMap`.
-- Roster is a table: symbol, callsign, service, status chip, assignment, distance to selected incident (computed with the haversine formula; show `—` when nothing is selected).
+- Roster body is a table: symbol, callsign, service, status pill, assignment, distance to selected incident (computed with the haversine formula; show `—` when nothing is selected).
 - Selecting a row highlights that unit on the map.
 
 - [ ] **Step 1: Implement**
-- [ ] **Step 2: Verify** — five units listed, distances change when a different incident is selected.
-- [ ] **Step 3: Commit** — `git commit -m "feat: add responder unit roster"`
+- [ ] **Step 2: Verify** — five units listed, distances change when a different incident is selected, and the module drags, collapses, and closes.
+- [ ] **Step 3: Commit** — `git commit -m "feat: add responder unit roster module"`
+
+---
+
+### Task 11b: Floating draggable module board
+
+Restored to scope per spec §5.1 — the earlier design placed draggable modules out of scope, and the revised spec brings them back as one of the product's signature demonstrated interactions.
+
+**Files:**
+- Create: `components/ModuleBoard.tsx` — the draggable container, drop targets, and Modules Panel
+- Create: `lib/moduleLayout.ts` — layout state, pure reducers, and `localStorage` persistence
+- Modify: `app/dashboard/page.tsx` (mount the board over the map's right side)
+
+**Interfaces:**
+- Consumes: `Panel`, `Chip` from `components/ui/panel.tsx`.
+- Produces:
+  - `interface ModulePlacement { id: string; order: number; collapsed: boolean; closed: boolean; pinned: boolean }`
+  - `type ModuleLayout = ModulePlacement[]`
+  - `DEFAULT_LAYOUT: ModuleLayout`
+  - `readLayout(): ModuleLayout` / `writeLayout(layout: ModuleLayout): void` — persisted in `localStorage` under `dispatch_module_layout`; browser-only, returning the default on the server or on parse failure.
+  - Pure, non-mutating reducers: `moveModule(layout, id, toOrder)`, `collapseModule(layout, id, next)`, `closeModule(layout, id)`, `restoreModule(layout, id)`, `pinModule(layout, id, next)`.
+  - `<ModuleBoard modules: Record<string, { title: string; node: ReactNode }>>` — renders open modules in layout order, the drop target during a drag, and a Modules Panel of closed modules.
+
+Requirements:
+- Each module card header carries, as real `<button>` elements: a drag grip, a collapse toggle, a pin toggle, and a close button. Cards use the 6px-radius panel styling and a `See more` footer in `--accent`.
+- Modules are draggable by the grip. While a drag is in flight, each valid slot renders a drop target: a dashed **2px `--accent`** border with `Drop here` centred in `--accent`.
+- A **Modules Panel** lists every closed module so it can be restored to its previous order.
+- A pinned module cannot be dragged or closed until unpinned; its controls reflect that state.
+- **Keyboard parity is required:** every action reachable by drag is also reachable without a pointer. The grip button responds to Enter/Space to pick up, arrow keys to move, and Enter to drop; collapse, pin, close, and restore are ordinary buttons. The board must be fully operable from the keyboard alone.
+- Layout (order, collapsed, closed, pinned) persists per operator in `localStorage` under `dispatch_module_layout` and is restored on load. Persistence is per browser only; multi-operator sync stays out of scope.
+- No `box-shadow` glow and no `backdrop-filter`; the drag affordance is the dashed `--accent` border, not a shadow.
+
+- [ ] **Step 1: Implement `lib/moduleLayout.ts`** — the placement type, `DEFAULT_LAYOUT`, the pure reducers, and `readLayout`/`writeLayout` over `dispatch_module_layout`.
+- [ ] **Step 2: Implement `ModuleBoard` and mount it over the map's right side**
+- [ ] **Step 3: Verify drag, close, restore, and reload**
+
+Open `/dashboard`, then in the browser console confirm the key exists after a change:
+
+```js
+localStorage.getItem('dispatch_module_layout')
+```
+
+Drag a module to a new slot (the `Drop here` target must appear during the drag), close it (it must move into the Modules Panel), restore it from the panel, then reload. Expected: the restored module returns to its previous order and the post-drag layout survives the reload.
+
+- [ ] **Step 4: Verify keyboard parity** — with a pointer unused, Tab to a module grip, press Enter/Space to pick up, arrow to a new slot, Enter to drop; Tab to the collapse, pin, and close buttons and operate each; restore the closed module from the Modules Panel. Every drag action must be reachable this way.
+- [ ] **Step 5: Commit**
+
+```bash
+git add components/ModuleBoard.tsx lib/moduleLayout.ts app/dashboard/page.tsx
+git commit -m "feat: add floating draggable module board with keyboard parity"
+```
 
 ---
 
@@ -1546,7 +1635,13 @@ Expected: all exit 0.
 
 - [ ] **Step 9: XSS** — the payload from Task 9 Step 3 leaves `window.__X` undefined.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 10: Satellite basemap** — the map renders satellite imagery by default, with incident triangles and their name labels legible against it.
+
+- [ ] **Step 11: Module board** — a module can be dragged to a new position, closed, and restored from the Modules Panel, and the layout survives a reload.
+
+- [ ] **Step 12: Keyboard parity** — every module action reachable by drag is also reachable by keyboard.
+
+- [ ] **Step 13: Commit**
 
 ```bash
 git commit --allow-empty -m "chore: verify revamp against design spec"
