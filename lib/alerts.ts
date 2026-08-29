@@ -51,12 +51,22 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
     // A closed incident cannot need operator attention.
     if (CLOSED_STATUSES.has(status)) continue;
 
-    const ageSeconds = (nowMs - Date.parse(call.created_at)) / 1000;
+    // Fail open on an undeterminable age: a missing/empty/unparseable
+    // created_at yields NaN, which would make every `age > threshold` test
+    // false and silently suppress P1_UNASSIGNED and STALE_INCIDENT. In a
+    // dispatch system that means an operator is never told about a critical
+    // incident, so we treat an unknown age as past every grace period —
+    // the alert fires rather than vanishing.
+    const parsedAge = (nowMs - Date.parse(call.created_at)) / 1000;
+    const ageSeconds = Number.isNaN(parsedAge) ? Infinity : parsedAge;
     const push = (code: AlertCode, severity: Alert['severity'], message: string) =>
       alerts.push({ key: `${call.id}:${code}`, callId: call.id, code, severity, message });
 
     const loc = call.caller_location;
-    if (typeof loc?.latitude !== 'number' || typeof loc?.longitude !== 'number') {
+    // Finiteness, not `typeof`: NaN is typeof 'number' but not a usable
+    // coordinate, so a NaN lat/long must still count as unresolved. `0` is a
+    // legitimate coordinate (equator / prime meridian) and stays resolved.
+    if (!Number.isFinite(loc?.latitude) || !Number.isFinite(loc?.longitude)) {
       push('LOCATION_UNRESOLVED', 'high', 'No coordinates resolved — responders cannot be routed.');
     }
 

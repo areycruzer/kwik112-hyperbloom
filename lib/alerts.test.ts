@@ -72,3 +72,88 @@ test('keys are stable and unique per call and code', () => {
   assert.deepEqual([...new Set(keys)], keys);
   assert.ok(keys.every((k) => k.startsWith('x1:')));
 });
+
+// --- Severity is the operator's prioritisation signal; assert it per rule. ---
+
+test('LOCATION_UNRESOLVED carries high severity', () => {
+  const [alert] = deriveAlerts([call({ caller_location: {} })], NOW).filter(
+    (a) => a.code === 'LOCATION_UNRESOLVED',
+  );
+  assert.equal(alert.severity, 'high');
+});
+
+test('P1_UNASSIGNED carries critical severity', () => {
+  const [alert] = deriveAlerts(
+    [call({ severity: 'critical', created_at: ago(120) })],
+    NOW,
+  ).filter((a) => a.code === 'P1_UNASSIGNED');
+  assert.equal(alert.severity, 'critical');
+});
+
+test('MODEL_ESCALATED carries medium severity', () => {
+  const [alert] = deriveAlerts([call({ model_escalated: true })], NOW).filter(
+    (a) => a.code === 'MODEL_ESCALATED',
+  );
+  assert.equal(alert.severity, 'medium');
+});
+
+test('LOW_CONFIDENCE carries medium severity', () => {
+  const [alert] = deriveAlerts([call({ ai_confidence: 0.3 })], NOW).filter(
+    (a) => a.code === 'LOW_CONFIDENCE',
+  );
+  assert.equal(alert.severity, 'medium');
+});
+
+test('STALE_INCIDENT carries low severity', () => {
+  const [alert] = deriveAlerts([call({ created_at: ago(2000) })], NOW).filter(
+    (a) => a.code === 'STALE_INCIDENT',
+  );
+  assert.equal(alert.severity, 'low');
+});
+
+// --- 0 is a legitimate coordinate (equator / prime meridian): still resolved. ---
+
+test('a 0/0 coordinate counts as resolved and raises no location alert', () => {
+  const alerts = deriveAlerts([call({ caller_location: { latitude: 0, longitude: 0 } })], NOW);
+  assert.equal(alerts.filter((a) => a.code === 'LOCATION_UNRESOLVED').length, 0);
+});
+
+// --- Gap: NaN is typeof 'number' but is not a usable coordinate. ---
+
+test('a NaN latitude raises LOCATION_UNRESOLVED', () => {
+  const alerts = deriveAlerts(
+    [call({ caller_location: { latitude: NaN, longitude: 77.2 } })],
+    NOW,
+  );
+  assert.equal(alerts.filter((a) => a.code === 'LOCATION_UNRESOLVED').length, 1);
+});
+
+test('a NaN longitude raises LOCATION_UNRESOLVED', () => {
+  const alerts = deriveAlerts(
+    [call({ caller_location: { latitude: 28.6, longitude: NaN } })],
+    NOW,
+  );
+  assert.equal(alerts.filter((a) => a.code === 'LOCATION_UNRESOLVED').length, 1);
+});
+
+// --- Gap: an undeterminable age must fail open, not silently suppress the alert. ---
+
+test('an unparseable created_at on an unassigned critical call raises P1_UNASSIGNED', () => {
+  const alerts = deriveAlerts(
+    [call({ severity: 'critical', status: 'active', created_at: 'not-a-date' })],
+    NOW,
+  );
+  assert.equal(alerts.filter((a) => a.code === 'P1_UNASSIGNED').length, 1);
+});
+
+// --- Boundary: LOW_CONFIDENCE uses `<`, so exactly 0.5 is not low. ---
+
+test('confidence of exactly 0.5 does not raise LOW_CONFIDENCE', () => {
+  const alerts = deriveAlerts([call({ ai_confidence: 0.5 })], NOW);
+  assert.equal(alerts.filter((a) => a.code === 'LOW_CONFIDENCE').length, 0);
+});
+
+test('a high-confidence call does not raise LOW_CONFIDENCE', () => {
+  const alerts = deriveAlerts([call({ ai_confidence: 0.95 })], NOW);
+  assert.equal(alerts.filter((a) => a.code === 'LOW_CONFIDENCE').length, 0);
+});
