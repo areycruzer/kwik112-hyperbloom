@@ -133,18 +133,29 @@ export function buildSymbol(spec: SymbolSpec): string {
       ? `<polygon points="12,3 21,20 3,20" fill="${color}" stroke="${color}" stroke-width="1" />`
       : `<circle cx="12" cy="12" r="9" fill="${color}" stroke="${color}" stroke-width="1" />`;
 
-  // Distress ring: an arc swept proportional to the measurement.
+  // Distress ring. Drawn only when prosody was actually measured. A measured
+  // reading always paints a dim background track so that a measured-calm marker
+  // (distress 0) reads differently from one that was never measured (null):
+  // the first shows the track, the second shows no ring at all. The coloured
+  // progress arc is then swept over the track proportional to the measurement.
   let ring = '';
   if (hasDistress) {
     const level = Math.min(100, Math.max(0, spec.distress as number));
     const r = 11;
     const circumference = 2 * Math.PI * r;
-    const dash = (level / 100) * circumference;
+    // Dim full track, in the module's existing rule colour, low opacity.
     ring =
-      `<circle cx="12" cy="12" r="${r}" fill="none" stroke="${distressColor(level)}" ` +
-      `stroke-width="1.5" stroke-linecap="butt" ` +
-      `stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}" ` +
-      `transform="rotate(-90 12 12)" opacity="0.9" />`;
+      `<circle cx="12" cy="12" r="${r}" fill="none" stroke="#3B3B3B" ` +
+      `stroke-width="1.5" opacity="0.35" />`;
+    // Coloured progress arc, only when there is something to sweep.
+    if (level > 0) {
+      const dash = (level / 100) * circumference;
+      ring +=
+        `<circle cx="12" cy="12" r="${r}" fill="none" stroke="${distressColor(level)}" ` +
+        `stroke-width="1.5" stroke-linecap="butt" ` +
+        `stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}" ` +
+        `transform="rotate(-90 12 12)" opacity="0.9" />`;
+    }
   }
 
   // Selection is a 1px --accent ring, never a scale transform.
