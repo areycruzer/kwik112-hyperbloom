@@ -34,9 +34,12 @@ export default function ForecastModule({ calls }: { calls: EmergencyCall[] }) {
     const byType = new Map<string, number>();
     const byHour = new Array<number>(24).fill(0);
 
-    // Triage provenance: `triage_method` is 'model' (model refinement) or
-    // 'keyword' (local rules). Calls with no recorded method are counted
-    // separately rather than being assigned to either bucket.
+    // Triage provenance. Read the structured `triage_engine` ('local' | 'model')
+    // the builder emits. `triage_method` is never the literal 'model' — it is
+    // `${provider}:${model}` on the model path and 'keyword' on the local path —
+    // so the old `method === 'model'` test left Model-graded permanently zero.
+    // Fall back to deriving the engine from `triage_method` for calls stored
+    // before the field existed; calls with neither are counted separately.
     let model = 0;
     let local = 0;
     let unrecorded = 0;
@@ -50,9 +53,11 @@ export default function ForecastModule({ calls }: { calls: EmergencyCall[] }) {
       const t = Date.parse(call.created_at);
       if (!Number.isNaN(t)) byHour[new Date(t).getHours()] += 1;
 
-      const method = call.triage_method;
-      if (method === 'model') model += 1;
-      else if (method) local += 1;
+      const engine =
+        call.triage_engine ??
+        (call.triage_method ? (call.triage_method === 'keyword' ? 'local' : 'model') : undefined);
+      if (engine === 'model') model += 1;
+      else if (engine === 'local') local += 1;
       else unrecorded += 1;
     }
 

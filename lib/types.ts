@@ -73,7 +73,9 @@ export interface EmergencyCall {
     flags?: string[];
     emotion_analysis?: {
       top_emotions?: Array<{ emotion: string; intensity: number }>;
-      distress_level?: number;
+      /** Measured 0–100 distress, or null when no prosody was captured. Zero is
+       *  a real measurement (measured calm); null is a coverage gap. */
+      distress_level?: number | null;
     };
   };
   ai_recommendation?: AIRecommendation | string;
@@ -101,8 +103,13 @@ export interface EmergencyCall {
   refinable?: boolean;
   /** Set when refinement graded the call above the local rules. */
   model_escalated?: boolean;
-  /** Names the engine that produced the current grade. */
+  /** Names the engine that produced the current grade (human-readable, e.g.
+   *  'keyword' or 'glm:glm-4.5-flash'). */
   triage_method?: string;
+  /** Structured provenance for analytics: 'local' when keyword rules graded the
+   *  call, 'model' when the language model did. Derived from `triage_method`
+   *  so a 'model'-mode build that fell back to keyword rules reads as 'local'. */
+  triage_engine?: 'local' | 'model';
 
   // Metadata
   created_at: string;

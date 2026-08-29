@@ -200,14 +200,22 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
   ].filter((f): f is EmotionFrame => Boolean(f) && typeof f === 'object');
 
   const ranked = rankEmotions(frames);
-  const distress = distressLevel(ranked);
+  // `distressLevel` returns 0 for an empty frame array — a real number, not
+  // absence. A scripted call (and any /create without an `emotions` array)
+  // captures no prosody, so publishing a measured distress of 0 would paint a
+  // green "measured calm" bar and claim the call came through the voice station.
+  // Only emit a measurement when frames actually exist; otherwise it is null.
+  const hasProsody = frames.length > 0;
+  const distress = hasProsody ? distressLevel(ranked) : null;
 
   const triageInput = callerText || fullText;
   const triage = mode === 'model' ? await triageTranscript(triageInput) : localTriage(triageInput);
   const baseScore = scoreOf(triage);
 
-  // Emotion evidence can nudge severity up, never down.
-  const severityScore = Math.min(100, Math.round(Math.max(baseScore, baseScore + distress * 0.2)));
+  // Emotion evidence can nudge severity up, never down. With no prosody the
+  // boost is a no-op, so severity is unaffected by the null case.
+  const distressBoost = distress ?? 0;
+  const severityScore = Math.min(100, Math.round(Math.max(baseScore, baseScore + distressBoost * 0.2)));
   const severity = severityFromScore(severityScore);
   const top = ranked[0];
 
@@ -260,6 +268,7 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
       flags: triage.flags,
       emotion_analysis: {
         top_emotions: ranked.slice(0, 8),
+        // null, not 0, when no prosody was captured — see `hasProsody` above.
         distress_level: distress,
       },
     },
@@ -277,6 +286,11 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     // Triage provenance. `create` (local) is refinable; `refine` (model) is not.
     refinable: mode === 'local',
     triage_method: triage.method,
+    // Structured provenance for analytics. `triage.method` is 'keyword' on the
+    // local path and `${provider}:${model}` on the model path — never the literal
+    // 'model' — so derive the engine from it rather than from `mode`, which lets a
+    // 'model'-mode build that fell back to keyword rules read honestly as 'local'.
+    triage_engine: triage.method === 'keyword' ? 'local' : 'model',
 
     created_at: now,
     updated_at: now,

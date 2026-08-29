@@ -439,7 +439,10 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
   // The model can only raise severity above the local grade, never lower it.
   // A model that misses "no pulse" must not downgrade what the rules caught.
   const localScore = scoreOf(local);
-  if (scoreOf(parsed) < localScore) {
+  // Capture the model's own score BEFORE the floor is applied, so the log line
+  // reports the real "model graded X, kept Y" rather than X === Y after raising.
+  const modelScore = scoreOf(parsed);
+  if (modelScore < localScore) {
     (parsed as any).severityScore = localScore;
     parsed.extraction.severity = severityFromScore(localScore);
     for (const threat of local.extraction.immediate_threats) {
@@ -448,7 +451,7 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
       }
     }
     logger.info('Model graded below local rules; keeping the higher grade', {
-      modelScore: scoreOf(parsed),
+      modelScore,
       localScore,
     });
   }
