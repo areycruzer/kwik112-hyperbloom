@@ -1,3 +1,6 @@
+/* Must precede @import "tailwindcss": Tailwind v4 expands into real rules,
+   and Lightning CSS drops any @import that follows a rule. Reordering these
+   two lines silently stops IBM Plex from loading, with no build error. */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @import "tailwindcss";
