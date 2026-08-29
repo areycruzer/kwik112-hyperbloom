@@ -34,7 +34,7 @@ import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS } from '@/lib/units';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
-import IncidentWorkflowOverlay from '@/components/IncidentWorkflowOverlay';
+import IncidentTimeline from '@/components/IncidentTimeline';
 import DataManagementDashboard from '@/components/DataManagementDashboard';
 import CallHistoryOverlay from '@/components/CallHistoryOverlay';
 import IncidentKanbanBoard from '@/components/IncidentKanbanBoard';
@@ -633,11 +633,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- OVERLAYS ------------------------------------------------------ */}
-      <IncidentWorkflowOverlay
+      <IncidentTimeline
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
-        call={selectedCall}
-        calls={calls}
+        call={selectedCall ?? null}
       />
 
       <DataManagementDashboard
