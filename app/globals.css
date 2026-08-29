@@ -106,15 +106,51 @@ html, body {
   font-size: 9px !important;
 }
 .leaflet-control-attribution a { color: var(--ink-2) !important; }
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
+
+/* Popup chrome. Leaflet's own leaflet.css is injected by the component *after*
+   globals.css, so at equal specificity its light-theme defaults (white wrapper,
+   white tip, grey glyphs) win the cascade and light-grey text renders on white.
+   The popup markup carries the `pulse-map-popup` class (bindPopup className), so
+   every rule below scopes through it to out-specify Leaflet without !important:
+   the wrapper/tip beat `.leaflet-popup-content-wrapper` (0,1,0) at (0,2,0), and
+   the close button beats `.leaflet-container a.leaflet-popup-close-button`
+   (0,2,1) at (0,3,1). */
+.pulse-map-popup .leaflet-popup-content-wrapper,
+.pulse-map-popup .leaflet-popup-tip {
   background: var(--panel);
   color: var(--ink);
   border: 1px solid var(--rule-strong);
   border-radius: 6px;
   box-shadow: none;
 }
+/* The tip is a rotated square: kill its shadow so no white triangle shows. */
+.pulse-map-popup .leaflet-popup-tip { border: none; }
 .leaflet-popup-content { margin: 0; padding: 8px; }
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button {
+  color: var(--ink-3);
+}
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button:hover,
+.leaflet-container .pulse-map-popup a.leaflet-popup-close-button:focus {
+  color: var(--ink);
+}
+
+/* Zoom control lives under .leaflet-container (not the popup), where Leaflet's
+   `.leaflet-bar a` (0,2,0) paints it white-on-white. Scope through the container
+   to reach (0,3,0) and (0,4,0) for hover, keeping the dark panel + ink glyphs. */
+.leaflet-container .leaflet-control-zoom a {
+  background-color: var(--panel);
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.leaflet-container .leaflet-control-zoom a:hover,
+.leaflet-container .leaflet-control-zoom a:focus {
+  background-color: var(--panel-raised);
+  color: var(--ink);
+}
+.leaflet-container .leaflet-control-zoom a.leaflet-disabled {
+  background-color: var(--panel);
+  color: var(--ink-4);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
