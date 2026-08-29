@@ -1,8 +1,9 @@
 /**
  * @module design/symbols
- * @description MIL-STD-2525-derived incident and unit symbols, emitted as SVG
- *              strings so the same function can feed both React components and
- *              Leaflet `divIcon`, which only accepts markup.
+ * @description Incident and unit symbols, emitted as SVG strings so the same
+ *              function can feed both React components and Leaflet `divIcon`,
+ *              which only accepts markup. Incidents are filled triangles in the
+ *              severity colour; units are filled circles in the service colour.
  *
  *              Self-contained on purpose: it imports nothing from the rest of
  *              the project so `node --test` can run it without a resolver.
@@ -24,21 +25,23 @@ export interface SymbolSpec {
   selected?: boolean;
 }
 
+// Severity collapses onto the product's three named levels: P1 → CRITICAL,
+// P2 → MILD, P3/P4 → SAFE.
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#C4342B',
-  high: '#D08C1E',
-  medium: '#C9B458',
-  low: '#6B8E6B',
+  critical: '#F40000',
+  high: '#FABC1F',
+  medium: '#47FF85',
+  low: '#47FF85',
 };
 
 const SERVICE_COLORS: Record<UnitService, string> = {
-  police: '#4A90B8',
-  fire: '#C4342B',
-  ems: '#5E9C6B',
+  police: '#69D2FF',
+  fire: '#F40000',
+  ems: '#47FF85',
 };
 
-/** Unknown affiliation, per STANAG 2019. */
-const UNKNOWN = '#D0A81E';
+/** Ungraded / unknown — neutral --ink-3, never a fabricated severity. */
+const UNKNOWN = '#9F9F9F';
 
 export function severityColor(severity?: string): string {
   if (!severity) return UNKNOWN;
@@ -76,11 +79,11 @@ function mix(a: string, b: string, t: number): string {
   return rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t);
 }
 
-/** @description Calm to peak distress: blue -> amber -> signal red. */
+/** @description Calm to peak distress: safe green -> mild amber -> signal red. */
 export function distressColor(level: number): string {
   const l = Math.min(100, Math.max(0, level));
-  if (l <= 50) return mix('#4A90B8', '#D0A81E', l / 50);
-  return mix('#D0A81E', '#C4342B', (l - 50) / 50);
+  if (l <= 50) return mix('#47FF85', '#FABC1F', l / 50);
+  return mix('#FABC1F', '#F40000', (l - 50) / 50);
 }
 
 export function glyphForIncidentType(incidentType?: string): IncidentGlyph {
@@ -108,9 +111,11 @@ const GLYPH_PATHS: Record<string, string> = {
 
 /**
  * @description Build an incident or unit symbol as an SVG string.
- *              Frame shape encodes entity kind (diamond = incident, rectangle =
- *              unit), stroke encodes severity or service, and the inner glyph
- *              encodes type. A distress ring is drawn only when prosody exists.
+ *              Frame shape encodes entity kind (filled triangle = incident,
+ *              filled circle = unit), fill encodes severity or service, and the
+ *              inner glyph encodes type. When a `label` is given it is set beside
+ *              the marker in --ink on a dark plate. A distress ring is drawn only
+ *              when prosody exists; selection adds a 1px accent ring.
  */
 export function buildSymbol(spec: SymbolSpec): string {
   const size = spec.size ?? 28;
@@ -122,10 +127,11 @@ export function buildSymbol(spec: SymbolSpec): string {
   const hasDistress = typeof spec.distress === 'number';
   const glyph = GLYPH_PATHS[spec.glyph] ?? GLYPH_PATHS.unknown;
 
+  // Incidents are filled triangles (point up); units are filled circles.
   const frame =
     spec.kind === 'incident'
-      ? `<polygon points="12,2.5 21.5,12 12,21.5 2.5,12" fill="${color}2E" stroke="${color}" stroke-width="1.5" />`
-      : `<rect x="3.5" y="5.5" width="17" height="13" rx="1" fill="${color}2E" stroke="${color}" stroke-width="1.5" />`;
+      ? `<polygon points="12,3 21,20 3,20" fill="${color}" stroke="${color}" stroke-width="1" />`
+      : `<circle cx="12" cy="12" r="9" fill="${color}" stroke="${color}" stroke-width="1" />`;
 
   // Distress ring: an arc swept proportional to the measurement.
   let ring = '';
@@ -141,21 +147,35 @@ export function buildSymbol(spec: SymbolSpec): string {
       `transform="rotate(-90 12 12)" opacity="0.9" />`;
   }
 
+  // Selection is a 1px --accent ring, never a scale transform.
   const selection = spec.selected
-    ? `<rect x="0.75" y="0.75" width="22.5" height="22.5" fill="none" stroke="#3E7C8C" stroke-width="1.5" />`
+    ? `<circle cx="12" cy="12" r="11.25" fill="none" stroke="#69D2FF" stroke-width="1" />`
     : '';
 
+  // Name label beside the marker, in --ink on a dark plate.
+  let plate = '';
+  let viewW = 24;
+  if (spec.label) {
+    const plateW = Math.max(24, spec.label.length * 6 + 12);
+    viewW = 28 + plateW;
+    plate =
+      `<rect x="28" y="6" width="${plateW}" height="12" rx="2" fill="#171717" stroke="#3B3B3B" stroke-width="1" />` +
+      `<text x="${28 + plateW / 2}" y="15" text-anchor="middle" font-size="9" font-weight="500" fill="#F2F2F2">${esc(spec.label)}</text>`;
+  }
+
   const title = spec.label ? `<title>${esc(spec.label)}</title>` : '';
+  const width = Math.round(size * (viewW / 24));
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" ` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewW} 24" width="${width}" height="${size}" ` +
     `data-kind="${esc(spec.kind)}"${hasDistress ? ` data-distress="${Math.round(spec.distress as number)}"` : ''} ` +
     `role="img" aria-label="${esc(spec.label ?? spec.glyph)}">` +
     title +
     selection +
     ring +
     frame +
-    `<path d="${glyph}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />` +
+    `<path d="${glyph}" fill="none" stroke="#1E1E1E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />` +
+    plate +
     `</svg>`
   );
 }
