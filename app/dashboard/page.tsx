@@ -346,6 +346,12 @@ export default function DashboardPage() {
   // badge decrements immediately.
   const handleAlertAck = useCallback(() => setAckVersion((v) => v + 1), []);
 
+  // In Board view the incident queue panel is redundant — the kanban already
+  // shows every incident, grouped by stage — so it is collapsed to give the five
+  // columns the full width. The icon rail stays. Only the Monitoring module owns
+  // the main area's map/board switch, so this only applies there.
+  const boardActive = activeModule === 'monitoring' && mainView === 'board';
+
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-ground text-ink">
       {/* ---- COMMAND BAR ---------------------------------------------------- */}
@@ -430,7 +436,8 @@ export default function DashboardPage() {
       <div className="flex min-h-0 flex-1">
         <ModuleRail active={activeModule} onSelect={handleModuleSelect} alertCount={alerts.length} />
 
-        {/* Incident panel */}
+        {/* Incident panel — hidden in Board view so the kanban gets full width. */}
+        {!boardActive && (
         <aside className="flex w-[360px] shrink-0 flex-col border-r border-rule-strong bg-ground xl:w-[400px]">
           {/* Incident panel header */}
           <div className="flex shrink-0 items-center justify-between border-b border-rule-strong px-3 py-2.5">
@@ -516,6 +523,7 @@ export default function DashboardPage() {
             </>
           )}
         </aside>
+        )}
 
         {/* Main area: the active rail module. Monitoring is the map / incident
             board; Alerts, History and Forecast each render here in the main

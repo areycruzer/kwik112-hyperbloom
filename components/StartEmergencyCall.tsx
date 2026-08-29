@@ -46,16 +46,36 @@ interface TranscriptLine {
   emotions?: Record<string, number>;
 }
 
-/** Scripted callers, used when no microphone is available. */
-const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: string[] }> = [
+/**
+ * Scripted callers, used when no microphone is available. Each line carries a
+ * plausible Hume-style prosody frame (emotion → 0–1 intensity) so the emotion
+ * panel animates the way a live call does. These curves are DEMO DATA: they are
+ * labelled SIMULATED wherever they surface and the created call is flagged
+ * `prosody_source: 'simulated'`, never passed off as a live measurement.
+ */
+interface ScriptLine {
+  text: string;
+  emotions?: Record<string, number>;
+}
+
+const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLine[] }> = [
   {
     id: 'cardiac',
     name: 'Cardiac arrest — Connaught Place',
     phone: '+91 98102 34512',
     lines: [
-      'Please help, my father just collapsed on the living room floor in Connaught Place, New Delhi.',
-      'He is clutching his chest and he is not breathing normally.',
-      'I cannot feel a pulse. He is completely unresponsive. Tell me what to do.',
+      {
+        text: 'Please help, my father just collapsed on the living room floor in Connaught Place, New Delhi.',
+        emotions: { Panic: 0.94, Distress: 0.89, Fear: 0.91, Anxiety: 0.62 },
+      },
+      {
+        text: 'He is clutching his chest and he is not breathing normally.',
+        emotions: { Panic: 0.96, Distress: 0.92, Fear: 0.88, Horror: 0.55 },
+      },
+      {
+        text: 'I cannot feel a pulse. He is completely unresponsive. Tell me what to do.',
+        emotions: { Panic: 0.98, Distress: 0.96, Desperation: 0.9, Fear: 0.85 },
+      },
     ],
   },
   {
@@ -63,9 +83,18 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: string[] 
     name: 'Structure fire — Nehru Place',
     phone: '+91 98711 88291',
     lines: [
-      'There is heavy black smoke pouring out of the third floor electronics shop at Nehru Place.',
-      'People are trapped on the stairway and the fire is spreading.',
-      'About fifteen of us are coming down the fire exit now.',
+      {
+        text: 'There is heavy black smoke pouring out of the third floor electronics shop at Nehru Place.',
+        emotions: { Fear: 0.92, Anxiety: 0.78, Distress: 0.66 },
+      },
+      {
+        text: 'People are trapped on the stairway and the fire is spreading.',
+        emotions: { Fear: 0.9, Panic: 0.72, Distress: 0.74 },
+      },
+      {
+        text: 'About fifteen of us are coming down the fire exit now.',
+        emotions: { Fear: 0.58, Distress: 0.4, Calmness: 0.35 },
+      },
     ],
   },
   {
@@ -73,8 +102,14 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: string[] 
     name: 'Highway collision — Pitampura',
     phone: '+91 99201 44589',
     lines: [
-      'Major accident near Pitampura metro crossing. An SUV flipped over and two cars collided.',
-      'Fuel is leaking across the road and one passenger is unconscious inside.',
+      {
+        text: 'Major accident near Pitampura metro crossing. An SUV flipped over and two cars collided.',
+        emotions: { Distress: 0.78, Fear: 0.7, Anxiety: 0.68 },
+      },
+      {
+        text: 'Fuel is leaking across the road and one passenger is unconscious inside.',
+        emotions: { Fear: 0.82, Distress: 0.8, Panic: 0.6 },
+      },
     ],
   },
   {
@@ -82,8 +117,14 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: string[] 
     name: 'Water main rupture — Noida (non-emergency)',
     phone: '+91 98450 11982',
     lines: [
-      'Hi, there is water gushing onto the sidewalk from a broken municipal main in Sector 62, Noida.',
-      'Nobody is hurt at all, it is just flooding the pavement.',
+      {
+        text: 'Hi, there is water gushing onto the sidewalk from a broken municipal main in Sector 62, Noida.',
+        emotions: { Calmness: 0.85, Neutral: 0.78, Boredom: 0.2 },
+      },
+      {
+        text: 'Nobody is hurt at all, it is just flooding the pavement.',
+        emotions: { Calmness: 0.88, Neutral: 0.8 },
+      },
     ],
   },
 ];
@@ -177,7 +218,9 @@ function CallStation({
   const { connect, disconnect, status, messages, chatMetadata, isMuted, mute, unmute, micFft } =
     useVoice();
 
-  const [phase, setPhase] = useState<'idle' | 'connecting' | 'live' | 'triaging' | 'done' | 'error'>('idle');
+  const [phase, setPhase] = useState<
+    'idle' | 'connecting' | 'live' | 'scripted' | 'triaging' | 'done' | 'error'
+  >('idle');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [phone, setPhone] = useState('+91 98102 34512');
@@ -187,8 +230,26 @@ function CallStation({
   const [changed, setChanged] = useState<string[]>([]);
   const [scriptId, setScriptId] = useState(SCRIPTS[0].id);
   const [scriptedLines, setScriptedLines] = useState<TranscriptLine[]>([]);
+  // Prosody frames revealed by the scripted timer, so the emotion panel animates
+  // during a demo the way it does off the live socket.
+  const [scriptedFrames, setScriptedFrames] = useState<Record<string, number>[]>([]);
+  // Which kind of session produced the readings on screen. Drives the MEASURED
+  // vs SIMULATED labelling of the emotion panel — the two must never be confused.
+  const [sessionKind, setSessionKind] = useState<'live' | 'scripted' | null>(null);
   const startedAt = useRef<number>(0);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  // Outstanding scripted-playback timers, cleared on unmount / close / restart so
+  // a demo left mid-playback cannot fire into an unmounted component.
+  const scriptTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearScriptTimers = useCallback(() => {
+    scriptTimersRef.current.forEach((t) => clearTimeout(t));
+    scriptTimersRef.current = [];
+  }, []);
+
+  // Belt-and-braces: clear any pending scripted timers when the station unmounts
+  // (the dialog is unmounted on close, so this covers close too).
+  useEffect(() => clearScriptTimers, [clearScriptTimers]);
 
   /** Derive the transcript and prosody frames from the live EVI socket. */
   const { lines, frames } = useMemo(() => {
@@ -223,18 +284,21 @@ function CallStation({
   // The HUD shows whichever transcript this session produced.
   const displayLines = lines.length ? lines : scriptedLines;
 
-  /** Top five emotions from the most recent measured utterance. */
+  // Live socket frames win; otherwise fall back to the scripted demo frames.
+  const activeFrames = frames.length ? frames : scriptedFrames;
+
+  /** Top five emotions from the most recent utterance (live or scripted). */
   const liveEmotions = useMemo(() => {
-    const latest = frames[frames.length - 1];
+    const latest = activeFrames[activeFrames.length - 1];
     if (!latest) return [];
     return Object.entries(latest)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([emotion, intensity]) => ({ emotion, intensity }));
-  }, [frames]);
+  }, [activeFrames]);
 
   useEffect(() => {
-    if (phase !== 'live') return;
+    if (phase !== 'live' && phase !== 'scripted') return;
     const timer = setInterval(() => setDuration(Math.floor((Date.now() - startedAt.current) / 1000)), 500);
     return () => clearInterval(timer);
   }, [phase]);
@@ -257,6 +321,10 @@ function CallStation({
 
   const startLiveCall = useCallback(async () => {
     setErrorText(null);
+    clearScriptTimers();
+    setScriptedLines([]);
+    setScriptedFrames([]);
+    setSessionKind('live');
     setPhase('connecting');
     try {
       const res = await fetch('/api/hume/token', { cache: 'no-store' });
@@ -278,7 +346,7 @@ function CallStation({
       );
       setPhase('error');
     }
-  }, [connect]);
+  }, [connect, clearScriptTimers]);
 
   /**
    * Optimistic triage. Local rules grade the call and it appears on the board at
@@ -290,7 +358,8 @@ function CallStation({
       callerNumber: string,
       payloadLines: TranscriptLine[],
       emotionFrames: Record<string, number>[],
-      seconds: number
+      seconds: number,
+      prosodySource: 'measured' | 'simulated'
     ) => {
       setPhase('triaging');
       setChanged([]);
@@ -306,6 +375,7 @@ function CallStation({
             phoneNumber: callerNumber,
             transcript: payloadLines,
             emotions: emotionFrames,
+            prosodySource,
             chatGroupId: chatMetadata?.chatGroupId,
             conversationId: chatMetadata?.chatId,
             callDurationSeconds: seconds,
@@ -337,6 +407,7 @@ function CallStation({
               phoneNumber: callerNumber,
               transcript: payloadLines,
               emotions: emotionFrames,
+              prosodySource,
               chatGroupId: chatMetadata?.chatGroupId,
               conversationId: chatMetadata?.chatId,
               callDurationSeconds: seconds,
@@ -367,29 +438,72 @@ function CallStation({
       setPhase('error');
       return;
     }
-    await triageAndPublish(phone, lines, frames, seconds);
+    await triageAndPublish(phone, lines, frames, seconds, 'measured');
   }, [disconnect, lines, frames, phone, triageAndPublish]);
 
-  /** Run a scripted caller through the same backend triage as a live call. */
-  const runScript = useCallback(async () => {
+  /**
+   * Run a scripted caller through the same backend triage as a live call, but
+   * reveal the transcript and its prosody one line at a time on a timer so the
+   * emotion panel ANIMATES during playback instead of everything landing at once.
+   * The frames are clearly labelled SIMULATED and the created call is flagged
+   * `prosody_source: 'simulated'` — never dressed up as a live measurement.
+   */
+  const SCRIPT_STEP_MS = 2500;
+  const runScript = useCallback(() => {
     const script = SCRIPTS.find((s) => s.id === scriptId);
     if (!script) return;
+
+    clearScriptTimers();
     setPhone(script.phone);
-    const scripted: TranscriptLine[] = script.lines.map((text) => ({
+    setErrorText(null);
+    setResult(null);
+    setChanged([]);
+    setScriptedLines([]);
+    setScriptedFrames([]);
+    setSessionKind('scripted');
+    startedAt.current = Date.now();
+    setDuration(0);
+    setPhase('scripted');
+
+    const built: TranscriptLine[] = script.lines.map((line) => ({
       role: 'user',
-      text,
+      text: line.text,
       timestamp: new Date().toISOString(),
+      emotions: line.emotions,
     }));
-    setScriptedLines(scripted);
-    await triageAndPublish(script.phone, scripted, [], script.lines.length * 6);
-  }, [scriptId, triageAndPublish]);
+    // Accumulated as the timer fires, so the payload handed to triage matches
+    // exactly what the panel showed.
+    const collectedFrames: Record<string, number>[] = [];
+
+    built.forEach((line, index) => {
+      const timer = setTimeout(() => {
+        setScriptedLines((prev) => [...prev, line]);
+        if (line.emotions) {
+          collectedFrames.push(line.emotions);
+          setScriptedFrames((prev) => [...prev, line.emotions as Record<string, number>]);
+        }
+      }, index * SCRIPT_STEP_MS);
+      scriptTimersRef.current.push(timer);
+    });
+
+    // Once the last line has played, grade the call through the same pipeline a
+    // live call uses.
+    const finishTimer = setTimeout(() => {
+      const seconds = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
+      void triageAndPublish(script.phone, built, collectedFrames, seconds, 'simulated');
+    }, built.length * SCRIPT_STEP_MS);
+    scriptTimersRef.current.push(finishTimer);
+  }, [scriptId, triageAndPublish, clearScriptTimers]);
 
   const reset = () => {
+    clearScriptTimers();
     setPhase('idle');
     setResult(null);
     setErrorText(null);
     setDuration(0);
     setScriptedLines([]);
+    setScriptedFrames([]);
+    setSessionKind(null);
     setChanged([]);
     setRefining(false);
   };
@@ -445,7 +559,7 @@ function CallStation({
                 id="caller-number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled={phase === 'live' || phase === 'triaging'}
+                disabled={phase === 'live' || phase === 'scripted' || phase === 'triaging'}
                 className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none disabled:opacity-50"
               />
             </div>
@@ -514,6 +628,13 @@ function CallStation({
                   </button>
                 </div>
                 <Meter value={micLevel * 100} max={100} color="var(--safe)" />
+              </div>
+            )}
+
+            {phase === 'scripted' && (
+              <div className="flex items-center gap-2 rounded-md border border-mild/30 bg-mild/15 px-3 py-3 text-xs font-medium text-mild">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Playing simulated caller — emotion values are demo data, not measured.
               </div>
             )}
 
@@ -592,10 +713,23 @@ function CallStation({
             <div className="flex items-center justify-between border-b border-rule pb-3">
               <div className="flex items-center gap-2">
                 <span
-                  className={cn('h-3 w-3 rounded-full', phase === 'live' ? 'animate-ping bg-critical' : 'bg-ink-4')}
+                  className={cn(
+                    'h-3 w-3 rounded-full',
+                    phase === 'live'
+                      ? 'animate-ping bg-critical'
+                      : phase === 'scripted'
+                      ? 'animate-ping bg-mild'
+                      : 'bg-ink-4',
+                  )}
                 />
                 <span className="text-sm font-bold uppercase tracking-wide text-ink">
-                  {phase === 'live' ? `Live call · ${mmss}` : phase === 'done' ? 'Call ended' : 'Ready'}
+                  {phase === 'live'
+                    ? `Live call · ${mmss}`
+                    : phase === 'scripted'
+                    ? `Simulated call · ${mmss}`
+                    : phase === 'done'
+                    ? 'Call ended'
+                    : 'Ready'}
                 </span>
               </div>
               <span className="text-2xs text-ink-4">
@@ -607,11 +741,21 @@ function CallStation({
               <div className="flex items-center justify-between text-xs text-ink-3">
                 <span className="flex items-center gap-1">
                   <Sparkles className="h-3.5 w-3.5 text-accent" />
-                  Hume prosody
+                  Emotion telemetry
                 </span>
-                <span className={liveEmotions.length ? 'text-safe' : 'text-ink-4'}>
-                  {liveEmotions.length ? `${frames.length} measured utterances` : 'awaiting speech'}
-                </span>
+                {/* MEASURED vs SIMULATED — two visually distinct states so a
+                    scripted curve is never mistaken for a real Hume reading. */}
+                {sessionKind === 'scripted' ? (
+                  <Chip tone="mild" dot>
+                    Simulated · demo values
+                  </Chip>
+                ) : sessionKind === 'live' ? (
+                  <Chip tone="safe" dot>
+                    Measured · live Hume EVI
+                  </Chip>
+                ) : (
+                  <span className="text-ink-4">no source yet</span>
+                )}
               </div>
 
               {liveEmotions.length ? (

@@ -34,6 +34,10 @@ export interface BuildCallInput {
   conversationId?: string;
   callDurationSeconds?: number;
   reportedLocation?: { latitude?: number; longitude?: number };
+  /** Provenance of the emotion frames. 'measured' is a live Hume EVI capture;
+   *  'simulated' is a scripted demo curve. Only meaningful when frames actually
+   *  arrive — with no prosody the call stays in the "absent" state regardless. */
+  prosodySource?: 'measured' | 'simulated';
 }
 
 interface IncomingSegment {
@@ -207,6 +211,15 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
   // Only emit a measurement when frames actually exist; otherwise it is null.
   const hasProsody = frames.length > 0;
   const distress = hasProsody ? distressLevel(ranked) : null;
+  // Only tag provenance when a measurement actually exists. With no prosody the
+  // call is in the "absent" state (distress null) and carries no source flag, so
+  // measured / simulated / absent stay three distinct states. A live capture
+  // defaults to 'measured'; a scripted demo must opt in with 'simulated'.
+  const prosodySource: 'measured' | 'simulated' | undefined = hasProsody
+    ? input.prosodySource === 'simulated'
+      ? 'simulated'
+      : 'measured'
+    : undefined;
 
   const triageInput = callerText || fullText;
   const triage = mode === 'model' ? await triageTranscript(triageInput) : localTriage(triageInput);
@@ -291,6 +304,8 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     // 'model' — so derive the engine from it rather than from `mode`, which lets a
     // 'model'-mode build that fell back to keyword rules read honestly as 'local'.
     triage_engine: triage.method === 'keyword' ? 'local' : 'model',
+    // Prosody provenance. Undefined when no frames arrived (absent state).
+    prosody_source: prosodySource,
 
     created_at: now,
     updated_at: now,

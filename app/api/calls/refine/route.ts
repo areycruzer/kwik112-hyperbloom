@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       conversationId: body?.conversationId,
       callDurationSeconds: body?.callDurationSeconds,
       reportedLocation: body?.reportedLocation,
+      prosodySource: body?.prosodySource,
     };
 
     // Build both grades from the SAME shared assembly so they can never drift.

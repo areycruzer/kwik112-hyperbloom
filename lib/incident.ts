@@ -42,12 +42,19 @@ export function distressOf(call: EmergencyCall): number | null {
 }
 
 /**
- * Where this call's grade came from. Only a call carrying a measured prosody
- * reading is attributed to the live 112 Pulse voice station; a seeded or
- * keyword-graded call is not dressed up as one.
+ * Where this call's grade came from. Three prosody states are kept distinct:
+ *   - measured  → a live Hume EVI reading: "112 Pulse voice".
+ *   - simulated → a scripted demo curve: "Simulated demo". Never dressed up as a
+ *                 live measurement, which is the whole point of the flag.
+ *   - absent    → no prosody at all (distress_level null): falls through to the
+ *                 triage/manual attribution below.
+ * A distress reading present with no `prosody_source` predates the flag and is
+ * treated as measured, preserving prior behaviour for older stored calls.
  */
 export function triageSource(call: EmergencyCall): string {
-  if (call.ai_triage?.emotion_analysis?.distress_level != null) return '112 Pulse voice';
+  if (call.ai_triage?.emotion_analysis?.distress_level != null) {
+    return call.prosody_source === 'simulated' ? 'Simulated demo' : '112 Pulse voice';
+  }
   if (call.ai_confidence != null || call.ai_triage?.confidence != null) return 'AI triage';
   return 'Manual intake';
 }

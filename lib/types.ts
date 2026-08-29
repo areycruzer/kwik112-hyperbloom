@@ -110,6 +110,12 @@ export interface EmergencyCall {
    *  call, 'model' when the language model did. Derived from `triage_method`
    *  so a 'model'-mode build that fell back to keyword rules reads as 'local'. */
   triage_engine?: 'local' | 'model';
+  /** Where the prosody behind `distress_level` came from. 'measured' is a live
+   *  Hume EVI reading; 'simulated' is a scripted demo curve. Absent (undefined)
+   *  means no prosody at all — the same coverage gap that leaves
+   *  `distress_level` null. Kept distinct so a scripted curve is never passed
+   *  off as a live measurement. */
+  prosody_source?: 'measured' | 'simulated';
 
   // Metadata
   created_at: string;

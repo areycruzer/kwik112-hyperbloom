@@ -227,8 +227,10 @@ export default function IncidentKanbanBoard({
         </div>
       </div>
 
-      {/* Five-column board */}
-      <div className="grid flex-1 grid-cols-1 gap-3 overflow-x-auto overflow-y-hidden p-4 md:grid-cols-3 lg:grid-cols-5">
+      {/* Five-column board. Columns flex to fill the width but never shrink
+          below a readable floor; when five of them cannot fit the viewport the
+          row scrolls horizontally rather than crushing each column. */}
+      <div className="flex flex-1 gap-3 overflow-x-auto overflow-y-hidden p-4">
         {KANBAN_COLUMNS.map((column) => {
           const colCalls = getCallsForColumn(column);
 
@@ -237,7 +239,7 @@ export default function IncidentKanbanBoard({
               key={column.id}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, column.id)}
-              className="flex h-full flex-col overflow-hidden rounded-md border border-rule-strong bg-panel"
+              className="flex h-full min-w-[240px] flex-1 flex-col overflow-hidden rounded-md border border-rule-strong bg-panel"
             >
               {/* Column header */}
               <div className="border-b border-rule">
@@ -274,7 +276,7 @@ export default function IncidentKanbanBoard({
                       >
                         {/* Header: priority, symbol, subtype, elapsed */}
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex min-w-0 items-start gap-2">
                             <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
                             <Symbol
                               spec={{
@@ -284,9 +286,13 @@ export default function IncidentKanbanBoard({
                                 distress: distressOf(call),
                                 size: 20,
                               }}
-                              className="shrink-0"
+                              className="mt-0.5 shrink-0"
                             />
-                            <span className="truncate text-sm font-semibold capitalize text-ink">
+                            {/* The subtype is the single most important field on
+                                the card. It wraps to at most two lines instead of
+                                truncating to a few characters; a very long subtype
+                                is clamped so one card cannot grow unbounded. */}
+                            <span className="line-clamp-2 break-words text-sm font-semibold capitalize leading-snug text-ink">
                               {subtype}
                             </span>
                           </div>
@@ -317,14 +323,19 @@ export default function IncidentKanbanBoard({
                           </span>
                         </div>
 
-                        {/* Actions */}
+                        {/* Actions — an icon-led primary plus icon-only
+                            secondaries, all on one line. "Open in map" never
+                            wraps; the icon buttons keep their footprint and each
+                            carries an aria-label and title so the board stays
+                            keyboard- and screen-reader-operable. */}
                         <div className="flex items-center gap-1.5 border-t border-rule pt-2">
                           <button
                             type="button"
                             onClick={() => onSelectCallAndNavigateToMap(call.id)}
-                            className="flex flex-1 items-center justify-center gap-1 rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 transition-colors hover:border-accent hover:text-accent"
+                            title="Open this incident on the situational map"
+                            className="flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 transition-colors hover:border-accent hover:text-accent"
                           >
-                            <Navigation className="h-3 w-3" aria-hidden />
+                            <Navigation className="h-3 w-3 shrink-0" aria-hidden />
                             <span>Open in map</span>
                           </button>
 
@@ -332,7 +343,7 @@ export default function IncidentKanbanBoard({
                             <button
                               type="button"
                               onClick={() => regressStage(call)}
-                              className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-mild hover:text-mild"
+                              className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-mild hover:text-mild"
                               title="Move back to the previous pipeline stage"
                               aria-label={`Move ${subtype} back to the previous stage`}
                             >
@@ -343,7 +354,7 @@ export default function IncidentKanbanBoard({
                           <button
                             type="button"
                             onClick={() => onOpenWorkflow(call)}
-                            className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-mild transition-colors hover:border-accent hover:text-accent"
+                            className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-mild transition-colors hover:border-accent hover:text-accent"
                             title="Review the AI decision timeline"
                             aria-label={`Review the decision timeline for ${subtype}`}
                           >
@@ -354,7 +365,7 @@ export default function IncidentKanbanBoard({
                             <button
                               type="button"
                               onClick={() => advanceStage(call)}
-                              className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-safe hover:text-safe"
+                              className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-safe hover:text-safe"
                               title="Advance to the next pipeline stage"
                               aria-label={`Advance ${subtype} to the next stage`}
                             >
