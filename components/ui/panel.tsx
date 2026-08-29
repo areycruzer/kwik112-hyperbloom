@@ -65,30 +65,30 @@ export type ChipTone = 'critical' | 'mild' | 'safe' | 'accent' | 'neutral';
 // Fully-rounded filled pills: the signal colour as text over that same colour
 // at low alpha, no border. Class names are spelled out in full (never
 // interpolated) so Tailwind's scanner emits every variant. The low-alpha fill
-// is written as an explicit `color-mix` over the design token rather than a
-// `bg-<tone>/15` opacity modifier: because these tokens are declared with
-// `@theme inline` as bare `var()` references, Tailwind silently drops the
-// opacity modifier and emits a fully-opaque fill, so the mix is spelled out.
+// uses the plain `bg-<tone>/15` opacity modifier: Tailwind v4 emits a
+// progressive-enhancement pair for these `@theme inline` tokens (a fully-opaque
+// fallback plus an `@supports` colour-mix rule carrying the alpha), so the
+// modifier renders the correct low-alpha fill in every modern browser.
 // The optional status dot uses the solid signal colour.
 const CHIP_TONES: Record<ChipTone, { pill: string; dot: string }> = {
   critical: {
-    pill: 'text-critical bg-[color-mix(in_oklab,var(--critical)_15%,transparent)]',
+    pill: 'text-critical bg-critical/15',
     dot: 'bg-critical',
   },
   mild: {
-    pill: 'text-mild bg-[color-mix(in_oklab,var(--mild)_15%,transparent)]',
+    pill: 'text-mild bg-mild/15',
     dot: 'bg-mild',
   },
   safe: {
-    pill: 'text-safe bg-[color-mix(in_oklab,var(--safe)_15%,transparent)]',
+    pill: 'text-safe bg-safe/15',
     dot: 'bg-safe',
   },
   accent: {
-    pill: 'text-accent bg-[color-mix(in_oklab,var(--accent)_15%,transparent)]',
+    pill: 'text-accent bg-accent/15',
     dot: 'bg-accent',
   },
   neutral: {
-    pill: 'text-ink-2 bg-[color-mix(in_oklab,var(--ink-2)_12%,transparent)]',
+    pill: 'text-ink-2 bg-ink-2/12',
     dot: 'bg-ink-3',
   },
 };
