@@ -19,11 +19,13 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmergencyCall } from '@/lib/types';
 import { Chip, type ChipTone } from '@/components/ui/panel';
 import { Symbol } from '@/components/ui/symbol';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
+import { recommendedUnits } from '@/lib/incident';
+import { useDialogFocus } from '@/lib/useDialogFocus';
 import {
   DECISION_POINTS,
   type DecisionPoint,
@@ -76,17 +78,6 @@ const ACTION_LABEL: Record<DecisionAction, string> = {
   overridden: 'Overridden',
 };
 
-/** The recommended responding units, drawn from real fields only — never invented. */
-function recommendedUnits(call: EmergencyCall): string[] {
-  if (call.recommended_units?.length) return call.recommended_units;
-  const rec = call.ai_recommendation;
-  if (rec && typeof rec === 'object') {
-    const units = [rec.primary_unit, ...(rec.support_units ?? [])].filter(Boolean) as string[];
-    if (units.length) return units;
-  }
-  return [];
-}
-
 /**
  * Build each decision point's proposal from the OPEN call. Nothing here is
  * hardcoded to a service: a utility incident yields its own summary, units, and
@@ -138,8 +129,9 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
   const [action, setAction] = useState<DecisionAction>('confirmed');
   const [note, setNote] = useState('');
 
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
+  // Initial focus, Tab trap, Escape-to-close, and focus restore — from the one
+  // shared hook the voice station also uses, so the two dialogs cannot diverge.
+  const { dialogRef, onKeyDown } = useDialogFocus(open, onClose);
 
   /**
    * Load this incident's timeline whenever the OPEN call changes. Keying on the
@@ -152,20 +144,6 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     setAction('confirmed');
     setNote('');
   }, [callId, open]);
-
-  // Move focus into the dialog on open; return it to the trigger on close.
-  // Focus directly rather than via requestAnimationFrame: the ref is already
-  // attached when this post-commit effect runs, and rAF callbacks are throttled
-  // in a backgrounded tab, which would leave focus stranded on the trigger.
-  useEffect(() => {
-    if (!open) return;
-    previouslyFocused.current = (document.activeElement as HTMLElement) ?? null;
-    // Focus the dialog container so a screen reader lands on the labelled dialog.
-    dialogRef.current?.focus();
-    return () => {
-      previouslyFocused.current?.focus?.();
-    };
-  }, [open]);
 
   const pending = useMemo(() => currentPoint(timeline), [timeline]);
   const complete = useMemo(() => isComplete(timeline), [timeline]);
@@ -201,38 +179,6 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     setNote('');
   }, [action, note, pending, timeline]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab') {
-        // Trap focus inside the dialog so Tab cycles within it.
-        const root = dialogRef.current;
-        if (!root) return;
-        const focusable = root.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const active = document.activeElement as HTMLElement | null;
-        if (e.shiftKey) {
-          if (active === first || active === root) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else if (active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    [onClose],
-  );
-
   if (!open || !call) return null;
 
   const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
@@ -250,7 +196,7 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        onKeyDown={handleKeyDown}
+        onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-md border border-rule-strong bg-panel text-ink outline-none"
       >

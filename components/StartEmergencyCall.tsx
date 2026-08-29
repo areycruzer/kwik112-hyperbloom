@@ -32,6 +32,7 @@ import { logger } from '@/lib/logger';
 import { EmergencyCall } from '@/lib/types';
 import { Chip, Meter } from '@/components/ui/panel';
 import { distressColor } from '@/lib/design/symbols';
+import { useDialogFocus } from '@/lib/useDialogFocus';
 import { cn } from '@/lib/utils';
 
 interface StartEmergencyCallProps {
@@ -119,18 +120,50 @@ function explainVoiceError(reason?: string): string {
   return raw;
 }
 
-/** @description Persist a triaged call and tell the dashboard about it. */
-function publishCall(call: EmergencyCall) {
+/**
+ * @description Persist a triaged call and tell the dashboard about it.
+ *
+ * A create (`isUpdate: false`) writes the call wholesale. A model refinement
+ * (`isUpdate: true`) arrives 10–25s later and MUST NOT clobber operator-owned
+ * lifecycle state: by then the operator may have dragged the incident to a later
+ * pipeline stage (persisting a new `status`), and the original `created_at`
+ * anchors incident age and the two age-based alert rules. So an update merges —
+ * operator-owned fields are taken from the stored record and only triage-derived
+ * fields come from the refined call. The `kwik-call-updated` event carries the
+ * real `isUpdate` flag so the dashboard does not steal the operator's selection.
+ */
+function publishCall(
+  call: EmergencyCall,
+  { isUpdate }: { isUpdate: boolean } = { isUpdate: false },
+) {
+  let record = call;
   try {
     const stored = localStorage.getItem('kwik_emergency_calls');
     const existing: EmergencyCall[] = stored ? JSON.parse(stored) : [];
+    const prior = existing.find((c) => c.id === call.id);
+
+    if (isUpdate && prior) {
+      // Overwrite only triage-derived fields; preserve everything the operator
+      // or the board owns — pipeline status, the original age anchor, and any
+      // dispatch bookkeeping.
+      record = {
+        ...call,
+        status: prior.status,
+        created_at: prior.created_at,
+        dispatched_units: prior.dispatched_units ?? call.dispatched_units,
+        dispatch_time: prior.dispatch_time ?? call.dispatch_time,
+        dispatcher_id: prior.dispatcher_id ?? call.dispatcher_id,
+        resolved_at: prior.resolved_at ?? call.resolved_at,
+      };
+    }
+
     const deduped = existing.filter((c) => c.id !== call.id);
-    localStorage.setItem('kwik_emergency_calls', JSON.stringify([call, ...deduped]));
+    localStorage.setItem('kwik_emergency_calls', JSON.stringify([record, ...deduped]));
   } catch (error) {
     logger.error('Could not persist call', { error });
   }
   window.dispatchEvent(
-    new CustomEvent('kwik-call-updated', { detail: { call, isUpdate: false } })
+    new CustomEvent('kwik-call-updated', { detail: { call: record, isUpdate } }),
   );
 }
 
@@ -217,14 +250,10 @@ function CallStation({
     }
   }, [status]);
 
-  // Escape closes the station from anywhere, not only when a child has focus.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // Initial focus into the dialog, a Tab trap, Escape-to-close, and focus
+  // restored to the trigger on close — the same behaviour IncidentTimeline uses,
+  // from the one shared hook so the two dialogs cannot diverge.
+  const { dialogRef, onKeyDown } = useDialogFocus(true, onClose);
 
   const startLiveCall = useCallback(async () => {
     setErrorText(null);
@@ -315,7 +344,7 @@ function CallStation({
           });
           const refined = await res.json();
           if (res.ok && refined?.call) {
-            publishCall(refined.call); // republish; dashboard merges by id
+            publishCall(refined.call, { isUpdate: true }); // republish; merge over the stored record
             setResult(refined.call);
             setTriageMethod(refined.triage_method ?? refined.call.triage_method ?? '');
             setChanged(Array.isArray(refined.changed) ? refined.changed : []);
@@ -371,10 +400,13 @@ function CallStation({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="112 Pulse voice station"
-      className="fixed inset-0 z-[2500] flex items-center justify-center bg-deep/80 p-4 text-ink"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="fixed inset-0 z-[2500] flex items-center justify-center bg-deep/80 p-4 text-ink outline-none"
     >
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-rule-strong bg-panel">
         {/* Header */}
