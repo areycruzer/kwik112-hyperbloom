@@ -12,13 +12,15 @@ export type DecisionPoint = 'INTAKE' | 'DISPATCH' | 'RESOLUTION';
 
 export const DECISION_POINTS: readonly DecisionPoint[] = ['INTAKE', 'DISPATCH', 'RESOLUTION'];
 
-export interface DecisionRecord {
-  point: DecisionPoint;
-  action: 'confirmed' | 'amended' | 'overridden';
-  at: string;
-  /** Required by the UI whenever the action is 'overridden'. */
-  note?: string;
-}
+/**
+ * An override REQUIRES a justification note; confirm/amend may omit it. Modeled
+ * as a discriminated union so the compiler forbids an override without a note at
+ * every typed call site. The runtime guard in `recordDecision` covers the rest
+ * (data parsed from localStorage, untyped callers).
+ */
+export type DecisionRecord =
+  | { point: DecisionPoint; action: 'confirmed' | 'amended'; at: string; note?: string }
+  | { point: DecisionPoint; action: 'overridden'; at: string; note: string };
 
 export interface TimelineState {
   callId: string;
@@ -31,6 +33,12 @@ export function emptyTimeline(callId: string): TimelineState {
 
 /** @description Add or replace the record for one decision point. */
 export function recordDecision(state: TimelineState, record: DecisionRecord): TimelineState {
+  // Enforce the "note required on override" invariant before any state is
+  // built, so a rejected record leaves the timeline untouched. The compiler
+  // cannot vouch for records parsed from localStorage or untyped callers.
+  if (record.action === 'overridden' && (record.note ?? '').trim() === '') {
+    throw new Error('An overridden decision requires a justification note.');
+  }
   const records = state.records.filter((r) => r.point !== record.point);
   records.push(record);
   // Keep records in canonical point order so the UI can render them directly.
@@ -57,7 +65,12 @@ function readAll(): TimelineMap {
   try {
     const raw = window.localStorage.getItem(TIMELINE_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? (parsed as TimelineMap) : {};
+    // Only a plain object is a valid store. An array (or any other non-object)
+    // is corrupt: reject it so a later writeTimeline replaces it rather than
+    // assigning a string key onto it, which JSON.stringify would silently drop.
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as TimelineMap)
+      : {};
   } catch {
     return {};
   }
