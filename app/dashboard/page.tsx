@@ -26,9 +26,12 @@ import { deriveAlerts, readAcknowledged, type AlertInput } from '@/lib/alerts';
 import { cn } from '@/lib/utils';
 
 import { Symbol } from '@/components/ui/symbol';
-import { Chip, type ChipTone } from '@/components/ui/panel';
+import { Chip, DataRow, type ChipTone } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
 import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
+import { ModuleBoard } from '@/components/ModuleBoard';
+import { UnitRoster } from '@/components/UnitRoster';
+import { TACTICAL_UNITS } from '@/lib/units';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentWorkflowOverlay from '@/components/IncidentWorkflowOverlay';
@@ -113,6 +116,7 @@ function confidencePercent(value?: number): string | null {
 export default function DashboardPage() {
   const [calls, setCalls] = useState<EmergencyCall[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
   const [activeModule, setActiveModule] = useState<ModuleId>('monitoring');
   const [panelTab, setPanelTab] = useState<PanelTab>('emergencies');
@@ -248,6 +252,10 @@ export default function DashboardPage() {
   // Stable identities keep the Leaflet marker effect from re-running (and
   // re-opening the popup) on every one-second clock tick.
   const handleMarkerClick = useCallback((id: string) => setSelectedCallId(id), []);
+  const handleSelectUnit = useCallback(
+    (id: string) => setSelectedUnitId((prev) => (prev === id ? null : id)),
+    [],
+  );
   const handleDispatchUnit = useCallback(() => setWorkflowOpen(true), []);
   const handleOpenWorkflow = useCallback((call: EmergencyCall) => {
     setSelectedCallId(call.id);
@@ -286,6 +294,47 @@ export default function DashboardPage() {
     // `calls` identity only changes when the fingerprint changes, so this is stable
     // between polls that see no real change.
   }, [calls]);
+
+  // Floating modules mounted over the map's right side (Task 11 / 11b). The
+  // roster is the first module; a compact live summary sits beside it so
+  // repositioning is observable. Both read real board data only.
+  const modules = useMemo(
+    () => ({
+      roster: {
+        title: 'Unit Roster',
+        node: (
+          <UnitRoster
+            units={TACTICAL_UNITS}
+            selectedCall={selectedCall ?? null}
+            selectedUnitId={selectedUnitId}
+            onSelectUnit={handleSelectUnit}
+          />
+        ),
+      },
+      summary: {
+        title: 'Board Summary',
+        node: (
+          <div className="flex flex-col">
+            <DataRow label="Total incidents" value={totalCount} mono />
+            <DataRow label="Critical" value={criticalCount} mono />
+            <DataRow label="High" value={highCount} mono />
+            <DataRow label="Resolved" value={resolvedCount} mono />
+            <DataRow label="Open alerts" value={alerts.length} mono />
+          </div>
+        ),
+      },
+    }),
+    [
+      selectedCall,
+      selectedUnitId,
+      handleSelectUnit,
+      totalCount,
+      criticalCount,
+      highCount,
+      resolvedCount,
+      alerts.length,
+    ],
+  );
 
   const filteredCalls = calls.filter((call) => {
     const haystack = [
@@ -554,12 +603,22 @@ export default function DashboardPage() {
         {/* Main area: full-bleed map, or the incident board. */}
         <main className="relative min-w-0 flex-1 bg-deep">
           {mainView === 'map' ? (
-            <EmergencyMap
-              calls={calls}
-              selectedCallId={selectedCall?.id || null}
-              onMarkerClick={handleMarkerClick}
-              onDispatchUnit={handleDispatchUnit}
-            />
+            <>
+              <EmergencyMap
+                calls={calls}
+                selectedCallId={selectedCall?.id || null}
+                onMarkerClick={handleMarkerClick}
+                onDispatchUnit={handleDispatchUnit}
+                selectedUnitId={selectedUnitId}
+              />
+              {/* Floating module board over the map's right side. The wrapper is
+                  click-through; only the cards inside capture pointer events. */}
+              <div className="pointer-events-none absolute right-4 top-16 bottom-4 z-[500] flex w-[340px] max-w-[calc(100%-2rem)] justify-end">
+                <div className="pointer-events-auto w-full overflow-y-auto">
+                  <ModuleBoard modules={modules} />
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex h-full flex-col overflow-hidden">
               <IncidentKanbanBoard
