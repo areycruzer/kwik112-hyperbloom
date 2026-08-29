@@ -801,7 +801,7 @@ git commit -m "feat: derive operational alerts from live call state"
 - Consumes: nothing. Self-contained.
 - Produces:
   - `type DecisionPoint = 'INTAKE' | 'DISPATCH' | 'RESOLUTION'`
-  - `interface DecisionRecord { point: DecisionPoint; action: 'confirmed' | 'amended' | 'overridden'; at: string; note?: string }`
+  - `type DecisionRecord` — discriminated union; `note: string` is REQUIRED on the `overridden` arm
   - `interface TimelineState { callId: string; records: DecisionRecord[] }`
   - `DECISION_POINTS: readonly DecisionPoint[]`
   - `emptyTimeline(callId: string): TimelineState`
@@ -891,13 +891,12 @@ export type DecisionPoint = 'INTAKE' | 'DISPATCH' | 'RESOLUTION';
 
 export const DECISION_POINTS: readonly DecisionPoint[] = ['INTAKE', 'DISPATCH', 'RESOLUTION'];
 
-export interface DecisionRecord {
-  point: DecisionPoint;
-  action: 'confirmed' | 'amended' | 'overridden';
-  at: string;
-  /** Required by the UI whenever the action is 'overridden'. */
-  note?: string;
-}
+/** A discriminated union so the compiler requires a justification note on an
+ *  override. `recordDecision` also guards at runtime, because the compiler
+ *  cannot protect records parsed back out of localStorage. */
+export type DecisionRecord =
+  | { point: DecisionPoint; action: 'confirmed' | 'amended'; at: string; note?: string }
+  | { point: DecisionPoint; action: 'overridden'; at: string; note: string };
 
 export interface TimelineState {
   callId: string;
