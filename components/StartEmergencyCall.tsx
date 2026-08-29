@@ -1,16 +1,21 @@
 /**
- * Pulse112 Live 112 Voice Station
+ * 112 PULSE — Live Voice Station
+ *
  * Opens a real Hume EVI voice session, streams the caller's speech and prosody
- * in real time, then hands the finished conversation to /api/calls/create for
- * triage. A scripted mode runs the same backend pipeline without a microphone.
+ * in real time, then grades the finished conversation. A scripted mode runs the
+ * same backend pipeline without a microphone.
+ *
+ * On call end the flow is optimistic: `POST /api/calls/create` grades with local
+ * rules and returns in milliseconds, so a graded incident hits the board at
+ * once; `POST /api/calls/refine` then upgrades it in place with the model. The
+ * refinement is pure enrichment — if it is slow or fails, the local grade stands
+ * and the operator is never interrupted by an error.
  */
 
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceProvider, useVoice } from '@humeai/voice-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Phone,
   PhoneOff,
@@ -25,6 +30,9 @@ import {
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { EmergencyCall } from '@/lib/types';
+import { Chip, Meter } from '@/components/ui/panel';
+import { distressColor } from '@/lib/design/symbols';
+import { cn } from '@/lib/utils';
 
 interface StartEmergencyCallProps {
   onCallCreated?: (callId: string) => void;
@@ -79,31 +87,15 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: string[] 
   },
 ];
 
-const EMOTION_COLORS: Record<string, string> = {
-  panic: '#ef4444',
-  fear: '#f97316',
-  distress: '#ef4444',
-  horror: '#dc2626',
-  anxiety: '#f59e0b',
-  anger: '#e11d48',
-  pain: '#fb7185',
-  sadness: '#a855f7',
-  calmness: '#38bdf8',
-  determination: '#22d3ee',
-};
-
-function emotionColor(name: string) {
-  return EMOTION_COLORS[name.toLowerCase()] ?? '#38bdf8';
-}
-
 /**
  * @description Name the engine that actually graded the call. The operator must
- *              be able to tell a model verdict from a local rule verdict, so
- *              this reads the method the server reported rather than assuming.
+ *              be able to tell a model verdict from a local-rule verdict, so this
+ *              reads the method the server reported rather than assuming. The
+ *              keyword path reads as `local rules`; a model path reads as its id.
  */
 function describeTriageMethod(method: string): string {
   if (!method) return 'unknown';
-  if (method === 'keyword') return 'keyword rules';
+  if (method === 'keyword') return 'local rules';
   const [provider, model] = method.split(':');
   if (provider === 'glm') return model || 'GLM';
   if (provider === 'openai') return model || 'OpenAI';
@@ -158,6 +150,8 @@ function CallStation({
   const [phone, setPhone] = useState('+91 98102 34512');
   const [result, setResult] = useState<EmergencyCall | null>(null);
   const [triageMethod, setTriageMethod] = useState<string>('');
+  const [refining, setRefining] = useState(false);
+  const [changed, setChanged] = useState<string[]>([]);
   const [scriptId, setScriptId] = useState(SCRIPTS[0].id);
   const [scriptedLines, setScriptedLines] = useState<TranscriptLine[]>([]);
   const startedAt = useRef<number>(0);
@@ -223,6 +217,15 @@ function CallStation({
     }
   }, [status]);
 
+  // Escape closes the station from anywhere, not only when a child has focus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const startLiveCall = useCallback(async () => {
     setErrorText(null);
     setPhase('connecting');
@@ -248,16 +251,30 @@ function CallStation({
     }
   }, [connect]);
 
-  /** Send a transcript to the real triage pipeline and publish the result. */
+  /**
+   * Optimistic triage. Local rules grade the call and it appears on the board at
+   * once; the model then refines it in place. Refinement failure is silent by
+   * design — the local grade is a valid, life-safe grade on its own.
+   */
   const triageAndPublish = useCallback(
-    async (payloadLines: TranscriptLine[], emotionFrames: Record<string, number>[], seconds: number) => {
+    async (
+      callerNumber: string,
+      payloadLines: TranscriptLine[],
+      emotionFrames: Record<string, number>[],
+      seconds: number
+    ) => {
       setPhase('triaging');
+      setChanged([]);
+      setRefining(false);
+
+      // 1. Local grade, returns in milliseconds.
+      let created: any;
       try {
         const res = await fetch('/api/calls/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phoneNumber: phone,
+            phoneNumber: callerNumber,
             transcript: payloadLines,
             emotions: emotionFrames,
             chatGroupId: chatMetadata?.chatGroupId,
@@ -265,20 +282,52 @@ function CallStation({
             callDurationSeconds: seconds,
           }),
         });
-        const data = await res.json();
-        if (!res.ok || !data.call) throw new Error(data.error || 'Triage failed.');
-
-        publishCall(data.call);
-        setResult(data.call);
-        setTriageMethod(data.triage_method ?? '');
-        setPhase('done');
-        onCallCreated?.(data.call.id);
+        created = await res.json();
+        if (!res.ok || !created.call) throw new Error(created.error || 'Triage failed.');
       } catch (error) {
         setErrorText(error instanceof Error ? error.message : 'Triage failed.');
         setPhase('error');
+        return;
+      }
+
+      publishCall(created.call);
+      setResult(created.call);
+      setTriageMethod(created.triage_method ?? created.call.triage_method ?? '');
+      setPhase('done');
+      onCallCreated?.(created.call.id);
+
+      // 2. Enrich in the background. Failure is silent by design.
+      if (created.refinable) {
+        setRefining(true);
+        try {
+          const res = await fetch('/api/calls/refine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              callId: created.call.id,
+              phoneNumber: callerNumber,
+              transcript: payloadLines,
+              emotions: emotionFrames,
+              chatGroupId: chatMetadata?.chatGroupId,
+              conversationId: chatMetadata?.chatId,
+              callDurationSeconds: seconds,
+            }),
+          });
+          const refined = await res.json();
+          if (res.ok && refined?.call) {
+            publishCall(refined.call); // republish; dashboard merges by id
+            setResult(refined.call);
+            setTriageMethod(refined.triage_method ?? refined.call.triage_method ?? '');
+            setChanged(Array.isArray(refined.changed) ? refined.changed : []);
+          }
+        } catch {
+          // Local grade stands. No modal, no error state.
+        } finally {
+          setRefining(false);
+        }
       }
     },
-    [phone, chatMetadata, onCallCreated]
+    [chatMetadata, onCallCreated]
   );
 
   const endLiveCall = useCallback(async () => {
@@ -289,8 +338,8 @@ function CallStation({
       setPhase('error');
       return;
     }
-    await triageAndPublish(lines, frames, seconds);
-  }, [disconnect, lines, frames, triageAndPublish]);
+    await triageAndPublish(phone, lines, frames, seconds);
+  }, [disconnect, lines, frames, phone, triageAndPublish]);
 
   /** Run a scripted caller through the same backend triage as a live call. */
   const runScript = useCallback(async () => {
@@ -303,7 +352,7 @@ function CallStation({
       timestamp: new Date().toISOString(),
     }));
     setScriptedLines(scripted);
-    await triageAndPublish(scripted, [], script.lines.length * 6);
+    await triageAndPublish(script.phone, scripted, [], script.lines.length * 6);
   }, [scriptId, triageAndPublish]);
 
   const reset = () => {
@@ -312,48 +361,52 @@ function CallStation({
     setErrorText(null);
     setDuration(0);
     setScriptedLines([]);
+    setChanged([]);
+    setRefining(false);
   };
 
   const mmss = `${String(Math.floor(duration / 60)).padStart(2, '0')}:${String(duration % 60).padStart(2, '0')}`;
   const micLevel = micFft.length ? Math.min(1, micFft.reduce((a, b) => a + b, 0) / micFft.length / 40) : 0;
+  const didChange = (field: string) => changed.includes(field);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Live 112 voice station"
-      className="fixed inset-0 z-[2500] bg-slate-950/90 backdrop-blur-2xl text-slate-100 flex items-center justify-center p-4"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
+      aria-label="112 Pulse voice station"
+      className="fixed inset-0 z-[2500] flex items-center justify-center bg-deep/80 p-4 text-ink"
     >
-      <div className="w-full max-w-4xl bg-slate-900/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        <div className="px-6 py-4 bg-slate-950/80 border-b border-white/10 flex items-center justify-between shrink-0">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-rule-strong bg-panel">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-rule-strong bg-deep px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30">
-              <Radio className={`w-5 h-5 ${phase === 'live' ? 'animate-pulse' : ''}`} />
+            <div className="rounded-md border border-critical/30 bg-critical/15 p-2 text-critical">
+              <Radio className={cn('h-5 w-5', phase === 'live' && 'animate-pulse')} />
             </div>
-            <div>
-              <h2 className="font-bold text-white tracking-wide text-base">Hume EVI Live Voice Station</h2>
-              <p className="text-xs text-slate-400 font-mono">
-                Real-time conversational triage and emotion telemetry
-              </p>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-md font-bold tracking-wide text-ink">112 PULSE</h2>
+                <Chip tone="critical" dot>
+                  Voice station
+                </Chip>
+              </div>
+              <p className="text-xs text-ink-3">Real-time conversational triage and emotion telemetry</p>
             </div>
           </div>
           <button
             onClick={onClose}
             aria-label="Close voice station"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+            className="rounded-md p-1.5 text-ink-3 hover:bg-panel-raised hover:text-ink"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+        <div className="grid grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-12">
           {/* Controls */}
-          <div className="lg:col-span-5 space-y-4">
+          <div className="space-y-4 lg:col-span-5">
             <div className="space-y-1.5">
-              <label htmlFor="caller-number" className="text-xs font-mono uppercase text-slate-400 font-bold">
+              <label htmlFor="caller-number" className="label">
                 Caller number
               </label>
               <input
@@ -361,54 +414,51 @@ function CallStation({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 disabled={phase === 'live' || phase === 'triaging'}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950/80 border border-white/10 text-sm font-mono text-slate-100 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none disabled:opacity-50"
               />
             </div>
 
             {phase === 'idle' || phase === 'error' ? (
               <>
-                <Button
+                <button
                   onClick={startLiveCall}
-                  className="w-full bg-red-600 hover:bg-red-500 text-white font-bold font-mono text-xs py-3 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.35)]"
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-critical px-3 py-3 text-xs font-bold uppercase tracking-wide text-ink hover:bg-critical-bright"
                 >
-                  <Phone className="w-4 h-4 mr-2" />
-                  START LIVE MIC CALL
-                </Button>
+                  <Phone className="h-4 w-4" />
+                  Start live mic call
+                </button>
 
-                <div className="pt-2 border-t border-white/10 space-y-2">
-                  <span className="text-xs font-mono uppercase text-slate-400 font-bold block">
-                    Or run a scripted caller
-                  </span>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                <div className="space-y-2 border-t border-rule pt-3">
+                  <span className="label block">Or run a scripted caller</span>
+                  <p className="text-xs leading-relaxed text-ink-4">
                     No microphone needed. The script goes through the same triage pipeline as a live call.
                   </p>
                   <select
                     value={scriptId}
                     onChange={(e) => setScriptId(e.target.value)}
                     aria-label="Scripted caller"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink-2 focus:border-accent focus:outline-none"
                   >
                     {SCRIPTS.map((s) => (
-                      <option key={s.id} value={s.id} className="bg-slate-950">
+                      <option key={s.id} value={s.id} className="bg-deep">
                         {s.name}
                       </option>
                     ))}
                   </select>
-                  <Button
+                  <button
                     onClick={runScript}
-                    variant="outline"
-                    className="w-full bg-slate-900 border-white/10 hover:bg-slate-800 text-slate-200 font-mono text-xs py-2.5 rounded-xl"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-rule-strong bg-panel-raised px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-ink-2 hover:text-ink"
                   >
-                    <Play className="w-3.5 h-3.5 mr-2" />
-                    RUN SCRIPTED CALL
-                  </Button>
+                    <Play className="h-3.5 w-3.5" />
+                    Run scripted call
+                  </button>
                 </div>
               </>
             ) : null}
 
             {phase === 'connecting' && (
-              <div className="flex items-center gap-2 text-xs font-mono text-sky-300 py-3">
-                <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="flex items-center gap-2 py-3 text-xs text-accent">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Opening EVI socket and requesting the microphone…
               </div>
             )}
@@ -416,44 +466,38 @@ function CallStation({
             {phase === 'live' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Button
+                  <button
                     onClick={endLiveCall}
-                    className="flex-1 bg-slate-800 hover:bg-red-600 text-white font-bold font-mono text-xs py-3 rounded-xl border border-red-500/30"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-critical/30 bg-panel-raised px-3 py-3 text-xs font-bold uppercase tracking-wide text-ink hover:bg-critical"
                   >
-                    <PhoneOff className="w-4 h-4 mr-2" />
-                    END CALL &amp; TRIAGE
-                  </Button>
-                  <Button
+                    <PhoneOff className="h-4 w-4" />
+                    End call &amp; triage
+                  </button>
+                  <button
                     onClick={() => (isMuted ? unmute() : mute())}
-                    variant="outline"
                     aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-                    className="bg-slate-900 border-white/10 hover:bg-slate-800 px-3 py-3 rounded-xl"
+                    className="rounded-md border border-rule-strong bg-panel-raised px-3 py-3 hover:bg-panel"
                   >
-                    {isMuted ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-emerald-400" />}
-                  </Button>
+                    {isMuted ? <MicOff className="h-4 w-4 text-critical" /> : <Mic className="h-4 w-4 text-safe" />}
+                  </button>
                 </div>
-                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-100"
-                    style={{ width: `${Math.round(micLevel * 100)}%` }}
-                  />
-                </div>
+                <Meter value={micLevel * 100} max={100} color="var(--safe)" />
               </div>
             )}
 
             {phase === 'triaging' && (
-              <div className="flex items-center gap-2 text-xs font-mono text-sky-300 py-3">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Running triage over the transcript…
+              <div className="flex items-center gap-2 py-3 text-xs text-accent">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Grading the transcript…
               </div>
             )}
 
             {errorText && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-[11px] text-red-200 leading-relaxed">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 rounded-md border border-critical/30 bg-critical/15 p-3 text-xs leading-relaxed text-critical-soft">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-2">
                   <p>{errorText}</p>
-                  <button onClick={reset} className="underline font-mono text-[10px]">
+                  <button onClick={reset} className="text-2xs underline">
                     Try again
                   </button>
                 </div>
@@ -461,63 +505,79 @@ function CallStation({
             )}
 
             {result && (
-              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-emerald-500/30 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-400 font-mono text-[11px]">TRIAGE COMPLETE</span>
-                  <Badge className="bg-slate-800 text-slate-300 font-mono text-[9px]">
-                    {describeTriageMethod(triageMethod)}
-                  </Badge>
+              <div className="space-y-2 rounded-md border border-rule-strong bg-deep p-3.5 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wide text-safe">Triage complete</span>
+                  <div className="flex items-center gap-1.5">
+                    {refining && (
+                      <Chip tone="accent" dot>
+                        Refining
+                      </Chip>
+                    )}
+                    <Chip tone="neutral">{describeTriageMethod(triageMethod)}</Chip>
+                  </div>
                 </div>
-                <div className="font-mono text-[11px] space-y-1 text-slate-300">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Priority</span>
-                    <span className="text-white font-bold">
+                <div className="space-y-1 text-xs text-ink-2">
+                  <div className={cn('flex justify-between py-0.5', didChange('severity') && 'refine-flash')}>
+                    <span className="text-ink-4">Priority</span>
+                    <span className="font-bold text-ink">
                       {result.priority_code} · {result.severity}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Score</span>
-                    <span className="text-white">{result.severity_score}/100</span>
+                  <div className={cn('flex justify-between py-0.5', didChange('severity_score') && 'refine-flash')}>
+                    <span className="text-ink-4">Score</span>
+                    <span className="tnum text-ink">{result.severity_score}/100</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Incident</span>
-                    <span className="text-white text-right">{result.incident_subtype}</span>
+                  <div className={cn('flex justify-between py-0.5', didChange('incident_subtype') && 'refine-flash')}>
+                    <span className="text-ink-4">Incident</span>
+                    <span className="text-right text-ink">{result.incident_subtype}</span>
+                  </div>
+                  <div className={cn('flex justify-between gap-3 py-0.5', didChange('caller_location.address') && 'refine-flash')}>
+                    <span className="text-ink-4">Location</span>
+                    <span className="text-right text-ink">{result.caller_location?.address}</span>
                   </div>
                 </div>
-                <p className="text-slate-300 leading-relaxed border-t border-white/10 pt-2">{result.ai_summary}</p>
-                <Button
-                  onClick={onClose}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs py-2 rounded-lg"
+                <p
+                  className={cn(
+                    'border-t border-rule pt-2 leading-relaxed text-ink-2',
+                    didChange('ai_summary') && 'refine-flash'
+                  )}
                 >
-                  VIEW ON DISPATCH BOARD
-                </Button>
+                  {result.ai_summary}
+                </p>
+                <button
+                  onClick={onClose}
+                  className="w-full rounded-md bg-accent px-3 py-2 text-xs font-medium uppercase tracking-wide text-deep hover:bg-accent-bright"
+                >
+                  View on dispatch board
+                </button>
               </div>
             )}
           </div>
 
           {/* Live HUD */}
-          <div className="lg:col-span-7 flex flex-col gap-4 bg-slate-950/80 p-5 rounded-2xl border border-white/10">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex flex-col gap-4 rounded-md border border-rule-strong bg-deep p-5 lg:col-span-7">
+            <div className="flex items-center justify-between border-b border-rule pb-3">
               <div className="flex items-center gap-2">
                 <span
-                  className={`w-3 h-3 rounded-full ${phase === 'live' ? 'bg-red-500 animate-ping' : 'bg-slate-600'}`}
+                  className={cn('h-3 w-3 rounded-full', phase === 'live' ? 'animate-ping bg-critical' : 'bg-ink-4')}
                 />
-                <span className="font-mono font-bold text-sm uppercase">
-                  {phase === 'live' ? `LIVE CALL · ${mmss}` : phase === 'done' ? 'CALL ENDED' : 'READY'}
+                <span className="text-sm font-bold uppercase tracking-wide text-ink">
+                  {phase === 'live' ? `Live call · ${mmss}` : phase === 'done' ? 'Call ended' : 'Ready'}
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">
+              <span className="text-2xs text-ink-4">
                 {chatMetadata?.chatGroupId ? `group ${chatMetadata.chatGroupId.slice(0, 8)}` : 'no session'}
               </span>
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <div className="flex items-center justify-between text-xs text-ink-3">
                 <span className="flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  <Sparkles className="h-3.5 w-3.5 text-accent" />
                   Hume prosody
                 </span>
-                <span className={liveEmotions.length ? 'text-emerald-400' : 'text-slate-600'}>
+                <span className={liveEmotions.length ? 'text-safe' : 'text-ink-4'}>
                   {liveEmotions.length ? `${frames.length} measured utterances` : 'awaiting speech'}
                 </span>
               </div>
@@ -525,24 +585,20 @@ function CallStation({
               {liveEmotions.length ? (
                 <div className="grid grid-cols-5 gap-2">
                   {liveEmotions.map(({ emotion, intensity }) => (
-                    <div key={emotion} className="p-2 rounded-lg bg-slate-900 border border-white/5 text-center space-y-1">
-                      <span className="text-[9px] font-mono text-slate-400 block truncate" title={emotion}>
+                    <div
+                      key={emotion}
+                      className="space-y-1 rounded-md border border-rule bg-panel p-2 text-center"
+                    >
+                      <span className="block truncate text-2xs text-ink-3" title={emotion}>
                         {emotion}
                       </span>
-                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${Math.round(intensity * 100)}%`, backgroundColor: emotionColor(emotion) }}
-                        />
-                      </div>
-                      <span className="text-[10px] font-mono font-bold text-white">
-                        {Math.round(intensity * 100)}%
-                      </span>
+                      <Meter value={intensity * 100} max={100} color={distressColor(intensity * 100)} />
+                      <span className="tnum text-2xs font-bold text-ink">{Math.round(intensity * 100)}%</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="h-[58px] rounded-lg bg-slate-900/60 border border-white/5 flex items-center justify-center text-[10px] font-mono text-slate-600">
+                <div className="flex h-[58px] items-center justify-center rounded-md border border-rule bg-panel text-2xs text-ink-4">
                   Emotion telemetry appears once the caller speaks
                 </div>
               )}
@@ -550,10 +606,10 @@ function CallStation({
 
             <div
               ref={transcriptRef}
-              className="flex-1 min-h-[200px] max-h-[280px] rounded-xl bg-slate-900/70 border border-white/10 p-3 overflow-y-auto space-y-2 text-xs"
+              className="max-h-[280px] min-h-[200px] flex-1 space-y-2 overflow-y-auto rounded-md border border-rule bg-panel p-3 text-sm"
             >
               {displayLines.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-500 font-mono text-[11px] text-center px-4">
+                <div className="flex h-full items-center justify-center px-4 text-center text-xs text-ink-4">
                   {phase === 'live'
                     ? 'Connected. Speak into the microphone — the transcript appears here.'
                     : 'Start a live call or run a scripted caller to see the transcript.'}
@@ -562,9 +618,9 @@ function CallStation({
                 displayLines.map((line, i) => (
                   <div
                     key={i}
-                    className={`flex gap-2 ${line.role === 'user' ? 'text-amber-300' : 'text-sky-300'}`}
+                    className={cn('flex gap-2', line.role === 'user' ? 'text-mild' : 'text-accent')}
                   >
-                    <span className="font-bold font-mono uppercase text-[10px] shrink-0">
+                    <span className="shrink-0 text-2xs font-bold uppercase">
                       [{line.role === 'user' ? 'caller' : 'ai'}]
                     </span>
                     <p className="leading-relaxed">{line.text}</p>
@@ -584,13 +640,13 @@ export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCall
 
   return (
     <>
-      <Button
+      <button
         onClick={() => setIsOpen(true)}
-        className="bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs px-3.5 py-2 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] flex items-center gap-2 transition-all hover:scale-105"
+        className="flex items-center gap-2 rounded-md bg-critical px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-ink transition-transform hover:scale-105 hover:bg-critical-bright"
       >
-        <Phone className="w-4 h-4" />
-        <span>START 112 VOICE CALL</span>
-      </Button>
+        <Phone className="h-4 w-4" />
+        <span>Start 112 voice call</span>
+      </button>
 
       {isOpen && (
         <VoiceProvider>

@@ -152,10 +152,28 @@ html, body {
   color: var(--ink-4);
 }
 
+/* Refinement flash. When the model upgrades a local-rules grade in place, each
+   field the model actually changed flashes once, in --accent at low alpha, then
+   settles back. The colour is mixed from the token, never a hardcoded hex. */
+@keyframes refine-flash {
+  0%   { background-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  100% { background-color: transparent; }
+}
+.refine-flash {
+  animation: refine-flash 500ms ease-out 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* No flash under reduced motion: the "this field changed" signal survives as a
+     persistent 2px accent left border instead, so the information is never lost
+     to a reader who has opted out of animation. */
+  .refine-flash {
+    border-left: 2px solid var(--accent);
+    padding-left: 8px;
   }
 }
