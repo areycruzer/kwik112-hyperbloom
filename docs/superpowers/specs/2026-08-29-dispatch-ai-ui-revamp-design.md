@@ -36,8 +36,14 @@ does (a hardcoded 92/86/78/45 on every incident regardless of source).
 
 ## 3. Design system
 
-Derived from NATO Joint Military Symbology and STANAG 2019 colour conventions,
-which is what the reference project used and what suits government dispatch.
+**Revised 2026-08-29 after inspecting the real product.** The first draft of this
+section inferred a "NATO/ICS doctrine" palette from a written description of NATO
+symbology. That was wrong. The values below are extracted from Dispatch AI's own
+Figma component library export (`ComponentsLibraryDispatch.svg`, 3054x3867) by
+counting every hex literal, and corroborated against their product screenshots.
+
+Their scheme is **neutral grey surfaces with vivid saturated signal colour** —
+not the blue-tinted, desaturated military tones originally specified.
 
 ### 3.1 Colour
 
@@ -45,118 +51,131 @@ Surfaces:
 
 | Token | Value | Use |
 |---|---|---|
-| `--ground` | `#0E1116` | Page background |
-| `--panel` | `#161A21` | Panel background |
-| `--panel-raised` | `#1C222B` | Nested/selected panel |
-| `--rule` | `#2A3038` | Hairline divider |
-| `--rule-strong` | `#3A424E` | Panel border, focus ring base |
-| `--ink` | `#E4E8ED` | Primary text |
-| `--ink-2` | `#9AA5B1` | Secondary text |
-| `--ink-3` | `#6B7684` | Labels, metadata |
+| `--ground` | `#1E1E1E` | Page background |
+| `--panel` | `#2D2D2D` | Panel background (their most-used value) |
+| `--panel-raised` | `#373636` | Nested / hovered / selected panel |
+| `--rule` | `#3B3B3B` | Hairline divider |
+| `--rule-strong` | `#4B4B4B` | Panel border |
+| `--deep` | `#171717` | Deepest wells, map surround |
 
-Affiliation (STANAG 2019):
+Text:
+
+| Token | Value | Use |
+|---|---|---|
+| `--ink` | `#F2F2F2` | Primary text |
+| `--ink-2` | `#B0B0B0` | Secondary text |
+| `--ink-3` | `#9F9F9F` | Labels, metadata |
+| `--ink-4` | `#808080` | Disabled, placeholder |
+
+Signal — vivid on purpose, and the only saturated colour on screen:
 
 | Token | Value | Meaning |
 |---|---|---|
-| `--aff-friendly` | `#4A90B8` | Own responder units |
-| `--aff-hostile` | `#C4342B` | Threat / active emergency |
-| `--aff-neutral` | `#5E9C6B` | Resolved / no threat |
-| `--aff-unknown` | `#D0A81E` | Pending classification |
+| `--accent` | `#69D2FF` | Interactive: links, active state, "See more", focus |
+| `--accent-dim` | `#49B5E2` | Accent hover / secondary |
+| `--accent-bright` | `#13E3FF` | Live indicator |
+| `--safe` | `#47FF85` | SAFE severity, READY status |
+| `--mild` | `#FABC1F` | MILD severity, BUSY status |
+| `--mild-dim` | `#C0931F` | Mild on filled backgrounds |
+| `--critical` | `#F40000` | CRITICAL severity |
+| `--critical-bright` | `#FF4E4E` | Critical hover / emphasis |
+| `--critical-soft` | `#FF859B` | Critical text on dark red fill |
+| `--critical-bg` | `#611717` | Filled background behind critical text |
 
-Severity signal:
+Severity maps to three named levels, matching their labels exactly: **CRITICAL**,
+**MILD**, **SAFE**. Our four-priority model (P1-P4) maps onto them as
+P1 → CRITICAL, P2 → MILD, P3/P4 → SAFE.
 
-| Token | Value | Priority |
-|---|---|---|
-| `--sev-p1` | `#C4342B` | Critical |
-| `--sev-p2` | `#D08C1E` | High |
-| `--sev-p3` | `#C9B458` | Medium |
-| `--sev-p4` | `#6B8E6B` | Low |
-
-Interactive accent: `--accent` `#3E7C8C`.
-
-Distress ramp (112 Pulse): interpolate `#4A90B8` (calm) → `#D0A81E` → `#C4342B`
-(peak distress) across 0–100.
+Distress ramp (112 Pulse): `#47FF85` (calm) → `#FABC1F` → `#F40000` (peak).
 
 ### 3.2 Typography
 
-- UI: IBM Plex Sans. Data, labels, identifiers: IBM Plex Mono. Both via Google
-  Fonts, with explicit fallback stacks.
-- Six-step scale only: 10, 11, 12, 14, 16, 20, 28px. No arbitrary sizes.
-- `font-variant-numeric: tabular-nums` on every figure that appears in a column
-  or updates in place (counts, scores, timers, coordinates).
-- Uppercase mono labels carry `0.08em` letter-spacing.
+A single geometric sans throughout — **Inter**, with a system fallback stack.
+There is no monospace anywhere in their design; the earlier IBM Plex Sans + Mono
+pairing is dropped.
+
+- Scale: 10, 11, 12, 14, 16, 20, 28px.
+- Weights: 400 body, 500 labels, 600 names and headings, 700 section titles.
+- Uppercase labels (`RCO`, `SAFE`, `EMERGENCY DASHBOARD`) at 10-11px with
+  `0.06em` letter-spacing.
+- `font-variant-numeric: tabular-nums` on figures in columns or updating in place.
+- Metadata lines set the label in `--ink-3` and the value in `--ink` at the same
+  size, bolded — e.g. "Total calls: **44** | Line: **PA3241**".
 
 ### 3.3 Surface rules
 
-- Border radius: 2px maximum. Panels are square.
-- Dividers and borders: 1px, `--rule`.
-- **No `box-shadow` glow.** Every `shadow-[0_0_Npx_rgba(...)]` is removed.
-- **No `backdrop-filter`.** Every `backdrop-blur-*` is removed.
-- Spacing on a strict 4px grid.
-- Focus: 2px `--accent` outline, 2px offset. Visible on every interactive element.
+- Panels: 6px radius, `--panel` fill, 1px `--rule-strong` border.
+- Chips and status pills: **fully rounded** (999px), filled background at low
+  alpha with the signal colour as text. This replaces the earlier square,
+  1px-bordered chip.
+- Status pills carry a leading filled dot in the signal colour.
+- Buttons and inputs: 4px radius.
+- **No `box-shadow` glow, no `backdrop-filter`.** Vivid colour comes from the
+  hue, not from bloom.
+- Spacing on a 4px grid.
+- Focus: 2px `--accent` outline, 2px offset.
 
 ## 4. Symbology
 
-A pure function `buildSymbol(spec): string` in `lib/design/symbols.ts` returns an
-escaped inline SVG string. The same function feeds React components and Leaflet
-`divIcon`, so an incident renders identically in the queue, on the map, and on a
-Kanban card.
+**Revised.** MIL-STD-2525 frames are dropped. Their map uses a far simpler and
+more legible convention, and matching it matters more than matching the doctrine
+they cite in prose.
 
-Simplified MIL-STD-2525:
+- **Incidents are filled triangles** in the severity colour, point up, with the
+  incident name set beside the marker in `--ink` on a dark plate.
+- **Units are filled circles** in the service colour with a small glyph.
+- **Selection** adds a 1px `--accent` ring, not a scale transform.
+- **Distress ring (112 Pulse)** is retained as an arc around the triangle,
+  coloured from the distress ramp, and drawn only when prosody exists. Absent
+  entirely when never measured, so absence stays visually distinct from calm.
 
-- **Frame shape encodes entity kind.** Incident: diamond (2525 threat frame).
-  Unit: rectangle (2525 friendly frame).
-- **Frame stroke encodes state.** Incident: severity colour. Unit: affiliation
-  colour by service (police/fire/EMS).
-- **Fill** is the same hue at 18% alpha.
-- **Inner glyph encodes type.** Incidents: fire, medical, crime, traffic,
-  utility, unknown. Units: police, fire, ems.
-- **Distress ring.** When a call carries 112 Pulse prosody, an arc is drawn
-  around the incident frame, swept 0–100% of the circumference and coloured from
-  the distress ramp. Absent entirely when there is no prosody — not drawn at zero,
-  so absence is visually distinct from calm.
-
-All text interpolated into the SVG string is escaped via the existing
-`escapeHtml`. This is the sink that previously executed injected markup.
+`buildSymbol(spec): string` keeps its signature and its escaping contract — only
+the geometry changes. All text interpolated into the SVG passes through the
+module's `esc()`.
 
 ## 5. Information architecture
 
-### 5.1 Module rail
-
-A fixed left rail replaces the buttons crowded into today's header. Modules:
-Monitoring, Alerts, History, Forecast. Each is an icon plus a mono label, with
-the active one marked by a 2px left border in `--accent`. Alerts shows an
-unacknowledged count.
-
-**112 Pulse is not a rail module.** It is an action — opening a live call — so it
-sits in the command bar as the primary control, badged `112 PULSE`, and opens the
-voice station over whichever module is active. The rail holds places you go; the
-command bar holds things you do.
-
-### 5.2 Three-tier layout
-
-Applies to the Monitoring module, following the reference's top-down reading
-order: high-level status, then detail, then operational control.
+**Revised.** Their layout is four columns with floating modules over the map, not
+the three-tier stack originally specified.
 
 ```
-COMMAND BAR   DISPATCH AI · station · clock · 112 Pulse health
-TIER 1 STATUS queue depth · P1 count · unassigned · oldest incident · triage source
-TIER 2 OPS    [ incident queue ] [ situation map ] [ incident detail ]
-TIER 3 UNITS  responder roster — callsign, service, status, assignment, distance
+TOP BAR    DISPATCH AI · environment telemetry · clock · LIVE · region
++------+-------------------+---------------------------+
+| icon | INCIDENT PANEL    |  MAP (satellite)          |
+| rail |  tabs: Emergencies|   labelled triangle       |
+|      |        / Alerts   |   markers, unit circles,   |
+|      |  search + filter  |   route vectors            |
+|      |  stat row         |                            |
+|      |  incident list    |   [ floating modules ]     |
++------+-------------------+---------------------------+
 ```
 
-Tier 3 is new. Responder units currently exist only inside `EmergencyMap` as
-component state; the roster surfaces them as the platform's resource-control
-layer.
+- **Icon rail** — narrow, icon-only, one per module.
+- **Incident panel** — `Emergencies` / `Alerts` tabs, a search field, a filter
+  dropdown, a three-cell stat row (Total / Critical / Resolved), then the list.
+- **Map** — full-bleed **satellite imagery**. The existing code already carries an
+  Esri `World_Imagery` layer behind an unused toggle; that becomes the default.
+- **Floating modules** — draggable cards over the map's right side, each with a
+  drag grip, collapse and close controls, a view-toggle and sort row, rows with
+  status pills and pin controls, and a `See more` footer in `--accent`.
 
-Existing view modes (Radar / Kanban / Split) are retained and rearrange Tier 2:
+### 5.1 Modules and drag-and-drop
 
-- **Radar** — queue, map, detail as drawn above.
-- **Kanban** — the five-stage board occupies the full width of Tier 2; queue and
-  detail collapse, since the board already carries both.
-- **Split** — board and map share Tier 2 half and half; detail collapses.
+Restored to scope. It is one of the product's signature demonstrated
+interactions, not a flourish.
 
-Tiers 1 and 3 and the module rail are constant across all three.
+- Modules are draggable by their grip, and can be collapsed, closed, and pinned.
+- A drop target renders as a dashed 2px `--accent` border with `Drop here`
+  centred in `--accent`.
+- A **Modules Panel** lists closed modules so they can be restored.
+- Layout persists per operator in `localStorage` under `dispatch_module_layout`.
+- Keyboard parity is required: every module exposes collapse, close and move
+  actions as buttons, so the board is operable without a pointer.
+
+### 5.2 112 Pulse
+
+112 Pulse remains the emotion-aware voice intake and is not a rail module. It is
+the primary action in the top bar, badged `112 PULSE`, opening over the board.
 
 ## 6. Modules
 
@@ -328,8 +347,8 @@ Deleted (dead or replaced):
 
 Explicitly not in this change:
 
-- Drag-to-reorder panels. High effort, high jank risk, low payoff.
-- Toggleable module visibility. Considered and dropped.
+- Multi-operator layout sync. Module layout persists per browser only.
+- Module resizing. Modules drag, collapse, close and pin; they do not resize.
 - Authentication. Still absent; tracked separately as a deployment blocker.
 - Hume webhook signature verification. Tracked separately.
 - Replacing `localStorage` with a database.
@@ -352,3 +371,8 @@ The change is done when, against a production build driven in a browser:
 8. `tsc --noEmit` and `next build` are clean.
 9. The XSS payload that previously executed still renders inert after the
    symbology rewrite.
+10. The map renders satellite imagery by default, with incident triangles and
+    their name labels legible against it.
+11. A module can be dragged to a new position, closed, and restored from the
+    Modules Panel, and the layout survives a reload.
+12. Every module action reachable by drag is also reachable by keyboard.
