@@ -5,19 +5,22 @@
  * tabular-nums table with NO truncation of the summary or address: this project
  * deliberately favours density because dispatchers are trained on dense screens,
  * and clamping the summary was one of the original defects. Sortable by age and
- * severity; filterable by severity and free text. Each row is keyboard-reachable
- * (`role="button"` + `tabIndex`).
+ * severity; filterable by severity and free text. Row selection is a real
+ * `<button>` in the Detail cell (not `role="button"` on the `<tr>`, which would
+ * strip the table semantics and hide the very columns this module exists for);
+ * the row also has a mouse-convenience `onClick`.
  */
 
 'use client';
 
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Search } from 'lucide-react';
 
 import type { EmergencyCall, Severity } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
-import { Chip, type ChipTone } from '@/components/ui/panel';
+import { Chip } from '@/components/ui/panel';
+import { severityTone, priorityCode } from '@/lib/incident';
 import { cn } from '@/lib/utils';
 
 type SeverityFilter = 'all' | Severity;
@@ -32,20 +35,6 @@ const SEVERITY_RANK: Record<Severity, number> = {
   medium: 2,
   low: 3,
 };
-
-function severityTone(severity?: string): ChipTone {
-  if (severity === 'critical') return 'critical';
-  if (severity === 'high') return 'mild';
-  if (severity === 'medium' || severity === 'low') return 'safe';
-  return 'neutral';
-}
-
-function priorityCode(call: EmergencyCall): string {
-  return (
-    call.priority_code ||
-    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
-  );
-}
 
 /** Milliseconds since a call was created; Infinity when the timestamp is unusable. */
 function ageMs(call: EmergencyCall): number {
@@ -113,13 +102,6 @@ export default function HistoryModule({
 
   const sortIndicator = (field: SortField) =>
     sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
-
-  const onRowKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault();
-      onSelectCall?.(id);
-    }
-  };
 
   return (
     <div className="h-full overflow-y-auto bg-ground p-4">
@@ -199,12 +181,8 @@ export default function HistoryModule({
                 rows.map((call) => (
                   <tr
                     key={call.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Open incident ${call.incident_subtype || call.incident_type || call.id}`}
                     onClick={() => onSelectCall?.(call.id)}
-                    onKeyDown={(e) => onRowKeyDown(e, call.id)}
-                    className="cursor-pointer border-b border-rule align-top transition-colors last:border-b-0 hover:bg-panel-raised focus-visible:bg-panel-raised"
+                    className="cursor-pointer border-b border-rule align-top transition-colors last:border-b-0 hover:bg-panel-raised"
                   >
                     <Td>
                       <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
@@ -231,16 +209,31 @@ export default function HistoryModule({
                     </Td>
                     <Td className="whitespace-nowrap text-ink-3">{getTimeElapsed(call.created_at)}</Td>
                     <Td>
-                      {/* Genuine detail affordance — opens the full incident dossier. */}
-                      <Link
-                        href={`/dashboard/calls/${call.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Open full detail for ${call.incident_subtype || call.incident_type || call.id}`}
-                        className="inline-flex items-center gap-0.5 rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-accent hover:text-accent-bright"
-                      >
-                        View
-                        <ChevronRight className="h-3 w-3" aria-hidden />
-                      </Link>
+                      <div className="flex items-center gap-1">
+                        {/* Real, keyboard-reachable row-select control. Replaces the
+                            invalid role="button" on the <tr>. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectCall?.(call.id);
+                          }}
+                          aria-label={`Select incident ${call.incident_subtype || call.incident_type || call.id}`}
+                          className="inline-flex items-center rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink-2 hover:text-ink"
+                        >
+                          Select
+                        </button>
+                        {/* Genuine detail affordance — opens the full incident dossier. */}
+                        <Link
+                          href={`/dashboard/calls/${call.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Open full detail for ${call.incident_subtype || call.incident_type || call.id}`}
+                          className="inline-flex items-center gap-0.5 rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-accent hover:text-accent-bright"
+                        >
+                          View
+                          <ChevronRight className="h-3 w-3" aria-hidden />
+                        </Link>
+                      </div>
                     </Td>
                   </tr>
                 ))

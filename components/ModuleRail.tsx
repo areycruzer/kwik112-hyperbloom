@@ -46,11 +46,17 @@ export function ModuleRail({
       {RAIL_ITEMS.map(({ id, label, Icon }) => {
         const isActive = active === id;
         const showBadge = id === 'alerts' && alertCount > 0;
+        // The count badge is aria-hidden (it is decorative chrome over the icon),
+        // so fold it into the button's accessible name — otherwise a screen-reader
+        // user hears "Alerts" with no indication that any are open.
+        const accessibleLabel = showBadge
+          ? `${label}, ${alertCount} unacknowledged`
+          : label;
         return (
           <button
             key={id}
             type="button"
-            aria-label={label}
+            aria-label={accessibleLabel}
             aria-current={isActive ? 'true' : undefined}
             onClick={() => onSelect(id)}
             className={cn(

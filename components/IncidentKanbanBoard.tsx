@@ -23,7 +23,8 @@ import { Symbol } from '@/components/ui/symbol';
 import { DistressMeter } from '@/components/DistressMeter';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { getTimeElapsed } from '@/lib/mock-data';
-import { MapPin, Navigation, Shield, MoveRight, Filter, Layers } from 'lucide-react';
+import { severityTone, priorityCode, distressOf } from '@/lib/incident';
+import { MapPin, Navigation, Shield, MoveRight, MoveLeft, Filter, Layers } from 'lucide-react';
 
 interface IncidentKanbanBoardProps {
   calls: EmergencyCall[];
@@ -91,32 +92,6 @@ const STATUS_FOR_STAGE: Record<string, CallStatus> = {
 };
 
 const PRIORITY_FILTERS = ['all', 'critical', 'high', 'medium', 'low'] as const;
-
-/** Severity → the design system's three-tone chip scale. */
-function severityTone(severity?: string): ChipTone {
-  if (severity === 'critical') return 'critical';
-  if (severity === 'high') return 'mild';
-  if (severity === 'medium' || severity === 'low') return 'safe';
-  return 'neutral';
-}
-
-/** The priority code a call carries, or one derived from its severity. */
-function priorityCode(call: EmergencyCall): string {
-  return (
-    call.priority_code ||
-    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
-  );
-}
-
-/**
- * The measured distress reading, or null when prosody was never captured. Zero
- * is a real measurement; absence is a coverage gap — `DistressMeter` renders the
- * gap as an em-dash rather than inventing a value.
- */
-function distressOf(call: EmergencyCall): number | null {
-  const level = call.ai_triage?.emotion_analysis?.distress_level;
-  return typeof level === 'number' ? level : null;
-}
 
 /** Real per-card confidence, as a whole-percent string, or null when ungraded. */
 function confidenceOf(call: EmergencyCall): string | null {
@@ -194,6 +169,20 @@ export default function IncidentKanbanBoard({
     const next = STAGE_ORDER[Math.min(current + 1, STAGE_ORDER.length - 1)];
     if (next && next !== STAGE_ORDER[current]) {
       onUpdateCallStatus(call.id, STATUS_FOR_STAGE[next]);
+    }
+  };
+
+  /**
+   * @description The mirror of `advanceStage`: move a card one stage backward.
+   *              Drag can drop a card into any column including earlier ones, so
+   *              without this, correcting a mis-drag or reopening a wrongly
+   *              resolved incident was mouse-only.
+   */
+  const regressStage = (call: EmergencyCall) => {
+    const current = STAGE_ORDER.indexOf(stageOf(call));
+    const prev = STAGE_ORDER[Math.max(current - 1, 0)];
+    if (prev && prev !== STAGE_ORDER[current]) {
+      onUpdateCallStatus(call.id, STATUS_FOR_STAGE[prev]);
     }
   };
 
@@ -338,6 +327,18 @@ export default function IncidentKanbanBoard({
                             <Navigation className="h-3 w-3" aria-hidden />
                             <span>Open in map</span>
                           </button>
+
+                          {stageOf(call) !== 'triage' && (
+                            <button
+                              type="button"
+                              onClick={() => regressStage(call)}
+                              className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-mild hover:text-mild"
+                              title="Move back to the previous pipeline stage"
+                              aria-label={`Move ${subtype} back to the previous stage`}
+                            >
+                              <MoveLeft className="h-3 w-3" aria-hidden />
+                            </button>
+                          )}
 
                           <button
                             type="button"

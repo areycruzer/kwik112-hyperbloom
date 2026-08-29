@@ -113,11 +113,6 @@ export function ModuleBoard({ modules, className }: ModuleBoardProps) {
     [effective],
   );
 
-  const openIndexOf = useCallback(
-    (id: string) => openList.findIndex((p) => p.id === id),
-    [openList],
-  );
-
   const moveBy = useCallback(
     (id: string, delta: number) => {
       const cur = openList.findIndex((p) => p.id === id);

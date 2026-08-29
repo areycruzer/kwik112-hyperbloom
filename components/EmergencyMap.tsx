@@ -15,6 +15,7 @@ import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
 import { escapeHtml } from '@/lib/utils';
 import { buildSymbol, glyphForIncidentType } from '@/lib/design/symbols';
+import { priorityCode, distressOf } from '@/lib/incident';
 import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
 import { Navigation, Shield } from 'lucide-react';
 
@@ -32,30 +33,6 @@ const SATELLITE_TILE_URL =
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const SATELLITE_ATTRIBUTION =
   'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
-
-/**
- * The measured distress reading, or null when prosody was never captured. Zero
- * is a real measurement; absence is a coverage gap. `buildSymbol` draws the
- * distress ring only when a number is passed, so null leaves it off entirely.
- */
-function distressOf(call: EmergencyCall): number | null {
-  const level = call.ai_triage?.emotion_analysis?.distress_level;
-  return typeof level === 'number' ? level : null;
-}
-
-/** The priority code a call carries, or one derived from its severity. */
-function priorityLabel(call: EmergencyCall): string {
-  return (
-    call.priority_code ||
-    (call.severity === 'critical'
-      ? 'P1'
-      : call.severity === 'high'
-      ? 'P2'
-      : call.severity === 'medium'
-      ? 'P3'
-      : 'P4')
-  );
-}
 
 /** Read a design token from :root so Leaflet-set colours match the JSX layer. */
 function cssToken(name: string, fallback: string): string {
@@ -170,7 +147,7 @@ export default function EmergencyMap({
 
     calls.forEach((call) => {
       const location = call.caller_location;
-      if (!location || !location.latitude || !location.longitude) return;
+      if (!location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) return;
 
       currentCallIds.add(call.id);
       const isSelected = selectedCallId === call.id;
@@ -215,7 +192,7 @@ export default function EmergencyMap({
         <div class="min-w-[200px] space-y-1.5">
           <div class="flex items-center justify-between gap-2 border-b border-rule pb-1.5">
             <span class="text-sm font-semibold capitalize text-ink">${escapeHtml(call.incident_subtype || call.incident_type)}</span>
-            <span class="label">${escapeHtml(priorityLabel(call))}</span>
+            <span class="label">${escapeHtml(priorityCode(call))}</span>
           </div>
           <p class="text-sm leading-relaxed text-ink-2">${escapeHtml(summary)}</p>
           <div class="text-xs text-ink-3">
