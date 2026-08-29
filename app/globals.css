@@ -1,38 +1,39 @@
 /* Must precede @import "tailwindcss": Tailwind v4 expands into real rules,
-   and Lightning CSS drops any @import that follows a rule. Reordering these
-   two lines silently stops IBM Plex from loading, with no build error. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+   and Lightning CSS drops any @import that follows a rule. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
 /* Dispatch AI design system.
-   Derived from NATO Joint Military Symbology and STANAG 2019 colour
-   conventions. Flat surfaces, 1px rules, no glow, no blur. */
+   Neutral grey surfaces with vivid saturated signal colour, extracted from the
+   product's own Figma component library. Flat surfaces, 1px rules, no glow,
+   no blur. */
 :root {
-  --ground: #0E1116;
-  --panel: #161A21;
-  --panel-raised: #1C222B;
-  --rule: #2A3038;
-  --rule-strong: #3A424E;
+  --ground: #1E1E1E;
+  --panel: #2D2D2D;
+  --panel-raised: #373636;
+  --rule: #3B3B3B;
+  --rule-strong: #4B4B4B;
+  --deep: #171717;
 
-  --ink: #E4E8ED;
-  --ink-2: #9AA5B1;
-  --ink-3: #6B7684;
+  --ink: #F2F2F2;
+  --ink-2: #B0B0B0;
+  --ink-3: #9F9F9F;
+  --ink-4: #808080;
 
-  --aff-friendly: #4A90B8;
-  --aff-hostile: #C4342B;
-  --aff-neutral: #5E9C6B;
-  --aff-unknown: #D0A81E;
+  --accent: #69D2FF;
+  --accent-dim: #49B5E2;
+  --accent-bright: #13E3FF;
 
-  --sev-p1: #C4342B;
-  --sev-p2: #D08C1E;
-  --sev-p3: #C9B458;
-  --sev-p4: #6B8E6B;
+  --safe: #47FF85;
+  --mild: #FABC1F;
+  --mild-dim: #C0931F;
+  --critical: #F40000;
+  --critical-bright: #FF4E4E;
+  --critical-soft: #FF859B;
+  --critical-bg: #611717;
 
-  --accent: #3E7C8C;
-
-  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 @theme inline {
@@ -41,20 +42,22 @@
   --color-panel-raised: var(--panel-raised);
   --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
+  --color-deep: var(--deep);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
-  --color-aff-friendly: var(--aff-friendly);
-  --color-aff-hostile: var(--aff-hostile);
-  --color-aff-neutral: var(--aff-neutral);
-  --color-aff-unknown: var(--aff-unknown);
-  --color-sev-p1: var(--sev-p1);
-  --color-sev-p2: var(--sev-p2);
-  --color-sev-p3: var(--sev-p3);
-  --color-sev-p4: var(--sev-p4);
+  --color-ink-4: var(--ink-4);
   --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-bright: var(--accent-bright);
+  --color-safe: var(--safe);
+  --color-mild: var(--mild);
+  --color-mild-dim: var(--mild-dim);
+  --color-critical: var(--critical);
+  --color-critical-bright: var(--critical-bright);
+  --color-critical-soft: var(--critical-soft);
+  --color-critical-bg: var(--critical-bg);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
 
   /* The only permitted type scale. */
   --text-2xs: 10px;
@@ -78,14 +81,13 @@ html, body {
 }
 
 /* Every figure that sits in a column or updates in place. */
-.tnum, table, .font-mono { font-variant-numeric: tabular-nums; }
+.tnum, table { font-variant-numeric: tabular-nums; }
 
-/* Uppercase mono labels. */
+/* Uppercase labels. */
 .label {
-  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
@@ -95,12 +97,11 @@ html, body {
   outline-offset: 2px;
 }
 
-/* Leaflet: tactical basemap treatment. Only the tile pane is filtered so
-   markers and popups keep their true colour. */
-.leaflet-container { background: var(--ground); font-family: var(--font-sans); }
-.leaflet-tile-pane { filter: brightness(0.45) saturate(0.6) contrast(1.25); }
+/* Leaflet: satellite basemap. The tiles render at their true colour so the
+   imagery stays legible under the triangle markers and their name plates. */
+.leaflet-container { background: var(--deep); font-family: var(--font-sans); }
 .leaflet-control-attribution {
-  background: rgba(14, 17, 22, 0.8) !important;
+  background: rgba(23, 23, 23, 0.8) !important;
   color: var(--ink-3) !important;
   font-size: 9px !important;
 }
@@ -110,7 +111,7 @@ html, body {
   background: var(--panel);
   color: var(--ink);
   border: 1px solid var(--rule-strong);
-  border-radius: 2px;
+  border-radius: 6px;
   box-shadow: none;
 }
 .leaflet-popup-content { margin: 0; padding: 8px; }
