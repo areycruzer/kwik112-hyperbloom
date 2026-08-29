@@ -1,14 +1,41 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+function findBrowserBinary() {
+  const candidates = [
+    process.env.CHROME_BIN,
+    process.env.EDGE_BIN,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/microsoft-edge',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return 'google-chrome';
+}
+
+const browserPath = findBrowserBinary();
 const debugPort = 9333;
 const profilePath = await mkdtemp(join(tmpdir(), 'pulse112-layout-'));
 
-const edge = spawn(
-  edgePath,
+const browser = spawn(
+  browserPath,
   [
     '--headless=new',
     '--disable-gpu',
@@ -22,9 +49,9 @@ const edge = spawn(
   { stdio: ['ignore', 'ignore', 'pipe'] },
 );
 
-let edgeErrorOutput = '';
-edge.stderr.on('data', (chunk) => {
-  edgeErrorOutput += chunk.toString();
+let browserErrorOutput = '';
+browser.stderr.on('data', (chunk) => {
+  browserErrorOutput += chunk.toString();
 });
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -37,11 +64,11 @@ async function getDebugTarget() {
       const page = targets.find((target) => target.type === 'page');
       if (page) return page;
     } catch {
-      // Edge has not opened its debugging port yet.
+      // Browser has not opened its debugging port yet.
     }
     await delay(100);
   }
-  throw new Error(`Could not connect to headless Edge: ${edgeErrorOutput.trim()}`);
+  throw new Error(`Could not connect to headless browser: ${browserErrorOutput.trim()}`);
 }
 
 const target = await getDebugTarget();
@@ -134,8 +161,8 @@ try {
 } finally {
   await send('Browser.close').catch(() => undefined);
   await new Promise((resolve) => {
-    if (edge.exitCode !== null) resolve();
-    else edge.once('exit', resolve);
+    if (browser.exitCode !== null) resolve();
+    else browser.once('exit', resolve);
   });
   socket.close();
   await rm(profilePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
