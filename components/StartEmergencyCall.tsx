@@ -97,6 +97,20 @@ function emotionColor(name: string) {
 }
 
 /**
+ * @description Name the engine that actually graded the call. The operator must
+ *              be able to tell a model verdict from a local rule verdict, so
+ *              this reads the method the server reported rather than assuming.
+ */
+function describeTriageMethod(method: string): string {
+  if (!method) return 'unknown';
+  if (method === 'keyword') return 'keyword rules';
+  const [provider, model] = method.split(':');
+  if (provider === 'glm') return model || 'GLM';
+  if (provider === 'openai') return model || 'OpenAI';
+  return method;
+}
+
+/**
  * @description Turn a raw socket or getUserMedia failure into something an
  *              operator can act on. A blocked microphone is by far the most
  *              common cause and has a concrete remedy.
@@ -451,7 +465,7 @@ function CallStation({
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-emerald-400 font-mono text-[11px]">TRIAGE COMPLETE</span>
                   <Badge className="bg-slate-800 text-slate-300 font-mono text-[9px]">
-                    {triageMethod === 'gpt-4-turbo' ? 'GPT-4' : 'keyword rules'}
+                    {describeTriageMethod(triageMethod)}
                   </Badge>
                 </div>
                 <div className="font-mono text-[11px] space-y-1 text-slate-300">

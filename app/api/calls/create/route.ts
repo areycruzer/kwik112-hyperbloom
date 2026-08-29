@@ -113,7 +113,12 @@ function resolveLocation(
           city: place.city,
           latitude: place.latitude,
           longitude: place.longitude,
-          confidence: Math.max(modelConfidence, 0.55),
+          // The pin is a district centroid, not the doorway. A model that says
+          // it is 100% sure of the address is still only telling us the
+          // district it recognised, so the displayed confidence is capped to
+          // reflect what the coordinate actually represents.
+          confidence: Math.min(Math.max(modelConfidence, 0.55), 0.75),
+          accuracy_radius: 1200,
           source: 'caller',
         };
       }
