@@ -1,34 +1,29 @@
 /**
  * Pulse112 Mission Kanban Pipeline
- * Multi-stage incident pipeline inspired by Jasmine Wu's Dispatch AI Operational Loop.
- * Enables stage tracking, drag & drop / 1-click stage transition, and deep inspection in Tactical Radar Map.
+ *
+ * A five-stage incident pipeline rebuilt on the Dispatch AI design system:
+ * flat `--panel` surfaces, 1px rules, signal-coloured accents, and no glow or
+ * blur. Each card carries the incident's `buildSymbol` triangle, its real
+ * per-card AI confidence, its real measured distress (an em-dash when prosody
+ * was never captured), and the full unclamped `ai_summary`.
+ *
+ * Two hard-won behaviours are preserved verbatim:
+ *   - `stageOf` maps a call to EXACTLY ONE stage, so no incident can render in
+ *     two columns at once.
+ *   - The `advanceStage` button stays: drag alone is not keyboard reachable and
+ *     the board must be operable without a mouse.
  */
 
 'use client';
 
 import { useState } from 'react';
 import { CallStatus, EmergencyCall } from '@/lib/types';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  MapPin,
-  Clock,
-  Radio,
-  Phone,
-  Shield,
-  CheckCircle2,
-  Sparkles,
-  ChevronRight,
-  Navigation,
-  Flame,
-  AlertTriangle,
-  MoveRight,
-  Eye,
-  Plus,
-  Filter,
-  Layers,
-} from 'lucide-react';
+import { Chip, type ChipTone } from '@/components/ui/panel';
+import { Symbol } from '@/components/ui/symbol';
+import { DistressMeter } from '@/components/DistressMeter';
+import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { getTimeElapsed } from '@/lib/mock-data';
+import { MapPin, Navigation, Shield, MoveRight, Filter, Layers } from 'lucide-react';
 
 interface IncidentKanbanBoardProps {
   calls: EmergencyCall[];
@@ -41,53 +36,93 @@ interface ColumnDef {
   id: string;
   title: string;
   subtitle: string;
-  color: string;
-  badgeBg: string;
-  matchStatuses: string[];
+  /** Token background class for the 3px stage accent strip and the count pill. */
+  accentBg: string;
+  countTone: ChipTone;
 }
 
 const KANBAN_COLUMNS: ColumnDef[] = [
   {
     id: 'triage',
-    title: '1. INCOMING / AI TRIAGE',
-    subtitle: 'Live Speech Stream & Geolocation Lock',
-    color: '#ef4444',
-    badgeBg: 'bg-red-500/20 text-red-300 border-red-500/40',
-    matchStatuses: ['pending', 'triage', 'incoming'],
+    title: '1 · Incoming / AI triage',
+    subtitle: 'Live speech stream & geolocation lock',
+    accentBg: 'bg-critical',
+    countTone: 'critical',
   },
   {
     id: 'approval',
-    title: '2. AI RECOMMENDATION & HANDOFF',
-    subtitle: 'Awaiting Operator Authorization',
-    color: '#f97316',
-    badgeBg: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
-    matchStatuses: ['active', 'awaiting_approval'],
+    title: '2 · Recommendation & handoff',
+    subtitle: 'Awaiting operator authorization',
+    accentBg: 'bg-mild',
+    countTone: 'mild',
   },
   {
     id: 'dispatched',
-    title: '3. UNITS DISPATCHED / EN ROUTE',
-    subtitle: 'Active Pathfinding & Live Fleet GPS',
-    color: '#38bdf8',
-    badgeBg: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-    matchStatuses: ['dispatched', 'in-progress', 'en-route'],
+    title: '3 · Units dispatched / en route',
+    subtitle: 'Active pathfinding & fleet GPS',
+    accentBg: 'bg-accent',
+    countTone: 'accent',
   },
   {
     id: 'on_scene',
-    title: '4. ON-SCENE / ACTIVE MITIGATION',
-    subtitle: 'First Responders Deployed at Coordinates',
-    color: '#eab308',
-    badgeBg: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
-    matchStatuses: ['on_scene', 'mitigating'],
+    title: '4 · On scene / mitigation',
+    subtitle: 'Responders deployed at coordinates',
+    accentBg: 'bg-accent-dim',
+    countTone: 'accent',
   },
   {
     id: 'resolved',
-    title: '5. RESOLVED / AUTONOMOUS CLOSE',
-    subtitle: 'Handoff Completed & Audit Logged',
-    color: '#10b981',
-    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    matchStatuses: ['resolved', 'completed', 'ended'],
+    title: '5 · Resolved / closed',
+    subtitle: 'Handoff completed & audit logged',
+    accentBg: 'bg-safe',
+    countTone: 'safe',
   },
 ];
+
+const STAGE_ORDER = ['triage', 'approval', 'dispatched', 'on_scene', 'resolved'];
+
+/** @description The call status each pipeline stage corresponds to. */
+const STATUS_FOR_STAGE: Record<string, CallStatus> = {
+  triage: 'pending',
+  approval: 'active',
+  dispatched: 'dispatched',
+  on_scene: 'on_scene',
+  resolved: 'resolved',
+};
+
+const PRIORITY_FILTERS = ['all', 'critical', 'high', 'medium', 'low'] as const;
+
+/** Severity → the design system's three-tone chip scale. */
+function severityTone(severity?: string): ChipTone {
+  if (severity === 'critical') return 'critical';
+  if (severity === 'high') return 'mild';
+  if (severity === 'medium' || severity === 'low') return 'safe';
+  return 'neutral';
+}
+
+/** The priority code a call carries, or one derived from its severity. */
+function priorityCode(call: EmergencyCall): string {
+  return (
+    call.priority_code ||
+    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
+  );
+}
+
+/**
+ * The measured distress reading, or null when prosody was never captured. Zero
+ * is a real measurement; absence is a coverage gap — `DistressMeter` renders the
+ * gap as an em-dash rather than inventing a value.
+ */
+function distressOf(call: EmergencyCall): number | null {
+  const level = call.ai_triage?.emotion_analysis?.distress_level;
+  return typeof level === 'number' ? level : null;
+}
+
+/** Real per-card confidence, as a whole-percent string, or null when ungraded. */
+function confidenceOf(call: EmergencyCall): string | null {
+  const value = call.ai_confidence ?? call.ai_triage?.confidence;
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
+}
 
 export default function IncidentKanbanBoard({
   calls,
@@ -140,17 +175,6 @@ export default function IncidentKanbanBoard({
     e.preventDefault();
   };
 
-  /** @description The call status each pipeline stage corresponds to. */
-  const STATUS_FOR_STAGE: Record<string, CallStatus> = {
-    triage: 'pending',
-    approval: 'active',
-    dispatched: 'dispatched',
-    on_scene: 'on_scene',
-    resolved: 'resolved',
-  };
-
-  const STAGE_ORDER = ['triage', 'approval', 'dispatched', 'on_scene', 'resolved'];
-
   const handleDrop = (e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
     const callId = e.dataTransfer.getData('text/plain') || draggedCallId;
@@ -174,37 +198,39 @@ export default function IncidentKanbanBoard({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#060a12] text-slate-100 overflow-hidden select-none">
-      {/* Kanban Sub-Header & Stage Filter Bar */}
-      <div className="px-6 py-3 bg-slate-950/70 border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
-            <Layers className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-white font-mono tracking-wider flex items-center gap-2">
-              MISSION KANBAN PIPELINE
-              <span className="text-[10px] font-normal text-slate-400">
-                (DRAG CARDS OR CLICK TO INSPECT LIVE MAP)
-              </span>
+    <div className="flex h-full flex-1 flex-col overflow-hidden bg-ground text-ink">
+      {/* Sub-header & priority filter bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule bg-panel px-6 py-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-rule-strong bg-panel-raised text-accent">
+            <Layers className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-wide text-ink">
+              Mission Kanban Pipeline
             </h2>
+            <span className="text-2xs text-ink-4">
+              Drag cards or advance them to move a stage
+            </span>
           </div>
         </div>
 
-        {/* Priority Filter Chips */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-slate-400 mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Priority:
+          <span className="label flex items-center gap-1">
+            <Filter className="h-3 w-3" aria-hidden /> Priority
           </span>
-          {['all', 'critical', 'high', 'medium', 'low'].map((p) => (
+          {PRIORITY_FILTERS.map((p) => (
             <button
               key={p}
+              type="button"
               onClick={() => setFilterPriority(p)}
-              className={`px-2.5 py-1 rounded text-[11px] font-mono uppercase transition-all ${
-                filterPriority === p
-                  ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 font-bold shadow-md'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-white/5'
-              }`}
+              aria-pressed={filterPriority === p}
+              className={
+                'rounded-full px-2.5 py-0.5 text-2xs font-medium uppercase tracking-wide transition-colors ' +
+                (filterPriority === p
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-panel-raised text-ink-3 hover:text-ink')
+              }
             >
               {p}
             </button>
@@ -212,8 +238,8 @@ export default function IncidentKanbanBoard({
         </div>
       </div>
 
-      {/* 5-Column Kanban Board Layout */}
-      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 overflow-x-auto overflow-y-hidden">
+      {/* Five-column board */}
+      <div className="grid flex-1 grid-cols-1 gap-3 overflow-x-auto overflow-y-hidden p-4 md:grid-cols-3 lg:grid-cols-5">
         {KANBAN_COLUMNS.map((column) => {
           const colCalls = getCallsForColumn(column);
 
@@ -222,134 +248,116 @@ export default function IncidentKanbanBoard({
               key={column.id}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, column.id)}
-              className="flex flex-col h-full rounded-xl bg-slate-950/60 border border-white/10 overflow-hidden shadow-2xl transition-all"
+              className="flex h-full flex-col overflow-hidden rounded-md border border-rule-strong bg-panel"
             >
-              {/* Column Header */}
-              <div
-                className="p-3 border-b border-white/10 bg-slate-900/80 backdrop-blur-md space-y-1"
-                style={{ borderTop: `3px solid ${column.color}` }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-xs text-white truncate max-w-[170px]">
-                    {column.title}
-                  </span>
-                  <Badge className={`font-mono text-[10px] px-1.5 py-0.2 ${column.badgeBg}`}>
-                    {colCalls.length}
-                  </Badge>
+              {/* Column header */}
+              <div className="border-b border-rule">
+                <div className={'h-[3px] w-full ' + column.accentBg} aria-hidden />
+                <div className="space-y-1 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-ink">{column.title}</span>
+                    <Chip tone={column.countTone}>{colCalls.length}</Chip>
+                  </div>
+                  <p className="text-2xs text-ink-4">{column.subtitle}</p>
                 </div>
-                <p className="text-[10px] text-slate-400 truncate">{column.subtitle}</p>
               </div>
 
-              {/* Scrollable Column Cards Container */}
-              <div className="flex-1 p-2 space-y-2.5 overflow-y-auto">
+              {/* Cards */}
+              <div className="flex-1 space-y-2.5 overflow-y-auto p-2">
                 {colCalls.length === 0 ? (
-                  <div className="h-32 border-2 border-dashed border-white/5 rounded-xl flex items-center justify-center text-slate-600 font-mono text-[11px] text-center p-3">
-                    Drop incidents here to update stage
+                  <div className="flex h-28 items-center justify-center rounded-[6px] border border-dashed border-rule p-3 text-center text-2xs text-ink-4">
+                    No incidents in this stage
                   </div>
                 ) : (
                   colCalls.map((call) => {
-                    const isP1 = call.severity === 'critical';
-                    const isP2 = call.severity === 'high';
-                    const confidence = call.ai_confidence ?? call.ai_triage?.confidence ?? null;
-                    const ranked = call.ai_triage?.emotion_analysis?.top_emotions;
-                    const topEmotion = ranked?.length
-                      ? ranked[0]
-                      : call.top_emotion
-                      ? { emotion: call.top_emotion, intensity: call.emotion_intensity }
-                      : null;
-                    const pColor = isP1
-                      ? 'bg-red-500/15 border-red-500/40 text-red-300'
-                      : isP2
-                      ? 'bg-orange-500/15 border-orange-500/40 text-orange-300'
-                      : 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300';
+                    const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
+                    const subtype =
+                      call.incident_subtype || call.incident_type || 'Unclassified incident';
+                    const address = call.caller_location?.address;
+                    const confidence = confidenceOf(call);
 
                     return (
                       <div
                         key={call.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, call.id)}
-                        className={`group p-3 rounded-xl border bg-slate-900/90 hover:bg-slate-800/90 border-white/10 hover:border-blue-500/60 shadow-lg cursor-grab active:cursor-grabbing transition-all space-y-2 relative ${
-                          isP1 ? 'hover:shadow-[0_0_15px_rgba(239,68,68,0.25)]' : ''
-                        }`}
+                        className="group flex cursor-grab flex-col gap-2 rounded-[6px] border border-rule bg-panel-raised p-3 transition-colors hover:border-accent active:cursor-grabbing"
                       >
-                        {/* Card Header: Priority & Time */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border uppercase ${pColor}`}>
-                              {call.priority_code || (isP1 ? 'P1' : isP2 ? 'P2' : 'P3')}
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400 font-bold">
-                              #{call.id.slice(-4)}
+                        {/* Header: priority, symbol, subtype, elapsed */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
+                            <Symbol
+                              spec={{
+                                kind: 'incident',
+                                glyph,
+                                severity: call.severity,
+                                distress: distressOf(call),
+                                size: 20,
+                              }}
+                              className="shrink-0"
+                            />
+                            <span className="truncate text-sm font-semibold capitalize text-ink">
+                              {subtype}
                             </span>
                           </div>
-
-                          <span className="text-[10px] font-mono text-slate-400">
+                          <span className="tnum shrink-0 text-2xs text-ink-3">
                             {getTimeElapsed(call.created_at)}
                           </span>
                         </div>
 
-                        {/* Title & Complaint */}
-                        <div>
-                          <h4 className="font-bold text-xs text-white group-hover:text-sky-300 transition-colors line-clamp-1">
-                            {call.incident_subtype || call.incident_type}
-                          </h4>
-                          <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed mt-0.5">
-                            {call.ai_summary || call.chief_complaint || 'Emergency reported. Audio stream active.'}
-                          </p>
-                        </div>
+                        {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
+                        <p className="text-sm leading-relaxed text-ink-2">
+                          {call.ai_summary ||
+                            call.chief_complaint ||
+                            'Emergency call in progress; details pending.'}
+                        </p>
 
-                        {/* Hume Emotion & Geolocation Tags */}
-                        <div className="space-y-1 pt-1 border-t border-white/5 text-[10px] font-mono">
-                          <div className="flex items-center justify-between text-slate-400">
-                            <span className="truncate max-w-[140px]">
-                              📍 {call.caller_location?.address || 'GPS Fix Locked'}
-                            </span>
-                            <span className="text-emerald-400 font-bold">
-                              {typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : '—'}
-                            </span>
+                        {address && (
+                          <div className="flex items-start gap-1.5 text-xs text-ink-3">
+                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                            <span className="break-words">{address}</span>
                           </div>
+                        )}
 
-                          {/* Measured prosody, when this call actually has any */}
-                          {topEmotion && (
-                            <div className="flex items-center gap-1 text-[9px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                              <Sparkles className="w-2.5 h-2.5" />
-                              <span className="capitalize">
-                                {topEmotion.emotion}
-                                {typeof topEmotion.intensity === 'number'
-                                  ? ` (${Math.round(topEmotion.intensity * 100)}%)`
-                                  : ''}
-                              </span>
-                            </div>
-                          )}
+                        {/* Measured distress + real confidence */}
+                        <div className="flex items-center justify-between gap-2 border-t border-rule pt-2">
+                          <DistressMeter level={distressOf(call)} compact />
+                          <span className="tnum text-2xs uppercase tracking-wide text-ink-4">
+                            {confidence ? `Conf ${confidence}` : 'Conf —'}
+                          </span>
                         </div>
 
-                        {/* Interactive Click to View in Map & Action Controls */}
-                        <div className="pt-2 flex items-center justify-between gap-1.5 border-t border-white/5">
+                        {/* Actions */}
+                        <div className="flex items-center gap-1.5 border-t border-rule pt-2">
                           <button
+                            type="button"
                             onClick={() => onSelectCallAndNavigateToMap(call.id)}
-                            className="flex-1 py-1.5 px-2 rounded-lg bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white font-mono text-[10px] font-bold border border-blue-500/30 transition-all flex items-center justify-center gap-1"
+                            className="flex flex-1 items-center justify-center gap-1 rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 transition-colors hover:border-accent hover:text-accent"
                           >
-                            <Navigation className="w-3 h-3" />
-                            <span>OPEN IN MAP</span>
+                            <Navigation className="h-3 w-3" aria-hidden />
+                            <span>Open in map</span>
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => onOpenWorkflow(call)}
-                            className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-white/10 hover:border-white/20 transition-all"
-                            title="Review AI recommended actions"
-                            aria-label={`Review AI recommended actions for ${call.incident_subtype || call.incident_type}`}
+                            className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-mild transition-colors hover:border-accent hover:text-accent"
+                            title="Review the AI decision timeline"
+                            aria-label={`Review the decision timeline for ${subtype}`}
                           >
-                            <Shield className="w-3 h-3 text-amber-400" />
+                            <Shield className="h-3 w-3" aria-hidden />
                           </button>
 
                           {stageOf(call) !== 'resolved' && (
                             <button
+                              type="button"
                               onClick={() => advanceStage(call)}
-                              className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white font-mono text-[10px] border border-white/10 hover:border-emerald-500 transition-all"
+                              className="flex items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-safe hover:text-safe"
                               title="Advance to the next pipeline stage"
-                              aria-label={`Advance ${call.incident_subtype || call.incident_type} to the next stage`}
+                              aria-label={`Advance ${subtype} to the next stage`}
                             >
-                              <MoveRight className="w-3 h-3" />
+                              <MoveRight className="h-3 w-3" aria-hidden />
                             </button>
                           )}
                         </div>
