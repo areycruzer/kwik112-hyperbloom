@@ -251,10 +251,14 @@ function CallStation({
   // (the dialog is unmounted on close, so this covers close too).
   useEffect(() => clearScriptTimers, [clearScriptTimers]);
 
-  /** Derive the transcript and prosody frames from the live EVI socket. */
-  const { lines, frames } = useMemo(() => {
+  /** Derive the transcript, prosody frames, and detected language from the live
+   *  EVI socket. Hume tags each finalized user message with the language it heard
+   *  ("Detected language of the message text"); the call's language is the value
+   *  seen most often across those messages. */
+  const { lines, frames, detectedLanguage } = useMemo(() => {
     const out: TranscriptLine[] = [];
     const emotionFrames: Record<string, number>[] = [];
+    const languageCounts: Record<string, number> = {};
 
     for (const message of messages) {
       if (message.type === 'user_message') {
@@ -264,6 +268,11 @@ function CallStation({
           | Record<string, number>
           | undefined;
         if (scores) emotionFrames.push(scores);
+        const lang = (message as any).language;
+        if (typeof lang === 'string' && lang.trim()) {
+          const key = lang.trim();
+          languageCounts[key] = (languageCounts[key] ?? 0) + 1;
+        }
         out.push({
           role: 'user',
           text: message.message?.content ?? '',
@@ -278,7 +287,23 @@ function CallStation({
         });
       }
     }
-    return { lines: out.filter((l) => l.text.trim()), frames: emotionFrames };
+
+    // The most frequently detected non-empty language across the call. Undefined
+    // when EVI reported none — never invented.
+    let language: string | undefined;
+    let bestCount = 0;
+    for (const [lang, count] of Object.entries(languageCounts)) {
+      if (count > bestCount) {
+        bestCount = count;
+        language = lang;
+      }
+    }
+
+    return {
+      lines: out.filter((l) => l.text.trim()),
+      frames: emotionFrames,
+      detectedLanguage: language,
+    };
   }, [messages]);
 
   // The HUD shows whichever transcript this session produced.
@@ -359,7 +384,10 @@ function CallStation({
       payloadLines: TranscriptLine[],
       emotionFrames: Record<string, number>[],
       seconds: number,
-      prosodySource: 'measured' | 'simulated'
+      prosodySource: 'measured' | 'simulated',
+      // The language Hume detected in the caller's speech. Undefined on scripted
+      // demos — a scripted call detected nothing, so it carries no language.
+      detectedLanguage?: string
     ) => {
       setPhase('triaging');
       setChanged([]);
@@ -376,6 +404,7 @@ function CallStation({
             transcript: payloadLines,
             emotions: emotionFrames,
             prosodySource,
+            detectedLanguage,
             chatGroupId: chatMetadata?.chatGroupId,
             conversationId: chatMetadata?.chatId,
             callDurationSeconds: seconds,
@@ -408,6 +437,7 @@ function CallStation({
               transcript: payloadLines,
               emotions: emotionFrames,
               prosodySource,
+              detectedLanguage,
               chatGroupId: chatMetadata?.chatGroupId,
               conversationId: chatMetadata?.chatId,
               callDurationSeconds: seconds,
@@ -438,8 +468,8 @@ function CallStation({
       setPhase('error');
       return;
     }
-    await triageAndPublish(phone, lines, frames, seconds, 'measured');
-  }, [disconnect, lines, frames, phone, triageAndPublish]);
+    await triageAndPublish(phone, lines, frames, seconds, 'measured', detectedLanguage);
+  }, [disconnect, lines, frames, detectedLanguage, phone, triageAndPublish]);
 
   /**
    * Run a scripted caller through the same backend triage as a live call, but

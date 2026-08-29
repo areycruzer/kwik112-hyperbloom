@@ -195,7 +195,7 @@ export default function CallDetailPage({ params }: PageProps) {
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <DataRow label="Caller" value={call.caller_number || '—'} mono />
-                <DataRow label="Language" value={call.language || 'Unknown'} />
+                <DataRow label="Language" value={call.language || '—'} />
                 <DataRow label="Triage source" value={triageSource(call)} />
                 <DataRow label="Status" value={<span className="uppercase">{call.status || 'active'}</span>} />
               </div>

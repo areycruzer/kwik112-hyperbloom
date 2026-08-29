@@ -38,6 +38,37 @@ export interface BuildCallInput {
    *  'simulated' is a scripted demo curve. Only meaningful when frames actually
    *  arrive — with no prosody the call stays in the "absent" state regardless. */
   prosodySource?: 'measured' | 'simulated';
+  /** Language Hume EVI detected in the caller's speech, as an ISO-ish code
+   *  (`en`, `hi`, `ta`, …). Absent on scripted demos and on any call where EVI
+   *  reported nothing — a call that detected no language stays in the "absent"
+   *  state (language undefined) rather than being labelled with a guess. */
+  detectedLanguage?: string;
+}
+
+/** Hume returns language codes; the console shows readable names. Common Indian
+ *  languages plus English are mapped; anything unmapped falls through to the raw
+ *  code so an unexpected value still displays rather than vanishing. */
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  hi: 'Hindi',
+  ta: 'Tamil',
+  te: 'Telugu',
+  bn: 'Bengali',
+  mr: 'Marathi',
+  gu: 'Gujarati',
+  kn: 'Kannada',
+  ml: 'Malayalam',
+  pa: 'Punjabi',
+  ur: 'Urdu',
+};
+
+/** @description Readable name for a detected language code, or undefined when
+ *               nothing was detected — never a fabricated default. */
+function readableLanguage(code: string | undefined): string | undefined {
+  if (typeof code !== 'string') return undefined;
+  const trimmed = code.trim();
+  if (!trimmed) return undefined;
+  return LANGUAGE_NAMES[trimmed.toLowerCase()] ?? trimmed;
 }
 
 interface IncomingSegment {
@@ -252,7 +283,10 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     caller_number: phoneNumber,
     status: 'active',
     call_status: 'completed',
-    language: 'English',
+    // The language the caller actually spoke, as detected by Hume EVI. Undefined
+    // when nothing was detected (scripted demos, or EVI reporting none) — the
+    // console shows an em-dash for that absence rather than a guessed default.
+    language: readableLanguage(input.detectedLanguage),
     call_duration: typeof callDurationSeconds === 'number' ? callDurationSeconds : undefined,
 
     caller_location: location,

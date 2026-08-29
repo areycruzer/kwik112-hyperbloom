@@ -74,3 +74,14 @@ export function recommendedUnits(call: EmergencyCall): string[] {
 export function confidencePercent(value?: number): string | null {
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
 }
+
+/**
+ * The language the caller actually spoke, as detected by Hume EVI and stored on
+ * the call, or null when none was detected. Absence is a real state — a scripted
+ * demo detects nothing — so consumers render an em-dash rather than a guess,
+ * exactly as a never-measured distress reading renders an em-dash.
+ */
+export function spokenLanguage(call: EmergencyCall): string | null {
+  const language = call.language?.trim();
+  return language ? language : null;
+}

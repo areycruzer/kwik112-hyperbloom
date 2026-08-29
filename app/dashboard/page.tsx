@@ -31,6 +31,7 @@ import {
   triageSource,
   recommendedUnits,
   confidencePercent,
+  spokenLanguage,
 } from '@/lib/incident';
 import { cn } from '@/lib/utils';
 
@@ -734,6 +735,13 @@ function IncidentDetail({
               </>
             )}
           </span>
+        </Field>
+
+        {/* Spoken language — the language the caller actually used, detected by
+            Hume EVI. An em-dash when none was detected (e.g. a scripted demo),
+            consistent with how absent distress is shown. */}
+        <Field label="Spoken language">
+          <span className="text-sm text-ink">{spokenLanguage(call) ?? '—'}</span>
         </Field>
 
         {/* Full AI summary */}

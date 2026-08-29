@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
         callDurationSeconds: body?.callDurationSeconds,
         reportedLocation: body?.reportedLocation,
         prosodySource: body?.prosodySource,
+        detectedLanguage: body?.detectedLanguage,
       },
       'local'
     );
