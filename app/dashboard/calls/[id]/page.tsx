@@ -30,6 +30,14 @@ import { cn } from '@/lib/utils';
 import { Symbol } from '@/components/ui/symbol';
 import { Panel, DataRow, Chip, Meter, type ChipTone } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
+import {
+  severityTone,
+  priorityCode,
+  distressOf,
+  triageSource,
+  recommendedUnits,
+  confidencePercent,
+} from '@/lib/incident';
 
 // Leaflet needs the DOM; render the locator client-side only.
 const MiniLocationMap = dynamic(() => import('@/components/MiniLocationMap'), {
@@ -43,54 +51,6 @@ const MiniLocationMap = dynamic(() => import('@/components/MiniLocationMap'), {
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-/** Severity → the design system's three-tone chip scale. */
-function severityTone(severity?: string): ChipTone {
-  if (severity === 'critical') return 'critical';
-  if (severity === 'high') return 'mild';
-  if (severity === 'medium' || severity === 'low') return 'safe';
-  return 'neutral';
-}
-
-/** The priority code a call carries, or one derived from its severity. */
-function priorityCode(call: EmergencyCall): string {
-  return (
-    call.priority_code ||
-    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
-  );
-}
-
-/**
- * The measured distress reading, or null when prosody was never captured. Zero
- * is a real measurement; absence is a coverage gap. `DistressMeter` renders the
- * gap as an em-dash — the honesty contrast 112 Pulse is meant to show.
- */
-function distressOf(call: EmergencyCall): number | null {
-  const level = call.ai_triage?.emotion_analysis?.distress_level;
-  return typeof level === 'number' ? level : null;
-}
-
-/** Where this call's grade came from — never dressed up beyond the evidence. */
-function triageSource(call: EmergencyCall): string {
-  if (call.ai_triage?.emotion_analysis?.distress_level != null) return '112 Pulse voice';
-  if (call.ai_confidence != null || call.ai_triage?.confidence != null) return 'AI triage';
-  return 'Manual intake';
-}
-
-/** The recommended responding units drawn from real fields, never invented. */
-function recommendedUnits(call: EmergencyCall): string[] {
-  if (call.recommended_units?.length) return call.recommended_units;
-  const rec = call.ai_recommendation;
-  if (rec && typeof rec === 'object') {
-    const units = [rec.primary_unit, ...(rec.support_units ?? [])].filter(Boolean) as string[];
-    if (units.length) return units;
-  }
-  return [];
-}
-
-function confidencePercent(value?: number): string | null {
-  return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
 }
 
 /** A stored transcript segment. Real calls carry `{ text, role, timestamp }`. */
