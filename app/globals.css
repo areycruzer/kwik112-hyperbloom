@@ -1,268 +1,121 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* Dispatch AI design system.
+   Derived from NATO Joint Military Symbology and STANAG 2019 colour
+   conventions. Flat surfaces, 1px rules, no glow, no blur. */
+:root {
+  --ground: #0E1116;
+  --panel: #161A21;
+  --panel-raised: #1C222B;
+  --rule: #2A3038;
+  --rule-strong: #3A424E;
+
+  --ink: #E4E8ED;
+  --ink-2: #9AA5B1;
+  --ink-3: #6B7684;
+
+  --aff-friendly: #4A90B8;
+  --aff-hostile: #C4342B;
+  --aff-neutral: #5E9C6B;
+  --aff-unknown: #D0A81E;
+
+  --sev-p1: #C4342B;
+  --sev-p2: #D08C1E;
+  --sev-p3: #C9B458;
+  --sev-p4: #6B8E6B;
+
+  --accent: #3E7C8C;
+
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-aff-friendly: var(--aff-friendly);
+  --color-aff-hostile: var(--aff-hostile);
+  --color-aff-neutral: var(--aff-neutral);
+  --color-aff-unknown: var(--aff-unknown);
+  --color-sev-p1: var(--sev-p1);
+  --color-sev-p2: var(--sev-p2);
+  --color-sev-p3: var(--sev-p3);
+  --color-sev-p4: var(--sev-p4);
   --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* The only permitted type scale. */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
 }
 
-:root {
-  --radius: 0.5rem;
-  --background: #060a12;
-  --foreground: #f1f5f9;
-  --card: #0c121e;
-  --card-foreground: #f1f5f9;
-  --popover: #0c121e;
-  --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #172033;
-  --secondary-foreground: #94a3b8;
-  --muted: #111a2c;
-  --muted-foreground: #64748b;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
-  --sidebar: #090e17;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #172033;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #3b82f6;
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.dark {
-  --background: #060a12;
-  --foreground: #f1f5f9;
-  --card: #0c121e;
-  --card-foreground: #f1f5f9;
-  --popover: #0c121e;
-  --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #172033;
-  --secondary-foreground: #94a3b8;
-  --muted: #111a2c;
-  --muted-foreground: #64748b;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #8b5cf6;
-  --sidebar: #090e17;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #172033;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #3b82f6;
+/* Every figure that sits in a column or updates in place. */
+.tnum, table, .font-mono { font-variant-numeric: tabular-nums; }
+
+/* Uppercase mono labels. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground antialiased font-sans select-none;
-    background-color: #060a12;
-    color: #e2e8f0;
-  }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* Tactical HUD & Glassmorphism styles */
-.tactical-panel {
-  background: rgba(12, 18, 30, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.tactical-panel-active {
-  background: rgba(15, 23, 42, 0.95);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
-}
-
-.tactical-glow-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
-}
-
-.tactical-glow-amber {
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);
-}
-
-.tactical-glow-blue {
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.35);
-}
-
-.tactical-glow-emerald {
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
-}
-
-/* NATO Severity Indicators */
-.nato-p1 {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-}
-
-.nato-p2 {
-  background: rgba(249, 115, 22, 0.15);
-  border: 1px solid rgba(249, 115, 22, 0.4);
-  color: #fb923c;
-}
-
-.nato-p3 {
-  background: rgba(234, 179, 8, 0.15);
-  border: 1px solid rgba(234, 179, 8, 0.4);
-  color: #facc15;
-}
-
-.nato-p4 {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  color: #34d399;
-}
-
-/* Radar & Pulse Animations */
-@keyframes radar-sweep {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes tactical-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.08); }
-}
-
-@keyframes wave-bar {
-  0%, 100% { height: 4px; }
-  50% { height: 24px; }
-}
-
-.animate-radar {
-  animation: radar-sweep 4s linear infinite;
-}
-
-.animate-tactical-pulse {
-  animation: tactical-pulse 2s ease-in-out infinite;
-}
-
-/* Custom Tactical Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(6, 10, 18, 0.6);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.4);
-}
-
-/* Leaflet Dark Custom Overrides */
-.leaflet-container {
-  background: #05080f !important;
-  font-family: inherit;
-}
-
-.leaflet-popup-content-wrapper {
-  background: rgba(12, 18, 30, 0.95) !important;
-  color: #f1f5f9 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  backdrop-filter: blur(12px) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
-}
-
-.leaflet-popup-tip {
-  background: rgba(12, 18, 30, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px !important;
-  line-height: 1.4 !important;
-}
-
-/* Tactical basemap treatment. Esri's dark canvas renders mid-grey, so the tile
-   pane is darkened here rather than by swapping to a basemap that needs a key.
-   Only the tile pane is filtered — markers and popups sit in their own panes. */
-.leaflet-tile-pane {
-  filter: brightness(0.5) saturate(0.75) contrast(1.2);
-}
-
-.leaflet-container {
-  background: #05080f;
-}
-
+/* Leaflet: tactical basemap treatment. Only the tile pane is filtered so
+   markers and popups keep their true colour. */
+.leaflet-container { background: var(--ground); font-family: var(--font-sans); }
+.leaflet-tile-pane { filter: brightness(0.45) saturate(0.6) contrast(1.25); }
 .leaflet-control-attribution {
-  background: rgba(5, 8, 15, 0.75) !important;
-  color: #64748b !important;
+  background: rgba(14, 17, 22, 0.8) !important;
+  color: var(--ink-3) !important;
   font-size: 9px !important;
 }
+.leaflet-control-attribution a { color: var(--ink-2) !important; }
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: none;
+}
+.leaflet-popup-content { margin: 0; padding: 8px; }
 
-.leaflet-control-attribution a {
-  color: #94a3b8 !important;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
