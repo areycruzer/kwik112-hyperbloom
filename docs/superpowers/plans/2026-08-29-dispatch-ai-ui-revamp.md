@@ -82,9 +82,11 @@ Expected: exits 0 with `# tests 0`. If it errors, stop and fix before continuing
 Replace the whole of `app/globals.css` with:
 
 ```css
-@import "tailwindcss";
-
+/* Must precede @import "tailwindcss": Tailwind v4 expands into real rules,
+   and Lightning CSS drops any @import that follows a rule. */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@import "tailwindcss";
 
 /* Dispatch AI design system.
    Derived from NATO Joint Military Symbology and STANAG 2019 colour
