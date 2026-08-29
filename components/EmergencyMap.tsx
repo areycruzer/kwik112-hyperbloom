@@ -15,6 +15,7 @@ import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
 import { escapeHtml } from '@/lib/utils';
 import { buildSymbol, glyphForIncidentType } from '@/lib/design/symbols';
+import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
 import { Navigation, Shield } from 'lucide-react';
 
 interface EmergencyMapProps {
@@ -22,17 +23,8 @@ interface EmergencyMapProps {
   selectedCallId: string | null;
   onMarkerClick: (callId: string) => void;
   onDispatchUnit?: (unitId: string, callId: string) => void;
-}
-
-interface TacticalUnit {
-  id: string;
-  callsign: string;
-  type: 'police' | 'fire' | 'ems';
-  lat: number;
-  lng: number;
-  status: 'available' | 'en-route' | 'on-scene' | 'busy';
-  speed: string;
-  assignedCallId?: string;
+  /** Roster-selected unit: drawn with a 1px accent ring, like a selected incident. */
+  selectedUnitId?: string | null;
 }
 
 // Esri World_Imagery: bright satellite imagery, keyless, attribution required.
@@ -76,6 +68,7 @@ export default function EmergencyMap({
   calls,
   selectedCallId,
   onMarkerClick,
+  selectedUnitId = null,
 }: EmergencyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -90,14 +83,9 @@ export default function EmergencyMap({
   // bail out, and never re-run — every marker silently vanishes.
   const [mapReady, setMapReady] = useState(false);
 
-  // Mock First Responder Fleet positioned around the city.
-  const [tacticalUnits] = useState<TacticalUnit[]>([
-    { id: 'PD-101', callsign: 'Cruiser 101', type: 'police', lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
-    { id: 'FD-204', callsign: 'Engine 204', type: 'fire', lat: 28.6920, lng: 77.0850, status: 'en-route', speed: '48 km/h' },
-    { id: 'EMS-302', callsign: 'Medic 302', type: 'ems', lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
-    { id: 'PD-108', callsign: 'Interceptor 108', type: 'police', lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
-    { id: 'EMS-309', callsign: 'Air Rescue 1', type: 'ems', lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
-  ]);
+  // First Responder Fleet — the shared roster, so the map markers and the
+  // roster module can never disagree. Lifted to lib/units.ts (Task 11).
+  const tacticalUnits: TacticalUnit[] = TACTICAL_UNITS;
 
   // Initialize the map with the satellite basemap.
   useEffect(() => {
@@ -272,6 +260,7 @@ export default function EmergencyMap({
         glyph: unit.type,
         service: unit.type,
         label: unit.id,
+        selected: unit.id === selectedUnitId,
         size: 30,
       });
 
@@ -308,7 +297,7 @@ export default function EmergencyMap({
         { className: 'pulse-map-popup' },
       );
     });
-  }, [tacticalUnits, showUnits, mapReady]);
+  }, [tacticalUnits, showUnits, mapReady, selectedUnitId]);
 
   // Responder vector to the selected incident. Colour is pulled from the design
   // token so nothing hardcodes a hex here.
