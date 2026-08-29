@@ -35,8 +35,9 @@ import { TACTICAL_UNITS } from '@/lib/units';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentTimeline from '@/components/IncidentTimeline';
-import DataManagementDashboard from '@/components/DataManagementDashboard';
-import CallHistoryOverlay from '@/components/CallHistoryOverlay';
+import AlertsModule from '@/components/AlertsModule';
+import HistoryModule from '@/components/HistoryModule';
+import ForecastModule from '@/components/ForecastModule';
 import IncidentKanbanBoard from '@/components/IncidentKanbanBoard';
 
 // Leaflet needs the DOM; render the map client-side only.
@@ -52,7 +53,6 @@ const EmergencyMap = dynamic(() => import('@/components/EmergencyMap'), {
 const CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
 
 type SeverityFilter = 'all' | 'critical' | 'high' | 'other';
-type PanelTab = 'emergencies' | 'alerts';
 type PanelView = 'queue' | 'detail';
 type MainView = 'map' | 'board';
 
@@ -119,7 +119,6 @@ export default function DashboardPage() {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
   const [activeModule, setActiveModule] = useState<ModuleId>('monitoring');
-  const [panelTab, setPanelTab] = useState<PanelTab>('emergencies');
   const [panelView, setPanelView] = useState<PanelView>('queue');
   const [mainView, setMainView] = useState<MainView>('map');
 
@@ -127,8 +126,9 @@ export default function DashboardPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
 
   const [workflowOpen, setWorkflowOpen] = useState(false);
-  const [dataDashboardOpen, setDataDashboardOpen] = useState(false);
-  const [callHistoryOpen, setCallHistoryOpen] = useState(false);
+  // Bumped when an alert is acknowledged so the alert memo (and therefore the
+  // rail badge) recomputes against the freshly-persisted acknowledgement set.
+  const [ackVersion, setAckVersion] = useState(0);
 
   const [clock, setClock] = useState('');
 
@@ -288,12 +288,14 @@ export default function DashboardPage() {
       created_at: c.created_at,
       ai_confidence: c.ai_confidence,
       caller_location: c.caller_location,
+      model_escalated: c.model_escalated,
     }));
     const acknowledged = readAcknowledged();
     return deriveAlerts(input, now).filter((a) => !acknowledged.has(a.key));
     // `calls` identity only changes when the fingerprint changes, so this is stable
-    // between polls that see no real change.
-  }, [calls]);
+    // between polls that see no real change. `ackVersion` forces a recompute the
+    // moment an alert is acknowledged, so the rail badge decrements immediately.
+  }, [calls, ackVersion]);
 
   // Floating modules mounted over the map's right side (Task 11 / 11b). The
   // roster is the first module; a compact live summary sits beside it so
@@ -360,37 +362,26 @@ export default function DashboardPage() {
     return matchesSearch && matchesSeverity;
   });
 
+  // Every rail module now renders in the main region (no full-screen overlays).
+  // Selecting one is a pure activeModule switch, consistent across Monitoring,
+  // Alerts, History and Forecast.
   const handleModuleSelect = useCallback((id: ModuleId) => {
     setActiveModule(id);
-    if (id === 'monitoring') {
-      setPanelTab('emergencies');
-    } else if (id === 'alerts') {
-      setPanelTab('alerts');
-      setPanelView('queue');
-    } else if (id === 'history') {
-      setCallHistoryOpen(true);
-    } else if (id === 'forecast') {
-      setDataDashboardOpen(true);
-    }
-  }, []);
-
-  // When a transient overlay module closes, return the rail highlight to the
-  // module the panel is actually showing.
-  const restoreModule = useCallback(() => {
-    setActiveModule((prev) =>
-      prev === 'history' || prev === 'forecast'
-        ? panelTab === 'alerts'
-          ? 'alerts'
-          : 'monitoring'
-        : prev,
-    );
-  }, [panelTab]);
-
-  const selectTab = useCallback((tab: PanelTab) => {
-    setPanelTab(tab);
     setPanelView('queue');
-    setActiveModule(tab === 'alerts' ? 'alerts' : 'monitoring');
   }, []);
+
+  // Alerts / History link to an incident: jump to it on the map with its detail
+  // open, back in the monitoring module.
+  const handleModuleSelectCall = useCallback((id: string) => {
+    setSelectedCallId(id);
+    setActiveModule('monitoring');
+    setMainView('map');
+    setPanelView('detail');
+  }, []);
+
+  // Acknowledging an alert must recompute the derived alert set so the rail
+  // badge decrements immediately.
+  const handleAlertAck = useCallback(() => setAckVersion((v) => v + 1), []);
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-ground text-ink">
@@ -425,8 +416,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Main-area view switch keeps the map and the incident board reachable. */}
-          <div className="hidden items-center gap-1 rounded-[4px] border border-rule bg-panel p-0.5 md:flex">
+          {/* Main-area view switch keeps the map and the incident board reachable.
+              Only meaningful for the Monitoring module, which owns the main area. */}
+          <div
+            className={cn(
+              'items-center gap-1 rounded-[4px] border border-rule bg-panel p-0.5',
+              activeModule === 'monitoring' ? 'hidden md:flex' : 'hidden',
+            )}
+          >
             {(['map', 'board'] as MainView[]).map((view) => (
               <button
                 key={view}
@@ -472,29 +469,10 @@ export default function DashboardPage() {
 
         {/* Incident panel */}
         <aside className="flex w-[360px] shrink-0 flex-col border-r border-rule-strong bg-ground xl:w-[400px]">
-          {/* Tabs */}
-          <div className="flex shrink-0 border-b border-rule-strong">
-            {(['emergencies', 'alerts'] as PanelTab[]).map((tab) => {
-              const isActive = panelTab === tab;
-              const label = tab === 'emergencies' ? 'Emergencies' : 'Alerts';
-              const count = tab === 'emergencies' ? totalCount : alerts.length;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => selectTab(tab)}
-                  className={cn(
-                    'flex-1 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'border-accent text-ink'
-                      : 'border-transparent text-ink-3 hover:text-ink-2',
-                  )}
-                >
-                  {label}
-                  <span className="tnum ml-1.5 text-ink-4">{count}</span>
-                </button>
-              );
-            })}
+          {/* Incident panel header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-rule-strong px-3 py-2.5">
+            <span className="text-sm font-medium text-ink">Emergencies</span>
+            <span className="tnum text-ink-4">{totalCount}</span>
           </div>
 
           {panelView === 'detail' && selectedCall ? (
@@ -506,30 +484,6 @@ export default function DashboardPage() {
                 setWorkflowOpen(true);
               }}
             />
-          ) : panelTab === 'alerts' ? (
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {alerts.length === 0 ? (
-                <p className="p-3 text-sm text-ink-3">
-                  No open alerts. Operational alerts are computed from the live board, so this
-                  clears as incidents are located, assigned, and resolved.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {alerts.map((alert) => (
-                    <li key={alert.key}>
-                      <button
-                        type="button"
-                        onClick={() => selectCall(alert.callId)}
-                        className="flex w-full items-start gap-2 rounded-[6px] border border-rule bg-panel p-2.5 text-left transition-colors hover:border-rule-strong"
-                      >
-                        <Chip tone={severityTone(alert.severity)}>{alert.severity}</Chip>
-                        <span className="text-sm text-ink-2">{alert.message}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
           ) : (
             <>
               {/* Search + filter */}
@@ -600,9 +554,21 @@ export default function DashboardPage() {
           )}
         </aside>
 
-        {/* Main area: full-bleed map, or the incident board. */}
+        {/* Main area: the active rail module. Monitoring is the map / incident
+            board; Alerts, History and Forecast each render here in the main
+            region (never as full-screen overlays). */}
         <main className="relative min-w-0 flex-1 bg-deep">
-          {mainView === 'map' ? (
+          {activeModule === 'alerts' ? (
+            <AlertsModule
+              calls={calls}
+              onSelectCall={handleModuleSelectCall}
+              onAckChange={handleAlertAck}
+            />
+          ) : activeModule === 'history' ? (
+            <HistoryModule calls={calls} onSelectCall={handleModuleSelectCall} />
+          ) : activeModule === 'forecast' ? (
+            <ForecastModule calls={calls} />
+          ) : mainView === 'map' ? (
             <>
               <EmergencyMap
                 calls={calls}
@@ -637,27 +603,6 @@ export default function DashboardPage() {
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
         call={selectedCall ?? null}
-      />
-
-      <DataManagementDashboard
-        open={dataDashboardOpen}
-        onClose={() => {
-          setDataDashboardOpen(false);
-          restoreModule();
-        }}
-      />
-
-      <CallHistoryOverlay
-        open={callHistoryOpen}
-        onClose={() => {
-          setCallHistoryOpen(false);
-          restoreModule();
-        }}
-        calls={calls}
-        onSelectCall={(id) => {
-          handleSelectCallAndNavigateToMap(id);
-          selectCall(id);
-        }}
       />
     </div>
   );
