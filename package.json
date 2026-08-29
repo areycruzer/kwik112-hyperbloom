@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "test": "node --test \"lib/**/*.test.ts\""
+    "test": "node --test \"lib/**/*.test.ts\"",
+    "check:layout": "node scripts/check-dashboard-layout.mjs"
   },
   "dependencies": {
     "@humeai/voice-react": "^0.2.7",
