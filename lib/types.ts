@@ -96,6 +96,14 @@ export interface EmergencyCall {
   dispatcher_id?: string;
   priority_code?: PriorityCode;
   
+  // Triage provenance
+  /** True while a local-rules grade is awaiting model refinement. */
+  refinable?: boolean;
+  /** Set when refinement graded the call above the local rules. */
+  model_escalated?: boolean;
+  /** Names the engine that produced the current grade. */
+  triage_method?: string;
+
   // Metadata
   created_at: string;
   updated_at: string;

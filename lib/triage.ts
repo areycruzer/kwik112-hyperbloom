@@ -456,6 +456,15 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
   return parsed;
 }
 
+/**
+ * @description Grade a transcript with local rules only. No network, so this
+ *              returns in microseconds and is what the operator sees first.
+ */
+export function localTriage(transcript: string): TriageResult {
+  const clean = transcript.trim();
+  return applyEscalations(keywordTriage(clean), clean);
+}
+
 /** @description Suggest units from the incident type. */
 export function recommendUnits(type: string, severity: Severity): string[] {
   const base: Record<string, string[]> = {
