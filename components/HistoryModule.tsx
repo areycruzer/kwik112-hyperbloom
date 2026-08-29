@@ -12,7 +12,8 @@
 'use client';
 
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { Search } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, Search } from 'lucide-react';
 
 import type { EmergencyCall, Severity } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
@@ -184,12 +185,13 @@ export default function HistoryModule({
                 <Th sortable onClick={() => toggleSort('age')}>
                   Age{sortIndicator('age')}
                 </Th>
+                <Th>Detail</Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-4 text-sm text-ink-3">
+                  <td colSpan={9} className="p-4 text-sm text-ink-3">
                     No incidents match the current filter.
                   </td>
                 </tr>
@@ -228,6 +230,18 @@ export default function HistoryModule({
                       {call.severity || '—'}
                     </Td>
                     <Td className="whitespace-nowrap text-ink-3">{getTimeElapsed(call.created_at)}</Td>
+                    <Td>
+                      {/* Genuine detail affordance — opens the full incident dossier. */}
+                      <Link
+                        href={`/dashboard/calls/${call.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Open full detail for ${call.incident_subtype || call.incident_type || call.id}`}
+                        className="inline-flex items-center gap-0.5 rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-accent hover:text-accent-bright"
+                      >
+                        View
+                        <ChevronRight className="h-3 w-3" aria-hidden />
+                      </Link>
+                    </Td>
                   </tr>
                 ))
               )}

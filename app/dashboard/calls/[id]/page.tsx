@@ -1,200 +1,417 @@
 /**
- * Pulse112 Tactical Incident Telemetry & Deep Inspector
+ * Incident detail page — the full dossier for a single incident.
+ *
+ * Rebuilt on the design system (Task 18). It shows the FULL transcript
+ * untruncated, the real prosody emotion values (or an em-dash where prosody was
+ * never captured), the real stored confidence, the human-in-the-loop timeline
+ * state for this incident, and the satellite locator map. It is reached from a
+ * queue row's "Open detail" affordance and from the history module.
  */
 
 'use client';
 
-import { use, useState, useEffect } from 'react';
-import { EmergencyCall } from '@/lib/types';
-import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {
-  ArrowLeft,
-  Phone,
-  Radio,
-  MapPin,
-  Clock,
-  Activity,
-  AlertTriangle,
-  Flame,
-  Shield,
-  Sparkles,
-  CheckCircle2,
-  Navigation,
-  Globe,
-  Mic,
-  FileText,
-} from 'lucide-react';
+import { ArrowLeft, AlertTriangle, MapPin } from 'lucide-react';
 
+import { EmergencyCall } from '@/lib/types';
+import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
+import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
+import {
+  DECISION_POINTS,
+  currentPoint,
+  readTimeline,
+  type DecisionRecord,
+  type TimelineState,
+} from '@/lib/timeline';
+import { cn } from '@/lib/utils';
+
+import { Symbol } from '@/components/ui/symbol';
+import { Panel, DataRow, Chip, Meter, type ChipTone } from '@/components/ui/panel';
+import { DistressMeter } from '@/components/DistressMeter';
+
+// Leaflet needs the DOM; render the locator client-side only.
 const MiniLocationMap = dynamic(() => import('@/components/MiniLocationMap'), {
   ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-deep">
+      <span className="label">Initializing locator…</span>
+    </div>
+  ),
 });
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+/** Severity → the design system's three-tone chip scale. */
+function severityTone(severity?: string): ChipTone {
+  if (severity === 'critical') return 'critical';
+  if (severity === 'high') return 'mild';
+  if (severity === 'medium' || severity === 'low') return 'safe';
+  return 'neutral';
+}
+
+/** The priority code a call carries, or one derived from its severity. */
+function priorityCode(call: EmergencyCall): string {
+  return (
+    call.priority_code ||
+    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
+  );
+}
+
+/**
+ * The measured distress reading, or null when prosody was never captured. Zero
+ * is a real measurement; absence is a coverage gap. `DistressMeter` renders the
+ * gap as an em-dash — the honesty contrast 112 Pulse is meant to show.
+ */
+function distressOf(call: EmergencyCall): number | null {
+  const level = call.ai_triage?.emotion_analysis?.distress_level;
+  return typeof level === 'number' ? level : null;
+}
+
+/** Where this call's grade came from — never dressed up beyond the evidence. */
+function triageSource(call: EmergencyCall): string {
+  if (call.ai_triage?.emotion_analysis?.distress_level != null) return '112 Pulse voice';
+  if (call.ai_confidence != null || call.ai_triage?.confidence != null) return 'AI triage';
+  return 'Manual intake';
+}
+
+/** The recommended responding units drawn from real fields, never invented. */
+function recommendedUnits(call: EmergencyCall): string[] {
+  if (call.recommended_units?.length) return call.recommended_units;
+  const rec = call.ai_recommendation;
+  if (rec && typeof rec === 'object') {
+    const units = [rec.primary_unit, ...(rec.support_units ?? [])].filter(Boolean) as string[];
+    if (units.length) return units;
+  }
+  return [];
+}
+
+function confidencePercent(value?: number): string | null {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
+}
+
+/** A stored transcript segment. Real calls carry `{ text, role, timestamp }`. */
+interface StoredSegment {
+  text?: string;
+  role?: string;
+  speaker?: string;
+  timestamp?: string;
+}
+
+function normalizeSegments(transcript: unknown): StoredSegment[] {
+  if (!Array.isArray(transcript)) return [];
+  return transcript.filter(
+    (s): s is StoredSegment => !!s && typeof s === 'object' && typeof (s as StoredSegment).text === 'string',
+  );
+}
+
+/** A caller/agent label for a transcript segment. */
+function speakerLabel(segment: StoredSegment): string {
+  const role = segment.role ?? segment.speaker;
+  return role === 'assistant' ? '112 Pulse agent' : 'Caller';
+}
+
+const ACTION_TONE: Record<string, ChipTone> = {
+  confirmed: 'safe',
+  amended: 'mild',
+  overridden: 'critical',
+};
+
 export default function CallDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const callId = resolvedParams.id;
 
   const [call, setCall] = useState<EmergencyCall | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineState | null>(null);
 
   useEffect(() => {
+    let found: EmergencyCall | undefined;
     try {
       const stored = localStorage.getItem('kwik_emergency_calls');
       const all = stored ? JSON.parse(stored) : [];
-      const found = [...all, ...mockCalls].find((c) => c.id === callId);
-      if (found) setCall(found);
+      found = [...(Array.isArray(all) ? all : []), ...mockCalls].find((c) => c?.id === callId);
     } catch (e) {
       console.error(e);
-      const found = mockCalls.find((c) => c.id === callId);
-      if (found) setCall(found);
+      found = mockCalls.find((c) => c.id === callId);
+    }
+    if (found) {
+      setCall(found);
+      setTimeline(readTimeline(callId));
+    } else {
+      setNotFound(true);
     }
   }, [callId]);
 
-  if (!call) {
+  if (notFound) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#060a12] text-slate-300 font-mono text-xs">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-          <p>Retrieving Incident #{callId} Telemetry...</p>
-        </div>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-ground text-ink">
+        <p className="text-md font-semibold">Incident #{callId} not found</p>
+        <p className="text-sm text-ink-3">It may have been resolved and cleared from storage.</p>
+        <Link
+          href="/dashboard"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-[4px] bg-accent px-3 py-2 text-sm font-semibold text-deep hover:bg-accent-dim"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Return to command desk
+        </Link>
       </div>
     );
   }
 
+  if (!call) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ground text-ink-3">
+        <span className="label">Retrieving incident #{callId}…</span>
+      </div>
+    );
+  }
+
+  const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
+  const subtype = call.incident_subtype || call.incident_type || 'Unclassified incident';
+  const location = call.caller_location;
+  const confidence =
+    confidencePercent(location?.confidence) ?? confidencePercent(call.location_confidence);
+  const accuracyRadius =
+    typeof location?.accuracy_radius === 'number' ? location.accuracy_radius : undefined;
+  const gradeConfidence = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
+  const threats = call.immediate_threats ?? [];
+  const units = recommendedUnits(call);
+  const segments = normalizeSegments(call.transcript);
+  const emotions = call.ai_triage?.emotion_analysis?.top_emotions ?? [];
+  const summary =
+    call.ai_summary ||
+    call.ai_triage?.summary ||
+    call.chief_complaint ||
+    'No AI triage summary is available for this incident yet.';
+  const nextPoint = timeline ? currentPoint(timeline) : null;
+  const recordByPoint = new Map<string, DecisionRecord>(
+    (timeline?.records ?? []).map((r) => [r.point, r]),
+  );
+
   return (
-    <div className="min-h-screen bg-[#060a12] text-slate-100 flex flex-col font-sans select-none">
-      {/* Tactical Top Bar */}
-      <header className="bg-slate-950/90 border-b border-white/10 px-6 py-3 flex items-center justify-between shadow-2xl">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-slate-900 border-white/10 hover:bg-slate-800 text-slate-300 font-mono text-xs gap-1.5"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Return to Command Radar
-            </Button>
+    <div className="flex min-h-screen flex-col bg-ground text-ink">
+      {/* ---- HEADER -------------------------------------------------------- */}
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 rounded-[4px] border border-rule bg-panel px-2.5 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 hover:text-ink"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            Command desk
           </Link>
-
-          <div className="h-5 w-px bg-white/10"></div>
-
-          <div>
+          <span className="h-5 w-px bg-rule" aria-hidden />
+          <Symbol
+            spec={{ kind: 'incident', glyph, severity: call.severity, distress: distressOf(call), size: 26 }}
+            className="shrink-0"
+          />
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs uppercase text-slate-400">INCIDENT DOSSIER</span>
-              <span className="text-slate-600">•</span>
-              <Badge className="bg-red-500/20 text-red-300 font-mono text-[9px]">
-                {call.priority_code || (call.severity === 'critical' ? 'P1 CRITICAL' : 'P2 HIGH')}
-              </Badge>
+              <span className="label">Incident dossier</span>
+              <Chip tone={severityTone(call.severity)} dot>
+                {priorityCode(call)}
+              </Chip>
             </div>
-            <h1 className="text-base font-bold text-white tracking-wide">
-              {call.incident_subtype || call.incident_type} (#{call.id})
+            <h1 className="truncate text-md font-semibold capitalize text-ink">
+              {subtype} <span className="text-ink-4">#{call.id}</span>
             </h1>
           </div>
         </div>
-
-        <div className="flex items-center gap-3 font-mono text-xs">
-          <div className="px-3 py-1 rounded bg-slate-900 border border-white/5 text-slate-400">
-            Reported: <span className="text-white font-bold">{getTimeElapsed(call.created_at)}</span>
-          </div>
+        <div className="hidden shrink-0 flex-col items-end sm:flex">
+          <span className="label">Reported</span>
+          <span className="tnum text-sm text-ink-2">{getTimeElapsed(call.created_at)}</span>
         </div>
       </header>
 
-      {/* Main Dossier Content */}
-      <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto w-full">
-        {/* Left Column (7 cols): Telemetry & Transcript */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Caller & Location Card */}
-          <div className="p-5 rounded-2xl bg-slate-900/70 border border-white/10 backdrop-blur-md space-y-4">
-            <h2 className="text-xs font-mono font-bold uppercase text-slate-400 tracking-wider">
-              Caller & GPS Triangulation
-            </h2>
-
-            <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-white/5 space-y-1">
-                <span className="text-slate-500 text-[10px]">CALLER PHONE</span>
-                <span className="text-white font-bold block">{call.caller_number}</span>
+      {/* ---- BODY ---------------------------------------------------------- */}
+      <div className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-12">
+        {/* LEFT — telemetry + transcript */}
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          <Panel title="Caller & location">
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <DataRow label="Caller" value={call.caller_number || '—'} mono />
+                <DataRow label="Language" value={call.language || 'Unknown'} />
+                <DataRow label="Triage source" value={triageSource(call)} />
+                <DataRow label="Status" value={<span className="uppercase">{call.status || 'active'}</span>} />
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-white/5 space-y-1">
-                <span className="text-slate-500 text-[10px]">LANGUAGE / LOCALE</span>
-                <span className="text-sky-400 font-bold block">{call.language || 'English (Auto-Triage)'}</span>
+              <div className="border-t border-rule pt-3">
+                <span className="label flex items-center gap-1.5">
+                  <MapPin className="h-3 w-3 text-accent" aria-hidden />
+                  Triangulated address
+                </span>
+                <p className="mt-1 break-words text-sm text-ink">
+                  {location?.address || 'Location pending verification'}
+                </p>
+                <p className="mt-1 text-xs text-ink-3">
+                  Confidence: <span className="text-ink-2">{confidence ?? 'pending'}</span>
+                  {accuracyRadius != null && (
+                    <>
+                      {' · '}Accuracy: <span className="tnum text-ink-2">±{accuracyRadius} m</span>
+                    </>
+                  )}
+                </p>
               </div>
             </div>
+          </Panel>
 
-            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-white/5 text-xs">
-              <span className="text-slate-500 text-[10px] font-mono block mb-1">TRIANGULATED ADDRESS</span>
-              <p className="text-slate-200 font-medium">{call.caller_location?.address || 'Sector 14, Ring Road, New Delhi'}</p>
-            </div>
-          </div>
+          <Panel title={gradeConfidence ? `AI triage summary · ${gradeConfidence} confidence` : 'AI triage summary'}>
+            <p className="text-sm leading-relaxed text-ink-2">{summary}</p>
 
-          {/* AI Triage & Chief Complaint */}
-          <div className="p-5 rounded-2xl bg-slate-900/70 border border-white/10 backdrop-blur-md space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-mono font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
-                AI Triage Diagnostic Summary
-              </h2>
-              <Badge className="bg-emerald-500/20 text-emerald-300 font-mono text-[9px]">96% CONFIDENCE</Badge>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/80 p-4 rounded-xl border border-white/5 font-sans">
-              {call.ai_triage?.summary || call.chief_complaint || 'Emergency response required. AI extraction identified acute situation needing priority dispatch.'}
-            </p>
-          </div>
-        </div>
-
-        {/* Right Column (5 cols): Map & Hume Emotion Telemetry */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Mini Map */}
-          <div className="h-64 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-            {call.caller_location?.latitude && call.caller_location?.longitude ? (
-              <MiniLocationMap
-                latitude={call.caller_location.latitude}
-                longitude={call.caller_location.longitude}
-                address={call.caller_location.address}
-              />
-            ) : (
-              <div className="h-full w-full bg-slate-950 flex items-center justify-center font-mono text-xs text-slate-500">
-                Awaiting GPS Fix...
+            {threats.length > 0 && (
+              <div className="mt-3 border-t border-rule pt-3">
+                <span className="label flex items-center gap-1.5">
+                  <AlertTriangle className="h-3 w-3 text-mild" aria-hidden />
+                  Immediate threats
+                </span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {threats.map((threat) => (
+                    <Chip key={threat} tone="critical">
+                      {threat}
+                    </Chip>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Hume EVI Emotion Radar */}
-          <div className="p-5 rounded-2xl bg-slate-900/70 border border-white/10 backdrop-blur-md space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="font-bold text-slate-300">Hume Voice Emotion Breakdown</span>
-              <span className="text-emerald-400 text-[10px]">EVI 2.0 Telemetry</span>
+            <div className="mt-3 border-t border-rule pt-3">
+              <span className="label">Recommended units</span>
+              <div className="mt-1.5">
+                {units.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {units.map((unit) => (
+                      <Chip key={unit} tone="accent">
+                        {unit}
+                      </Chip>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sm text-ink-3">No units recommended yet.</span>
+                )}
+              </div>
             </div>
+          </Panel>
 
-            <div className="space-y-2.5">
-              {[
-                { label: 'Panic', val: 94, color: '#ef4444' },
-                { label: 'Distress', val: 88, color: '#f97316' },
-                { label: 'Urgency', val: 82, color: '#eab308' },
-                { label: 'Calmness', val: 12, color: '#38bdf8' },
-              ].map((e) => (
-                <div key={e.label} className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                    <span>{e.label}</span>
-                    <span className="text-white font-bold">{e.val}%</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${e.val}%`, backgroundColor: e.color }}
-                    ></div>
-                  </div>
+          <Panel
+            title="Full transcript"
+            action={<span className="tnum text-2xs text-ink-4">{segments.length} segments</span>}
+          >
+            {segments.length > 0 ? (
+              <ol className="flex flex-col gap-3">
+                {segments.map((segment, index) => {
+                  const isCaller = (segment.role ?? segment.speaker) !== 'assistant';
+                  return (
+                    <li key={index} className="flex flex-col gap-1">
+                      <span
+                        className={cn(
+                          'text-2xs font-medium uppercase tracking-wide',
+                          isCaller ? 'text-accent' : 'text-ink-3',
+                        )}
+                      >
+                        {speakerLabel(segment)}
+                      </span>
+                      {/* Full text, deliberately unclamped. */}
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-2">
+                        {segment.text}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-sm text-ink-3">
+                No transcript stored. A full turn-by-turn transcript is captured only for calls
+                taken through the live 112 Pulse voice station.
+              </p>
+            )}
+          </Panel>
+        </div>
+
+        {/* RIGHT — locator, prosody, timeline */}
+        <div className="flex flex-col gap-4 lg:col-span-5">
+          <Panel title="Incident locator" className="overflow-hidden">
+            <div className="-m-3 h-64">
+              {location?.latitude != null && location?.longitude != null ? (
+                <MiniLocationMap
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                  accuracyRadius={accuracyRadius}
+                  address={location.address}
+                  severity={call.severity}
+                  incidentType={call.incident_type}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-deep text-ink-4">
+                  <span className="label">Awaiting a positional fix</span>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          </Panel>
+
+          <Panel title="Prosody · emotion breakdown">
+            <div className="mb-3">
+              <DistressMeter level={distressOf(call)} />
+            </div>
+            {emotions.length > 0 ? (
+              <div className="flex flex-col gap-2.5 border-t border-rule pt-3">
+                {emotions.map((e) => {
+                  const pct = Math.round(Math.min(100, Math.max(0, e.intensity * 100)));
+                  return (
+                    <div key={e.emotion} className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm capitalize text-ink-2">{e.emotion}</span>
+                        <span className="tnum text-sm text-ink">{pct}</span>
+                      </div>
+                      <Meter value={pct} max={100} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="border-t border-rule pt-3 text-xs text-ink-4">
+                No prosody captured. Emotion values appear for calls taken through the live 112
+                Pulse voice station; a seeded or keyword-graded call shows an em-dash.
+              </p>
+            )}
+          </Panel>
+
+          <Panel title="Decision timeline">
+            <ol className="flex flex-col gap-2">
+              {DECISION_POINTS.map((point) => {
+                const record = recordByPoint.get(point);
+                const isNext = point === nextPoint;
+                return (
+                  <li
+                    key={point}
+                    className="flex items-center justify-between gap-2 rounded-[6px] border border-rule bg-panel-raised px-2.5 py-2"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-ink">{point}</span>
+                      {record?.note && (
+                        <span className="mt-0.5 break-words text-xs text-ink-3">{record.note}</span>
+                      )}
+                    </div>
+                    {record ? (
+                      <Chip tone={ACTION_TONE[record.action] ?? 'neutral'}>{record.action}</Chip>
+                    ) : isNext ? (
+                      <Chip tone="accent">awaiting</Chip>
+                    ) : (
+                      <span className="text-2xs uppercase tracking-wide text-ink-4">pending</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-2 text-2xs text-ink-4">
+              {nextPoint
+                ? `Next operator decision: ${nextPoint}.`
+                : 'All decision points recorded for this incident.'}
+            </p>
+          </Panel>
         </div>
       </div>
     </div>

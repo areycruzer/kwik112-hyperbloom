@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -624,48 +625,62 @@ function IncidentRow({
   const address = call.caller_location?.address;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
+    <div
       className={cn(
-        'flex w-full flex-col gap-2 rounded-[6px] border bg-panel p-3 text-left transition-colors',
+        'flex flex-col rounded-[6px] border bg-panel transition-colors',
         selected ? 'border-accent' : 'border-rule hover:border-rule-strong',
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
-          <Symbol
-            spec={{ kind: 'incident', glyph, severity: call.severity, distress: distressOf(call), size: 20 }}
-            className="shrink-0"
-          />
-          <span className="text-sm font-semibold capitalize text-ink">{subtype}</span>
+      {/* Selecting the body opens the incident in the in-panel detail view. */}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className="flex w-full flex-col gap-2 p-3 text-left"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
+            <Symbol
+              spec={{ kind: 'incident', glyph, severity: call.severity, distress: distressOf(call), size: 20 }}
+              className="shrink-0"
+            />
+            <span className="text-sm font-semibold capitalize text-ink">{subtype}</span>
+          </div>
+          <span className="tnum shrink-0 text-2xs text-ink-3">{getTimeElapsed(call.created_at)}</span>
         </div>
-        <span className="tnum shrink-0 text-2xs text-ink-3">{getTimeElapsed(call.created_at)}</span>
-      </div>
 
-      {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
-      <p className="text-sm leading-relaxed text-ink-2">
-        {call.ai_summary || call.chief_complaint || 'Emergency call in progress; details pending.'}
-      </p>
+        {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
+        <p className="text-sm leading-relaxed text-ink-2">
+          {call.ai_summary || call.chief_complaint || 'Emergency call in progress; details pending.'}
+        </p>
 
-      {address && (
-        <div className="flex items-start gap-1.5 text-xs text-ink-3">
-          <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          {/* Address wraps rather than truncating. */}
-          <span className="break-words">{address}</span>
-        </div>
-      )}
+        {address && (
+          <div className="flex items-start gap-1.5 text-xs text-ink-3">
+            <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+            {/* Address wraps rather than truncating. */}
+            <span className="break-words">{address}</span>
+          </div>
+        )}
+      </button>
 
-      <div className="flex items-center justify-between gap-2 border-t border-rule pt-2">
+      <div className="flex items-center justify-between gap-2 border-t border-rule px-3 py-2">
         <DistressMeter level={distressOf(call)} compact />
         <div className="flex items-center gap-1.5">
           {awaitingRefinement(call) && <Chip tone="mild">Refining</Chip>}
           <span className="text-2xs uppercase tracking-wide text-ink-4">{triageSource(call)}</span>
+          {/* Genuine detail affordance — navigates to the full incident dossier. */}
+          <Link
+            href={`/dashboard/calls/${call.id}`}
+            aria-label={`Open full detail for ${subtype}`}
+            className="inline-flex items-center gap-0.5 rounded-[4px] px-1.5 py-1 text-2xs font-medium uppercase tracking-wide text-accent hover:text-accent-bright"
+          >
+            View
+            <ChevronRight className="h-3 w-3" aria-hidden />
+          </Link>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
