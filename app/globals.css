@@ -245,3 +245,24 @@
   margin: 12px 14px !important;
   line-height: 1.4 !important;
 }
+
+/* Tactical basemap treatment. Esri's dark canvas renders mid-grey, so the tile
+   pane is darkened here rather than by swapping to a basemap that needs a key.
+   Only the tile pane is filtered — markers and popups sit in their own panes. */
+.leaflet-tile-pane {
+  filter: brightness(0.5) saturate(0.75) contrast(1.2);
+}
+
+.leaflet-container {
+  background: #05080f;
+}
+
+.leaflet-control-attribution {
+  background: rgba(5, 8, 15, 0.75) !important;
+  color: #64748b !important;
+  font-size: 9px !important;
+}
+
+.leaflet-control-attribution a {
+  color: #94a3b8 !important;
+}

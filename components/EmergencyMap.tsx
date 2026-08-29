@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
+import { escapeHtml } from '@/lib/utils';
 import { Navigation, Shield } from 'lucide-react';
 
 interface EmergencyMapProps {
@@ -43,6 +44,9 @@ export default function EmergencyMap({
   const unitMarkersRef = useRef<Map<string, any>>(new Map());
   const routePolylineRef = useRef<any>(null);
   const [showUnits, setShowUnits] = useState(true);
+  // Leaflet loads asynchronously. Effects that draw onto the map key off this so
+  // they re-run once it exists, rather than relying on a poll to retry them.
+  const [mapReady, setMapReady] = useState(false);
   const [activeLayer, setActiveLayer] = useState<'dark' | 'satellite'>('dark');
   const tileLayerRef = useRef<any>(null);
 
@@ -71,21 +75,19 @@ export default function EmergencyMap({
           center: [28.7041, 77.1025],
           zoom: 13,
           zoomControl: false,
-          attributionControl: false,
           preferCanvas: true,
         });
 
-        // Add dark tactical basemap
+        // Esri's dark canvas serves keyless without a watermark. CARTO's
+        // basemaps now stamp "API KEY REQUIRED" across every unkeyed tile.
         const darkTiles = L.default.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-          {
-            maxZoom: 19,
-            subdomains: 'abcd',
-          }
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+          { maxZoom: 16, attribution: 'Tiles &copy; Esri' }
         ).addTo(map);
 
         tileLayerRef.current = darkTiles;
         mapRef.current = map;
+        setMapReady(true);
 
         // Force resize calculation
         setTimeout(() => {
@@ -114,6 +116,10 @@ export default function EmergencyMap({
         mapRef.current.remove();
         mapRef.current = null;
       }
+      incidentMarkersRef.current.clear();
+      unitMarkersRef.current.clear();
+      routePolylineRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
@@ -124,12 +130,12 @@ export default function EmergencyMap({
     const L = leafletRef.current;
     mapRef.current.removeLayer(tileLayerRef.current);
     const newTiles = activeLayer === 'dark'
-      ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' })
-      : L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
+      ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri' })
+      : L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles &copy; Esri' });
 
     newTiles.addTo(mapRef.current);
     tileLayerRef.current = newTiles;
-  }, [activeLayer]);
+  }, [activeLayer, mapReady]);
 
   // Invalidate map size whenever selection changes or view renders
   useEffect(() => {
@@ -176,7 +182,7 @@ export default function EmergencyMap({
             <div class="relative px-2 py-1 rounded-md text-[10px] font-black font-mono shadow-2xl flex items-center gap-1 border border-white/20"
                  style="background: rgba(10, 15, 26, 0.92); color: ${color}; box-shadow: 0 0 16px ${color}66;">
               <span class="w-2 h-2 rounded-full" style="background-color: ${color}; box-shadow: 0 0 8px ${color};"></span>
-              <span>${priorityLabel}</span>
+              <span>${escapeHtml(priorityLabel)}</span>
             </div>
           </div>
         `,
@@ -194,20 +200,23 @@ export default function EmergencyMap({
         marker.setIcon(customIcon);
       }
 
+      // Every interpolated value below is caller-derived and reaches Leaflet as
+      // raw markup, so each one must be escaped. See lib/utils#escapeHtml.
+      const summary = call.ai_summary || call.chief_complaint || 'Emergency reported';
       const popupHtml = `
         <div class="p-1 text-slate-100 font-sans text-xs space-y-2 min-w-[220px]">
           <div class="flex items-center justify-between border-b border-white/10 pb-1.5">
             <span class="font-bold uppercase tracking-wider text-[11px]" style="color: ${color};">
-              ${call.incident_subtype || call.incident_type}
+              ${escapeHtml(call.incident_subtype || call.incident_type)}
             </span>
-            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 uppercase">${call.severity}</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 uppercase">${escapeHtml(call.severity)}</span>
           </div>
-          <p class="text-slate-300 text-[11px] leading-relaxed line-clamp-2">${call.chief_complaint || 'Emergency reported'}</p>
+          <p class="text-slate-300 text-[11px] leading-relaxed line-clamp-2">${escapeHtml(summary)}</p>
           <div class="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-            <span class="truncate">📍 ${location.address || 'Triangulated coordinate'}</span>
+            <span class="truncate">📍 ${escapeHtml(location.address || 'Triangulated coordinate')}</span>
           </div>
           <div class="flex items-center justify-between pt-1 border-t border-white/10 text-[10px] font-mono text-slate-400">
-            <span>⏱ ${getTimeElapsed(call.created_at)}</span>
+            <span>⏱ ${escapeHtml(getTimeElapsed(call.created_at))}</span>
             <span class="text-blue-400 font-semibold cursor-pointer">SELECT INCIDENT ›</span>
           </div>
         </div>
@@ -226,7 +235,7 @@ export default function EmergencyMap({
         incidentMarkersRef.current.delete(id);
       }
     });
-  }, [calls, selectedCallId, onMarkerClick]);
+  }, [calls, selectedCallId, onMarkerClick, mapReady]);
 
   // Render First Responder Fleet Markers
   useEffect(() => {
@@ -288,7 +297,7 @@ export default function EmergencyMap({
         </div>
       `);
     });
-  }, [tacticalUnits, showUnits]);
+  }, [tacticalUnits, showUnits, mapReady]);
 
   // Pathfinding vector route to Selected Incident
   useEffect(() => {
@@ -329,7 +338,7 @@ export default function EmergencyMap({
 
     routePolylineRef.current = polyline;
     mapRef.current.setView([targetLat, targetLng], 14, { animate: true });
-  }, [selectedCallId, calls, tacticalUnits]);
+  }, [selectedCallId, calls, tacticalUnits, mapReady]);
 
   return (
     <div className="relative w-full h-full min-h-[450px] bg-[#05080f] overflow-hidden flex-1">

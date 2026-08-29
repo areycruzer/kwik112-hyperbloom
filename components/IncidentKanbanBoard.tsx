@@ -98,42 +98,38 @@ export default function IncidentKanbanBoard({
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [draggedCallId, setDraggedCallId] = useState<string | null>(null);
 
-  // Group calls into columns
-  const getCallsForColumn = (column: ColumnDef) => {
-    return calls.filter((call) => {
-      // Filter by priority if set
-      if (filterPriority !== 'all' && call.severity !== filterPriority) {
-        return false;
-      }
-
-      // Check status match
-      const status = (call.status || 'pending').toLowerCase();
-      const callStatus = (call.call_status || '').toLowerCase();
-
-      // If call is marked resolved
-      if (column.id === 'resolved') {
-        return status === 'resolved' || status === 'completed' || callStatus === 'ended' && call.severity === 'low';
-      }
-
-      // If call is on-scene
-      if (column.id === 'on_scene') {
-        return status === 'on_scene' || status === 'mitigating';
-      }
-
-      // If call is dispatched
-      if (column.id === 'dispatched') {
-        return status === 'dispatched' || callStatus === 'in-progress' && status !== 'active';
-      }
-
-      // If call is awaiting approval
-      if (column.id === 'approval') {
-        return status === 'active' || status === 'awaiting_approval';
-      }
-
-      // Default incoming triage
-      return column.matchStatuses.includes(status) || (!['active', 'dispatched', 'on_scene', 'resolved', 'completed'].includes(status) && column.id === 'triage');
-    });
+  /**
+   * @description Map a call to exactly one pipeline stage. Returning a single
+   *              stage per call is what stops an incident rendering in two
+   *              columns at once, which the previous per-column predicates could
+   *              do for any call whose `status` and `call_status` disagreed.
+   */
+  const stageOf = (call: EmergencyCall): string => {
+    switch ((call.status || 'pending').toLowerCase()) {
+      case 'resolved':
+      case 'completed':
+      case 'closed':
+        return 'resolved';
+      case 'on_scene':
+      case 'mitigating':
+        return 'on_scene';
+      case 'dispatched':
+      case 'en-route':
+        return 'dispatched';
+      case 'active':
+      case 'awaiting_approval':
+      case 'pending_approval':
+        return 'approval';
+      default:
+        return 'triage';
+    }
   };
+
+  const getCallsForColumn = (column: ColumnDef) =>
+    calls.filter((call) => {
+      if (filterPriority !== 'all' && call.severity !== filterPriority) return false;
+      return stageOf(call) === column.id;
+    });
 
   const handleDragStart = (e: React.DragEvent, callId: string) => {
     e.dataTransfer.setData('text/plain', callId);
@@ -144,19 +140,37 @@ export default function IncidentKanbanBoard({
     e.preventDefault();
   };
 
+  /** @description The call status each pipeline stage corresponds to. */
+  const STATUS_FOR_STAGE: Record<string, CallStatus> = {
+    triage: 'pending',
+    approval: 'active',
+    dispatched: 'dispatched',
+    on_scene: 'on_scene',
+    resolved: 'resolved',
+  };
+
+  const STAGE_ORDER = ['triage', 'approval', 'dispatched', 'on_scene', 'resolved'];
+
   const handleDrop = (e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
     const callId = e.dataTransfer.getData('text/plain') || draggedCallId;
     if (callId) {
-      let nextStatus: CallStatus = 'pending';
-      if (targetColumnId === 'approval') nextStatus = 'active';
-      else if (targetColumnId === 'dispatched') nextStatus = 'dispatched';
-      else if (targetColumnId === 'on_scene') nextStatus = 'on_scene';
-      else if (targetColumnId === 'resolved') nextStatus = 'resolved';
-
-      onUpdateCallStatus(callId, nextStatus);
+      onUpdateCallStatus(callId, STATUS_FOR_STAGE[targetColumnId] ?? 'pending');
     }
     setDraggedCallId(null);
+  };
+
+  /**
+   * @description Keyboard- and click-reachable equivalent of dragging a card to
+   *              the next column. Drag-and-drop alone leaves the pipeline
+   *              unusable for anyone not using a mouse.
+   */
+  const advanceStage = (call: EmergencyCall) => {
+    const current = STAGE_ORDER.indexOf(stageOf(call));
+    const next = STAGE_ORDER[Math.min(current + 1, STAGE_ORDER.length - 1)];
+    if (next && next !== STAGE_ORDER[current]) {
+      onUpdateCallStatus(call.id, STATUS_FOR_STAGE[next]);
+    }
   };
 
   return (
@@ -236,6 +250,13 @@ export default function IncidentKanbanBoard({
                   colCalls.map((call) => {
                     const isP1 = call.severity === 'critical';
                     const isP2 = call.severity === 'high';
+                    const confidence = call.ai_confidence ?? call.ai_triage?.confidence ?? null;
+                    const ranked = call.ai_triage?.emotion_analysis?.top_emotions;
+                    const topEmotion = ranked?.length
+                      ? ranked[0]
+                      : call.top_emotion
+                      ? { emotion: call.top_emotion, intensity: call.emotion_intensity }
+                      : null;
                     const pColor = isP1
                       ? 'bg-red-500/15 border-red-500/40 text-red-300'
                       : isP2
@@ -273,7 +294,7 @@ export default function IncidentKanbanBoard({
                             {call.incident_subtype || call.incident_type}
                           </h4>
                           <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed mt-0.5">
-                            {call.chief_complaint || 'Emergency reported. Audio stream active.'}
+                            {call.ai_summary || call.chief_complaint || 'Emergency reported. Audio stream active.'}
                           </p>
                         </div>
 
@@ -284,15 +305,22 @@ export default function IncidentKanbanBoard({
                               📍 {call.caller_location?.address || 'GPS Fix Locked'}
                             </span>
                             <span className="text-emerald-400 font-bold">
-                              {call.ai_triage?.confidence ? `${Math.round(call.ai_triage.confidence * 100)}%` : '96%'}
+                              {typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : '—'}
                             </span>
                           </div>
 
-                          {/* Quick Hume Tag */}
-                          <div className="flex items-center gap-1 text-[9px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                            <Sparkles className="w-2.5 h-2.5" />
-                            <span>Hume Emotion: Panic (94%)</span>
-                          </div>
+                          {/* Measured prosody, when this call actually has any */}
+                          {topEmotion && (
+                            <div className="flex items-center gap-1 text-[9px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              <span className="capitalize">
+                                {topEmotion.emotion}
+                                {typeof topEmotion.intensity === 'number'
+                                  ? ` (${Math.round(topEmotion.intensity * 100)}%)`
+                                  : ''}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Interactive Click to View in Map & Action Controls */}
@@ -308,10 +336,22 @@ export default function IncidentKanbanBoard({
                           <button
                             onClick={() => onOpenWorkflow(call)}
                             className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-white/10 hover:border-white/20 transition-all"
-                            title="Review AI Recommended Actions"
+                            title="Review AI recommended actions"
+                            aria-label={`Review AI recommended actions for ${call.incident_subtype || call.incident_type}`}
                           >
                             <Shield className="w-3 h-3 text-amber-400" />
                           </button>
+
+                          {stageOf(call) !== 'resolved' && (
+                            <button
+                              onClick={() => advanceStage(call)}
+                              className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white font-mono text-[10px] border border-white/10 hover:border-emerald-500 transition-all"
+                              title="Advance to the next pipeline stage"
+                              aria-label={`Advance ${call.incident_subtype || call.incident_type} to the next stage`}
+                            >
+                              <MoveRight className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

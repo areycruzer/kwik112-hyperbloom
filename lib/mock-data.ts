@@ -13,7 +13,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-1',
     caller_number: '+919876543210',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'apartment fire',
@@ -81,7 +81,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-3',
     caller_number: '+919711223344',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'medical_emergency',
     incident_subtype: 'cardiac arrest',
@@ -109,7 +109,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-4',
     caller_number: '+919900112233',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'crime',
     incident_subtype: 'armed robbery',
@@ -137,8 +137,8 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-5',
     caller_number: '+919922334455',
-    status: 'active',
-    call_status: 'in-progress',
+    status: 'resolved',
+    call_status: 'completed',
     incident_type: 'public_safety',
     incident_subtype: 'gas leak',
     severity: 'medium',
@@ -193,7 +193,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-7',
     caller_number: '+919765432109',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'accident',
     incident_subtype: 'pedestrian hit',
@@ -221,7 +221,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'mumbai-1',
     caller_number: '+919823456789',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'commercial building fire',
@@ -249,7 +249,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'bangalore-1',
     caller_number: '+919880123456',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'accident',
     incident_subtype: 'bus accident',
@@ -277,7 +277,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'kolkata-1',
     caller_number: '+919830567890',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'public_safety',
     incident_subtype: 'building collapse',
@@ -333,8 +333,8 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'hyderabad-1',
     caller_number: '+919949876543',
-    status: 'active',
-    call_status: 'in-progress',
+    status: 'resolved',
+    call_status: 'completed',
     incident_type: 'crime',
     incident_subtype: 'chain snatching',
     severity: 'medium',
@@ -389,7 +389,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'delhi-8',
     caller_number: '+919811234567',
-    status: 'active',
+    status: 'dispatched',
     call_status: 'in-progress',
     incident_type: 'public_safety',
     incident_subtype: 'electric hazard',
@@ -417,7 +417,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'ahmedabad-1',
     caller_number: '+919879123456',
-    status: 'active',
+    status: 'triage',
     call_status: 'in-progress',
     incident_type: 'medical_emergency',
     incident_subtype: 'allergic reaction',
@@ -445,7 +445,7 @@ export const mockCalls: EmergencyCall[] = [
   {
     id: 'jaipur-1',
     caller_number: '+919829345678',
-    status: 'active',
+    status: 'on_scene',
     call_status: 'in-progress',
     incident_type: 'fire',
     incident_subtype: 'market fire',

@@ -1,228 +1,272 @@
 /**
  * Call Creation API Route
- * Creates a new emergency call with AI triage and emotion analysis
+ * Turns a finished EVI conversation (transcript + prosody frames) into a
+ * triaged EmergencyCall for the dispatch board.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { EmergencyCall } from '@/lib/types';
+import { EmergencyCall, Location } from '@/lib/types';
+import {
+  EmotionFrame,
+  distressLevel,
+  rankEmotions,
+  recommendUnits,
+  scoreOf,
+  severityFromScore,
+  priorityFromSeverity,
+  triageTranscript,
+} from '@/lib/triage';
+import { logger } from '@/lib/logger';
+
+interface IncomingSegment {
+  text?: string;
+  role?: string;
+  speaker?: string;
+  timestamp?: string;
+  emotions?: EmotionFrame;
+}
+
+/** @description Accept transcript as an array of segments or a newline string. */
+function normalizeTranscript(input: unknown): Array<{
+  text: string;
+  role: string;
+  timestamp: string;
+  segment_index: number;
+  emotions?: EmotionFrame;
+}> {
+  const rows: IncomingSegment[] = Array.isArray(input)
+    ? (input as IncomingSegment[])
+    : typeof input === 'string'
+    ? input.split('\n').map((text) => ({ text }))
+    : [];
+
+  return rows
+    .map((segment, index) => ({
+      text: typeof segment?.text === 'string' ? segment.text.trim() : '',
+      role: segment?.role === 'assistant' || segment?.speaker === 'assistant' ? 'assistant' : 'user',
+      timestamp: segment?.timestamp ?? new Date().toISOString(),
+      segment_index: index,
+      emotions: segment?.emotions,
+    }))
+    .filter((segment) => segment.text.length > 0);
+}
+
+/**
+ * @description Resolve a location without inventing one. When we cannot place
+ *              the address we return it unplotted rather than dropping a pin on
+ *              a coordinate nobody reported.
+ */
+const KNOWN_PLACES: Array<[RegExp, { latitude: number; longitude: number; city: string }]> = [
+  [/\bgreater noida\b/i, { latitude: 28.4744, longitude: 77.503, city: 'Greater Noida' }],
+  [/\bnoida\b/i, { latitude: 28.5355, longitude: 77.391, city: 'Noida' }],
+  [/\brohini\b/i, { latitude: 28.7196, longitude: 77.1186, city: 'New Delhi' }],
+  [/\bconnaught place\b/i, { latitude: 28.6304, longitude: 77.2177, city: 'New Delhi' }],
+  [/\bnehru place\b/i, { latitude: 28.5492, longitude: 77.253, city: 'New Delhi' }],
+  [/\bpitampura\b/i, { latitude: 28.7049, longitude: 77.1324, city: 'New Delhi' }],
+  [/\bgurgaon|gurugram\b/i, { latitude: 28.4595, longitude: 77.0266, city: 'Gurugram' }],
+  [/\bmumbai\b/i, { latitude: 19.076, longitude: 72.8777, city: 'Mumbai' }],
+  [/\bbengaluru|bangalore\b/i, { latitude: 12.9716, longitude: 77.5946, city: 'Bengaluru' }],
+  [/\bkolkata\b/i, { latitude: 22.5726, longitude: 88.3639, city: 'Kolkata' }],
+  [/\bchennai\b/i, { latitude: 13.0827, longitude: 80.2707, city: 'Chennai' }],
+  [/\bhyderabad\b/i, { latitude: 17.385, longitude: 78.4867, city: 'Hyderabad' }],
+  [/\bpune\b/i, { latitude: 18.5204, longitude: 73.8567, city: 'Pune' }],
+  [/\bnew delhi|\bdelhi\b/i, { latitude: 28.6139, longitude: 77.209, city: 'New Delhi' }],
+];
+
+/**
+ * @description Pull a recognisable place out of what the caller actually said.
+ *              Without this, keyword-only triage produces a call with no
+ *              coordinates, which never reaches the map.
+ */
+function placeFromTranscript(text: string): { phrase: string; place: (typeof KNOWN_PLACES)[number][1] } | null {
+  for (const [pattern, place] of KNOWN_PLACES) {
+    const match = text.match(pattern);
+    if (match) return { phrase: match[0], place };
+  }
+  return null;
+}
+
+function resolveLocation(
+  address: string | undefined,
+  reported: { latitude?: number; longitude?: number } | undefined,
+  modelConfidence: number,
+  transcriptText = ''
+): Location {
+  const trimmed = address?.trim();
+
+  // A coordinate the caller's device actually reported always wins.
+  if (typeof reported?.latitude === 'number' && typeof reported?.longitude === 'number') {
+    return {
+      address: trimmed || 'Device-reported position',
+      latitude: reported.latitude,
+      longitude: reported.longitude,
+      confidence: 0.95,
+      source: 'gps',
+    };
+  }
+
+  if (trimmed) {
+    for (const [pattern, place] of KNOWN_PLACES) {
+      if (pattern.test(trimmed)) {
+        return {
+          address: trimmed,
+          city: place.city,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          confidence: Math.max(modelConfidence, 0.55),
+          source: 'caller',
+        };
+      }
+    }
+    // Named but not placeable: keep the words, refuse to invent a pin.
+    return { address: trimmed, confidence: Math.min(modelConfidence, 0.3), source: 'caller' };
+  }
+
+  // No structured address, so fall back to a place name spoken in the call.
+  const spoken = placeFromTranscript(transcriptText);
+  if (spoken) {
+    return {
+      address: `Near ${spoken.phrase} (from caller audio)`,
+      city: spoken.place.city,
+      latitude: spoken.place.latitude,
+      longitude: spoken.place.longitude,
+      confidence: 0.45,
+      source: 'caller',
+    };
+  }
+
+  return { address: 'Location not yet established', confidence: 0, source: 'caller' };
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { phoneNumber, transcript, emotions, conversationId } = body;
+    const {
+      phoneNumber,
+      transcript,
+      emotions,
+      chatGroupId,
+      conversationId,
+      callDurationSeconds,
+      reportedLocation,
+    } = body ?? {};
 
-    if (!phoneNumber) {
-      return NextResponse.json(
-        { error: 'Phone number is required' },
-        { status: 400 }
-      );
+    if (!phoneNumber || typeof phoneNumber !== 'string') {
+      return NextResponse.json({ error: 'phoneNumber is required' }, { status: 400 });
     }
 
-    // Generate unique call ID
-    const callId = conversationId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const segments = normalizeTranscript(transcript);
+    const callerText = segments
+      .filter((s) => s.role === 'user')
+      .map((s) => s.text)
+      .join(' ');
+    const fullText = segments.map((s) => `${s.role.toUpperCase()}: ${s.text}`).join('\n');
 
-    // Step 1: Run AI triage on transcript (if provided)
-    let triageData = null;
-    if (transcript && transcript.length > 0) {
-      try {
-        const sanitizedTranscript = Array.isArray(transcript)
-          ? transcript
-              .map((segment) =>
-                typeof segment?.text === 'string' ? segment.text.trim() : ''
-              )
-              .filter((text) => text.length > 0)
-          : typeof transcript === 'string'
-          ? transcript.split('\n').map((line) => line.trim()).filter(Boolean)
-          : [];
+    // Emotion frames may arrive standalone or attached to segments.
+    const frames: EmotionFrame[] = [
+      ...(Array.isArray(emotions) ? emotions : []),
+      ...segments.map((s) => s.emotions).filter(Boolean),
+    ].filter((f): f is EmotionFrame => Boolean(f) && typeof f === 'object');
 
-        const fullTranscript = sanitizedTranscript.join(' ');
+    const ranked = rankEmotions(frames);
+    const distress = distressLevel(ranked);
 
-        const triageResponse = await fetch(`${request.nextUrl.origin}/api/triage/extract`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript: fullTranscript }),
-        });
-        
-        if (triageResponse.ok) {
-          triageData = await triageResponse.json();
-          console.log('✅ AI triage completed:', {
-            incident: triageData.extraction?.incident_type,
-            severity: triageData.extraction?.severity_score
-          });
-        }
-      } catch (error) {
-        console.warn('AI triage failed:', error);
-      }
-    }
+    const triage = await triageTranscript(callerText || fullText);
+    const baseScore = scoreOf(triage);
 
-    // Step 2: Process emotion data from Hume
-    const topEmotion = emotions && emotions.length > 0 
-      ? emotions.reduce((prev: any, current: any) => 
-          (current.intensity > prev.intensity) ? current : prev
-        )
-      : null;
+    // Emotion evidence can nudge severity up, never down.
+    const severityScore = Math.min(100, Math.round(Math.max(baseScore, baseScore + distress * 0.2)));
+    const severity = severityFromScore(severityScore);
+    const top = ranked[0];
 
-    const avgEmotionIntensity = emotions && emotions.length > 0
-      ? emotions.reduce((sum: number, e: any) => sum + e.intensity, 0) / emotions.length
-      : 0.5;
+    const location = resolveLocation(
+      triage.extraction.location?.address,
+      reportedLocation,
+      triage.extraction.location?.confidence ?? 0,
+      callerText || fullText
+    );
 
-    // Step 3: Calculate severity based on emotions + AI triage
-    let severityScore = triageData?.extraction?.severity_score || 50;
-    
-    // Boost severity based on distress emotions
-    if (topEmotion) {
-      const emotionBoost = {
-        'fear': 20,
-        'distress': 20,
-        'panic': 25,
-        'anxiety': 15,
-        'anger': 15,
-        'sadness': 10,
-      };
-      severityScore += (emotionBoost[topEmotion.emotion as keyof typeof emotionBoost] || 0) * topEmotion.intensity;
-    }
+    const callId =
+      typeof conversationId === 'string' && conversationId
+        ? conversationId
+        : `call_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-    severityScore = Math.min(Math.max(severityScore, 0), 100);
+    const now = new Date().toISOString();
 
-    const severity = severityScore >= 80 ? 'critical' :
-                    severityScore >= 60 ? 'high' :
-                    severityScore >= 40 ? 'medium' : 'low';
+    const call: EmergencyCall = {
+      id: callId,
+      caller_number: phoneNumber,
+      status: 'active',
+      call_status: 'completed',
+      language: 'English',
+      call_duration: typeof callDurationSeconds === 'number' ? callDurationSeconds : undefined,
 
-    // Step 4: Create the emergency call object
-      const newCall: EmergencyCall = {
-        id: callId,
-        caller_number: phoneNumber,
-        status: 'active',
-        call_status: 'in-progress',
-      
-      // Location: Use IP-based geolocation or browser location in production
-      caller_location: buildCallerLocation(triageData?.extraction?.location),
-      
-      // Incident data from AI triage
-      incident_type: triageData?.extraction?.incident_type || 'emergency',
-      incident_subtype: triageData?.extraction?.incident_subtype || 'Unknown',
+      caller_location: location,
+      location_confidence: location.confidence,
+
+      incident_type: triage.extraction.incident_type,
+      incident_subtype: triage.extraction.incident_subtype,
+      chief_complaint: triage.extraction.summary,
       severity,
       severity_score: severityScore,
-      
-      // Emotion data from Hume
-      top_emotion: topEmotion?.emotion || 'distress',
-      emotion_intensity: topEmotion?.intensity || avgEmotionIntensity,
-      caller_condition: severityScore >= 70 ? 'panicked' :
-                       severityScore >= 50 ? 'distressed' :
-                       severityScore >= 30 ? 'unclear' : 'calm',
-      emotion_data: emotions || [],
-      
-      // AI triage results
-      ai_summary: triageData?.extraction?.summary || 'Emergency call received. Awaiting detailed analysis.',
-      ai_confidence: triageData?.extraction?.confidence_score || 0.70,
-      persons_involved: triageData?.extraction?.persons_involved || 1,
-      immediate_threats: triageData?.extraction?.immediate_threats || [],
-      
-      // Transcript
-      transcript: Array.isArray(transcript)
-        ? transcript
-            .map((segment: any, index: number) => ({
-              text: typeof segment?.text === 'string' ? segment.text.trim() : '',
-              role: segment?.role || segment?.speaker || 'user',
-              timestamp: segment?.timestamp || new Date().toISOString(),
-              segment_index: index,
-            }))
-            .filter((segment) => segment.text.length > 0)
-        : typeof transcript === 'string'
-        ? transcript
-            .split('\n')
-            .map((line, index) => ({
-              text: line.trim(),
-              role: 'user',
-              timestamp: new Date().toISOString(),
-              segment_index: index,
-            }))
-            .filter((segment) => segment.text.length > 0)
-        : [],
-      
-      // Timestamps
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      
-      // AI recommendation
-      ai_recommendation: triageData?.extraction?.recommendations?.join('. ') || 
-                        'Dispatch appropriate emergency services immediately.',
+
+      top_emotion: top?.emotion,
+      emotion_intensity: top?.intensity,
+      caller_condition: triage.extraction.caller_condition,
+      emotion_data: frames,
+
+      ai_summary: triage.extraction.summary,
+      ai_confidence: triage.extraction.confidence_score,
+      ai_triage: {
+        severity,
+        confidence: triage.extraction.confidence_score,
+        summary: triage.extraction.summary,
+        incident_type: triage.extraction.incident_type,
+        priority_code: priorityFromSeverity(severity),
+        persons_involved: triage.extraction.persons_involved.count,
+        flags: triage.flags,
+        emotion_analysis: {
+          top_emotions: ranked.slice(0, 8),
+          distress_level: distress,
+        },
+      },
+      persons_involved: triage.extraction.persons_involved.count,
+      immediate_threats: triage.extraction.immediate_threats,
+
+      labels: triage.labels,
+      flags: triage.flags,
+      recommended_units: recommendUnits(triage.extraction.incident_type, severity),
+      special_instructions: triage.extraction.recommended_questions.join(' '),
+
+      transcript: segments,
+      priority_code: priorityFromSeverity(severity),
+
+      created_at: now,
+      updated_at: now,
     };
 
-    console.log('✅ Emergency call created:', {
+    logger.info('Emergency call triaged', {
       id: callId,
       severity,
       severityScore,
-      emotion: topEmotion?.emotion,
-      incident: newCall.incident_type
+      distress,
+      method: triage.method,
+      chatGroupId,
+      segments: segments.length,
+      emotionFrames: frames.length,
     });
 
-    // In production, this would save to Supabase
-    // For now, we return the call data and handle it client-side
-    
     return NextResponse.json({
       success: true,
-      call: newCall,
-      message: 'Emergency call created successfully',
+      call,
+      triage_method: triage.method,
+      missing_info: triage.extraction.missing_critical_info,
+      recommended_questions: triage.extraction.recommended_questions,
     });
-
   } catch (error) {
-    console.error('Call creation error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create call' },
-      { status: 500 }
-    );
+    logger.error('Call creation failed', {
+      error: error instanceof Error ? error.message : error,
+    });
+    return NextResponse.json({ error: 'Failed to create call' }, { status: 500 });
   }
 }
-
-function buildCallerLocation(locationText?: string) {
-  if (typeof locationText === 'string' && locationText.trim().length > 0) {
-    const normalized = locationText.trim();
-
-    if (/india|delhi|noida|uttar pradesh/gi.test(normalized)) {
-      const latLon = lookupIndianCoordinates(normalized);
-      return {
-        address: normalized,
-        latitude: latLon.latitude,
-        longitude: latLon.longitude,
-        confidence: 0.85,
-      };
-    }
-
-    return {
-      address: normalized,
-      latitude: 37.7749,
-      longitude: -122.4194,
-      confidence: 0.4,
-    };
-  }
-
-  return {
-    address: 'Location pending verification',
-    latitude: 28.6139,
-    longitude: 77.209,
-    confidence: 0.25,
-  };
-}
-
-function lookupIndianCoordinates(query: string) {
-  const lookupTable: Record<string, { latitude: number; longitude: number }> = {
-    noida: { latitude: 28.5355, longitude: 77.391 },
-    'greater noida': { latitude: 28.4744, longitude: 77.503 },
-    'uttar pradesh': { latitude: 26.8467, longitude: 80.9462 },
-    delhi: { latitude: 28.6139, longitude: 77.209 },
-    'new delhi': { latitude: 28.6139, longitude: 77.209 },
-    'rohini sector 16': { latitude: 28.7196, longitude: 77.1186 },
-  };
-
-  const normalizedQuery = query.toLowerCase();
-  for (const key of Object.keys(lookupTable)) {
-    if (normalizedQuery.includes(key)) {
-      return lookupTable[key];
-    }
-  }
-
-  return { latitude: 28.6139, longitude: 77.209 };
-}
-
-

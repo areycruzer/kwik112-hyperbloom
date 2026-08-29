@@ -86,22 +86,52 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load and sync calls from localStorage & mock data
-  const loadCalls = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('kwik_emergency_calls');
-      const newCalls = stored ? JSON.parse(stored) : [];
-      const merged = [...newCalls, ...mockCalls];
-      setCalls(merged);
+  // Reading the selection through a ref keeps `loadCalls` stable, so the poll
+  // interval below is not torn down and rebuilt on every selection change.
+  const selectedCallIdRef = useRef<string | null>(null);
+  selectedCallIdRef.current = selectedCallId;
 
-      if (!selectedCallId && merged.length > 0) {
-        setSelectedCallId(merged[0].id);
-      }
-    } catch (e) {
-      console.error('Error loading calls:', e);
-      setCalls(mockCalls);
+  /** @description Stored calls shadow their mock counterpart instead of joining it. */
+  const mergeCalls = (stored: EmergencyCall[]): EmergencyCall[] => {
+    const byId = new Map<string, EmergencyCall>();
+    for (const call of [...stored, ...mockCalls]) {
+      if (call && call.id && !byId.has(call.id)) byId.set(call.id, call);
     }
-  }, [selectedCallId]);
+    return [...byId.values()];
+  };
+
+  const readStored = (): EmergencyCall[] => {
+    try {
+      const raw = localStorage.getItem('kwik_emergency_calls');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Error reading stored calls:', e);
+      return [];
+    }
+  };
+
+  /**
+   * @description Poll storage, but only push new state when something actually
+   *              changed. Handing React a fresh array every five seconds makes
+   *              the Leaflet effects tear down and rebuild every marker and
+   *              re-centre the map under the operator.
+   */
+  const callsFingerprint = useRef<string>('');
+
+  const loadCalls = useCallback(() => {
+    const merged = mergeCalls(readStored());
+    const fingerprint = merged.map((c) => `${c.id}:${c.status}:${c.updated_at}`).join('|');
+
+    if (fingerprint !== callsFingerprint.current) {
+      callsFingerprint.current = fingerprint;
+      setCalls(merged);
+    }
+
+    if (!selectedCallIdRef.current && merged.length > 0) {
+      setSelectedCallId(merged[0].id);
+    }
+  }, []);
 
   useEffect(() => {
     loadCalls();
@@ -121,22 +151,50 @@ export default function DashboardPage() {
     return () => window.removeEventListener('kwik-call-updated', handleCallUpdated);
   }, [loadCalls]);
 
-  const handleUpdateCallStatus = (callId: string, newStatus: CallStatus) => {
+  /**
+   * @description Persist only the changed call. Writing the whole merged list
+   *              back would push the mock seed into storage, where the next poll
+   *              would merge it with `mockCalls` again and double the queue.
+   */
+  const handleUpdateCallStatus = useCallback((callId: string, newStatus: CallStatus) => {
     setCalls((prev) => {
-      const updated = prev.map((c) => (c.id === callId ? { ...c, status: newStatus } : c));
-      try {
-        localStorage.setItem('kwik_emergency_calls', JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
-  };
+      const target = prev.find((c) => c.id === callId);
+      if (!target) return prev;
 
-  const handleSelectCallAndNavigateToMap = (callId: string) => {
+      const updated: EmergencyCall = {
+        ...target,
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        const stored = readStored().filter((c) => c.id !== callId);
+        localStorage.setItem('kwik_emergency_calls', JSON.stringify([updated, ...stored]));
+      } catch (e) {
+        console.error('Error persisting call status:', e);
+      }
+
+      const next = prev.map((c) => (c.id === callId ? updated : c));
+      callsFingerprint.current = next
+        .map((c) => `${c.id}:${c.status}:${c.updated_at}`)
+        .join('|');
+      return next;
+    });
+  }, []);
+
+  const handleSelectCallAndNavigateToMap = useCallback((callId: string) => {
     setSelectedCallId(callId);
     setViewMode('map');
-  };
+  }, []);
+
+  // Stable identities keep the Leaflet marker effect from re-running (and
+  // re-opening the popup) on every one-second clock tick.
+  const handleMarkerClick = useCallback((id: string) => setSelectedCallId(id), []);
+  const handleDispatchUnit = useCallback(() => setWorkflowOpen(true), []);
+  const handleOpenWorkflow = useCallback((call: EmergencyCall) => {
+    setSelectedCallId(call.id);
+    setWorkflowOpen(true);
+  }, []);
 
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
   const selectedPriority = selectedCall?.priority_code || (selectedCall?.severity === 'critical' ? 'P1' : selectedCall?.severity === 'high' ? 'P2' : 'P3');
@@ -149,6 +207,49 @@ export default function DashboardPage() {
   const selectedMissingQuestions = selectedCall?.immediate_threats?.length
     ? ['Confirm exact floor/landmark', 'Confirm victim count', 'Confirm responder access route']
     : ['Confirm caller safety', 'Confirm precise location', 'Confirm immediate hazards'];
+
+  /**
+   * @description Emotion bars for the selected incident. Prefers the measured
+   *              Hume prosody ranking, then the single top emotion, and only
+   *              falls back to a neutral placeholder when the call carries no
+   *              emotion data at all.
+   */
+  const selectedEmotions: Array<{ label: string; val: number }> = (() => {
+    const ranked = selectedCall?.ai_triage?.emotion_analysis?.top_emotions;
+    if (ranked?.length) {
+      return ranked.slice(0, 4).map((e) => ({
+        label: e.emotion,
+        val: Math.round((e.intensity ?? 0) * 100),
+      }));
+    }
+    if (selectedCall?.top_emotion) {
+      return [
+        {
+          label: selectedCall.top_emotion,
+          val: Math.round((selectedCall.emotion_intensity ?? 0) * 100),
+        },
+      ];
+    }
+    return [];
+  })();
+
+  const emotionBarColor = (label: string) => {
+    const key = label.toLowerCase();
+    if (['panic', 'distress', 'terror', 'horror'].includes(key)) return '#ef4444';
+    if (['fear', 'pain', 'anxiety'].includes(key)) return '#f97316';
+    if (['anger', 'agitation', 'frustration'].includes(key)) return '#eab308';
+    if (['calmness', 'relief', 'calm'].includes(key)) return '#10b981';
+    return '#38bdf8';
+  };
+
+  const selectedDistress = selectedCall?.ai_triage?.emotion_analysis?.distress_level;
+  const selectedConfidence =
+    selectedCall?.ai_confidence ?? selectedCall?.ai_triage?.confidence ?? null;
+  const selectedSummary =
+    selectedCall?.ai_summary ||
+    selectedCall?.ai_triage?.summary ||
+    selectedCall?.chief_complaint ||
+    'No AI triage summary is available for this incident yet.';
   const selectedRecommendedUnits = selectedCall?.recommended_units?.length
     ? selectedCall.recommended_units
     : selectedCall?.incident_type === 'fire'
@@ -337,10 +438,7 @@ export default function DashboardPage() {
           calls={calls}
           onSelectCallAndNavigateToMap={handleSelectCallAndNavigateToMap}
           onUpdateCallStatus={handleUpdateCallStatus}
-          onOpenWorkflow={(call) => {
-            setSelectedCallId(call.id);
-            setWorkflowOpen(true);
-          }}
+          onOpenWorkflow={handleOpenWorkflow}
         />
       )}
 
@@ -421,7 +519,7 @@ export default function DashboardPage() {
                     </div>
 
                     <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed mb-2">
-                      {call.chief_complaint || 'Emergency call in progress'}
+                      {call.ai_summary || call.chief_complaint || 'Emergency call in progress'}
                     </p>
 
                     <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
@@ -439,8 +537,8 @@ export default function DashboardPage() {
             <EmergencyMap
               calls={calls}
               selectedCallId={selectedCall?.id || null}
-              onMarkerClick={(id) => setSelectedCallId(id)}
-              onDispatchUnit={(unitId, callId) => setWorkflowOpen(true)}
+              onMarkerClick={handleMarkerClick}
+              onDispatchUnit={handleDispatchUnit}
             />
           </div>
 
@@ -504,38 +602,65 @@ export default function DashboardPage() {
                       <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                       Hume Emotion Telemetry
                     </span>
-                    <span className="text-emerald-400 text-[10px]">EVI 2.0 (40Hz)</span>
+                    {selectedEmotions.length > 0 && selectedDistress !== undefined ? (
+                      <span className="text-emerald-400 text-[10px]">
+                        distress {Math.round(selectedDistress)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 text-[10px]">no measurement</span>
+                    )}
                   </div>
 
                   <div className="space-y-2">
-                    {[
-                      { label: 'Panic / Terror', val: 92, color: '#ef4444' },
-                      { label: 'Distress / Pain', val: 86, color: '#f97316' },
-                      { label: 'Urgency', val: 78, color: '#eab308' },
-                      { label: 'Agitation', val: 45, color: '#38bdf8' },
-                    ].map((emo) => (
-                      <div key={emo.label} className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                          <span>{emo.label}</span>
-                          <span className="text-white font-bold">{emo.val}%</span>
+                    {selectedEmotions.length === 0 ? (
+                      <p className="text-[10px] font-mono text-slate-500 py-2">
+                        This incident carries no prosody measurement. Emotion telemetry appears for
+                        calls captured through the live 112 voice station.
+                      </p>
+                    ) : (
+                      selectedEmotions.map((emo) => (
+                        <div key={emo.label} className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                            <span className="capitalize">{emo.label}</span>
+                            <span className="text-white font-bold">{emo.val}%</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{ width: `${emo.val}%`, backgroundColor: emotionBarColor(emo.label) }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${emo.val}%`, backgroundColor: emo.color }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
                 {/* AI Triage */}
                 <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-2 text-xs">
-                  <span className="font-bold font-mono text-slate-300 block">AI Triage Assessment</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold font-mono text-slate-300">AI Triage Assessment</span>
+                    {selectedConfidence !== null && (
+                      <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[9px]">
+                        {Math.round(selectedConfidence * 100)}% confidence
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-white/5">
-                    {selectedCall.ai_triage?.summary || selectedCall.chief_complaint || 'Patient experiencing acute distress. High priority medical dispatch required.'}
+                    {selectedSummary}
                   </p>
+                  {selectedCall.immediate_threats && selectedCall.immediate_threats.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedCall.immediate_threats.map((threat) => (
+                        <Badge
+                          key={threat}
+                          className="bg-red-500/15 text-red-300 border border-red-500/30 font-mono text-[9px]"
+                        >
+                          {threat}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 space-y-3 text-xs">
@@ -600,10 +725,7 @@ export default function DashboardPage() {
               calls={calls}
               onSelectCallAndNavigateToMap={handleSelectCallAndNavigateToMap}
               onUpdateCallStatus={handleUpdateCallStatus}
-              onOpenWorkflow={(call) => {
-                setSelectedCallId(call.id);
-                setWorkflowOpen(true);
-              }}
+              onOpenWorkflow={handleOpenWorkflow}
             />
           </div>
 
@@ -612,8 +734,8 @@ export default function DashboardPage() {
             <EmergencyMap
               calls={calls}
               selectedCallId={selectedCall?.id || null}
-              onMarkerClick={(id) => setSelectedCallId(id)}
-              onDispatchUnit={(unitId, callId) => setWorkflowOpen(true)}
+              onMarkerClick={handleMarkerClick}
+              onDispatchUnit={handleDispatchUnit}
             />
           </div>
         </div>
