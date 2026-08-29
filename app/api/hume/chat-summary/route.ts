@@ -1,6 +1,6 @@
 /**
  * @fileoverview API route for fetching recent Hume EVI chat metadata plus the latest transcript.
- * @description Mirrors the behaviour of the local `test-hume-config.js` helper by retrieving:
+ * @description Retrieves, in one round trip:
  *              1. The voice configuration details
  *              2. A paginated list of recent chat groups
  *              3. The full event log for the most recent chat group
