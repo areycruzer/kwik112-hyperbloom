@@ -48,6 +48,9 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
 
   for (const call of calls) {
     const status = (call.status ?? '').toLowerCase();
+    // Normalise severity the same way as status so callers do not have to
+    // pre-lowercase it: a 'Critical' from any source still fires P1_UNASSIGNED.
+    const severity = (call.severity ?? '').toLowerCase();
     // A closed incident cannot need operator attention.
     if (CLOSED_STATUSES.has(status)) continue;
 
@@ -71,7 +74,7 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
     }
 
     if (
-      call.severity === 'critical' &&
+      severity === 'critical' &&
       !ASSIGNED_STATUSES.has(status) &&
       ageSeconds > P1_GRACE_SECONDS
     ) {

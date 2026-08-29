@@ -60,9 +60,8 @@ export default function AlertsModule({
 
   const alerts = useMemo(() => {
     const now = Date.now();
-    // CAUTION: pass `severity` through UNCHANGED. `deriveAlerts` compares it
-    // case-sensitively against 'critical'; upper-casing or normalising here
-    // would make P1_UNASSIGNED silently never fire.
+    // `deriveAlerts` normalises severity and status itself, so the board's
+    // values pass through as-is.
     const input: AlertInput[] = calls.map((c) => ({
       id: c.id,
       severity: c.severity,
