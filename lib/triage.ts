@@ -402,6 +402,26 @@ export function scoreOf(result: TriageResult): number {
   return s === 'critical' ? 85 : s === 'high' ? 68 : s === 'medium' ? 48 : 25;
 }
 
+/** @description Prevent a model result from lowering deterministic local severity. */
+export function enforceLocalSafetyFloor(
+  modelResult: TriageResult,
+  localResult: TriageResult,
+): TriageResult {
+  const guarded = structuredClone(modelResult);
+  const localScore = scoreOf(localResult);
+  const modelScore = scoreOf(guarded);
+  if (modelScore >= localScore) return guarded;
+
+  (guarded as TriageResult & { severityScore: number }).severityScore = localScore;
+  guarded.extraction.severity = severityFromScore(localScore);
+  for (const threat of localResult.extraction.immediate_threats) {
+    if (!guarded.extraction.immediate_threats.includes(threat)) {
+      guarded.extraction.immediate_threats.push(threat);
+    }
+  }
+  return guarded;
+}
+
 /**
  * @description Run triage over a transcript. Uses the configured model (GLM by
  *              default) and falls back to deterministic keyword rules whenever
@@ -443,20 +463,13 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
   // reports the real "model graded X, kept Y" rather than X === Y after raising.
   const modelScore = scoreOf(parsed);
   if (modelScore < localScore) {
-    (parsed as any).severityScore = localScore;
-    parsed.extraction.severity = severityFromScore(localScore);
-    for (const threat of local.extraction.immediate_threats) {
-      if (!parsed.extraction.immediate_threats.includes(threat)) {
-        parsed.extraction.immediate_threats.push(threat);
-      }
-    }
     logger.info('Model graded below local rules; keeping the higher grade', {
       modelScore,
       localScore,
     });
   }
 
-  return parsed;
+  return enforceLocalSafetyFloor(parsed, local);
 }
 
 /**
