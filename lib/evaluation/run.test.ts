@@ -20,8 +20,10 @@ test('local mode never calls the model dependency', async () => {
     local: () => ({ method: 'keyword', labels: [], flags: [], extraction: {
       incident_type: 'medical_emergency', incident_subtype: 'cardiac event', severity: 'critical',
       location: { address: 'Test Metro Gate 1', confidence: 0.9 },
-      persons_involved: { count: 1, injuries: true }, immediate_threats: ['No pulse'],
+      persons_involved: { count: 1, injuries: true, descriptions: [] }, immediate_threats: ['No pulse'],
+      time_sensitive_factors: [], vehicles_involved: [], weapons_mentioned: [],
       caller_condition: 'unclear', summary: 'No pulse.', confidence_score: 0.8,
+      missing_critical_info: [],
       recommended_questions: [],
     }}),
     hybrid: async () => { modelCalls += 1; throw new Error('must not run'); },
@@ -35,8 +37,10 @@ test('hybrid mode records keyword return as fallback without aborting', async ()
     method: 'keyword', labels: [], flags: [], extraction: {
       incident_type: 'medical_emergency' as const, incident_subtype: 'cardiac event',
       severity: 'critical' as const, location: { confidence: 0 },
-      persons_involved: { count: 1, injuries: true }, immediate_threats: ['No pulse'],
+      persons_involved: { count: 1, injuries: true, descriptions: [] }, immediate_threats: ['No pulse'],
+      time_sensitive_factors: [], vehicles_involved: [], weapons_mentioned: [],
       caller_condition: 'unclear' as const, summary: 'No pulse.', confidence_score: 0.45,
+      missing_critical_info: [],
       recommended_questions: [],
     },
   };
@@ -46,4 +50,24 @@ test('hybrid mode records keyword return as fallback without aborting', async ()
   });
   assert.equal(run.metrics.fallback_count, 1);
   assert.equal(run.cases[0].predicted.fell_back, true);
+});
+
+test('hybrid failure falls back to local triage without aborting', async () => {
+  const localResult = {
+    method: 'keyword', labels: [], flags: [], extraction: {
+      incident_type: 'medical_emergency' as const, incident_subtype: 'cardiac event',
+      severity: 'critical' as const, location: { city: 'Test Metro' },
+      persons_involved: { count: 1, injuries: true, descriptions: [] }, immediate_threats: ['No pulse'],
+      time_sensitive_factors: [], vehicles_involved: [], weapons_mentioned: [],
+      caller_condition: 'unclear' as const, summary: 'No pulse.', confidence_score: 0.45,
+      missing_critical_info: [], recommended_questions: [],
+    },
+  };
+  const run = await runEvaluation({ corpus, split: 'held_out', mode: 'hybrid',
+    commit: async () => null, local: () => localResult,
+    hybrid: async () => { throw new Error('provider unavailable'); },
+  });
+  assert.equal(run.metrics.fallback_count, 1);
+  assert.equal(run.cases[0].predicted.fell_back, true);
+  assert.equal(run.cases[0].predicted.location_text, 'Test Metro');
 });
