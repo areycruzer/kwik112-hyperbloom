@@ -54,6 +54,7 @@ interface TranscriptLine {
  * `prosody_source: 'simulated'`, never passed off as a live measurement.
  */
 interface ScriptLine {
+  role?: 'user' | 'assistant';
   text: string;
   emotions?: Record<string, number>;
 }
@@ -125,6 +126,28 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLin
         text: 'Nobody is hurt at all, it is just flooding the pavement.',
         emotions: { Calmness: 0.88, Neutral: 0.8 },
       },
+    ],
+  },
+  {
+    id: 'calm-cardiac',
+    name: 'Safety demo Â· calm cardiac arrest',
+    phone: '+91 00000 00000',
+    lines: [
+      { role: 'user', text: 'I am speaking calmly. My father has no pulse and is not breathing.',
+        emotions: { Calmness: 0.86, Neutral: 0.71 } },
+      { role: 'assistant', text: 'Tell me your exact address or nearest landmark.' },
+      { role: 'user', text: 'We are at the public entrance of Sample Metro Gate 1.',
+        emotions: { Calmness: 0.78, Anxiety: 0.18 } },
+    ],
+  },
+  {
+    id: 'missing-location',
+    name: 'Failure demo Â· location unknown',
+    phone: '+91 00000 00000',
+    lines: [
+      { role: 'user', text: 'There has been a serious crash. One person is unconscious. I do not know this road.',
+        emotions: { Distress: 0.72, Fear: 0.61 } },
+      { role: 'assistant', text: 'Look for a road sign, shop name, milestone, or nearby landmark.' },
     ],
   },
 ];
@@ -496,7 +519,7 @@ function CallStation({
     setPhase('scripted');
 
     const built: TranscriptLine[] = script.lines.map((line) => ({
-      role: 'user',
+      role: line.role ?? 'user',
       text: line.text,
       timestamp: new Date().toISOString(),
       emotions: line.emotions,
