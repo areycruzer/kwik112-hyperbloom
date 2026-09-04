@@ -71,3 +71,25 @@ test('hybrid failure falls back to local triage without aborting', async () => {
   assert.equal(run.cases[0].predicted.fell_back, true);
   assert.equal(run.cases[0].predicted.location_text, 'Test Metro');
 });
+
+test('hybrid timeout falls back to the local prediction without aborting', async () => {
+  const localResult = {
+    method: 'keyword', labels: [], flags: [], extraction: {
+      incident_type: 'medical_emergency' as const, incident_subtype: 'cardiac event',
+      severity: 'critical' as const, location: { address: 'Test Metro Gate 1', confidence: 0.9 },
+      persons_involved: { count: 1, injuries: true, descriptions: [] }, immediate_threats: ['No pulse'],
+      time_sensitive_factors: [], vehicles_involved: [], weapons_mentioned: [],
+      caller_condition: 'unclear' as const, summary: 'No pulse.', confidence_score: 0.8,
+      missing_critical_info: [], recommended_questions: [],
+    },
+  };
+  const run = await runEvaluation({ corpus, split: 'held_out', mode: 'hybrid',
+    commit: async () => null, local: () => localResult,
+    hybrid: async () => { throw new Error('timeout after 1ms'); },
+  });
+  assert.equal(run.metrics.fallback_count, 1);
+  assert.equal(run.cases[0].predicted.fell_back, true);
+  assert.equal(run.cases[0].predicted.incident_type, 'medical_emergency');
+  assert.equal(run.cases[0].predicted.severity, 'critical');
+  assert.equal(run.cases[0].predicted.location_text, 'Test Metro Gate 1');
+});

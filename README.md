@@ -109,6 +109,7 @@ The hybrid runner completed, but no GLM or OpenAI API key was configured, so all
 Run the regression suite with `npm test`. It includes these named demonstrations:
 
 - `hybrid failure falls back to local triage without aborting`
+- `hybrid timeout falls back to the local prediction without aborting`
 - `model cannot downgrade a locally critical cardiac arrest`
 - `prompt injection text cannot suppress an active fire rule`
 - `missing location produces an exact-address follow-up without inventing an address`
