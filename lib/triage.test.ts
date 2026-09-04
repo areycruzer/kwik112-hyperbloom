@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as triage from './triage.ts';
 import { enforceLocalSafetyFloor, localTriage } from './triage.ts';
+
+test('schema-invalid model payloads retain keyword fallback provenance', () => {
+  const sanitizeModelExtraction = (triage as typeof triage & {
+    sanitizeModelExtraction?: (raw: unknown, transcript: string) => ReturnType<typeof localTriage>;
+  }).sanitizeModelExtraction;
+
+  for (const raw of [{}, [], { incident_type: 'medical_emergency' }]) {
+    const result = sanitizeModelExtraction?.(raw, 'A person has no pulse.');
+    assert.equal(result?.method, 'keyword');
+    assert.equal(result?.extraction.severity, 'critical');
+  }
+});
 
 test('model cannot downgrade a locally critical cardiac arrest', () => {
   const local = localTriage('Caller is calm. My father has no pulse.');

@@ -130,7 +130,7 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLin
   },
   {
     id: 'calm-cardiac',
-    name: 'Safety demo Â· calm cardiac arrest',
+    name: 'Safety demo - calm cardiac arrest',
     phone: '+91 00000 00000',
     lines: [
       { role: 'user', text: 'I am speaking calmly. My father has no pulse and is not breathing.',
@@ -142,7 +142,7 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLin
   },
   {
     id: 'missing-location',
-    name: 'Failure demo Â· location unknown',
+    name: 'Failure demo - location unknown',
     phone: '+91 00000 00000',
     lines: [
       { role: 'user', text: 'There has been a serious crash. One person is unconscious. I do not know this road.',

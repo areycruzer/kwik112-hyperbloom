@@ -310,10 +310,26 @@ function reconcileSeverity(rawScore: unknown, rawSeverity: unknown, fallbackScor
   return score;
 }
 
-/** @description Clamp and allow-list model output so it can never widen the type. */
-function sanitizeExtraction(raw: any, transcript: string): TriageResult {
+const MODEL_REQUIRED_FIELDS = [
+  'incident_type', 'incident_subtype', 'severity', 'severity_score', 'location',
+  'persons_involved', 'immediate_threats', 'caller_condition', 'summary',
+  'confidence_score', 'recommended_questions', 'labels', 'flags',
+] as const;
+
+/**
+ * @description Accept only a complete model response before applying lossy
+ *              coercions. A partial object is not model analysis: treating it
+ *              as such would turn locally supplied defaults into false model
+ *              provenance.
+ */
+export function sanitizeModelExtraction(raw: unknown, transcript: string): TriageResult {
   const fallback = keywordTriage(transcript);
-  if (!raw || typeof raw !== 'object') return fallback;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fallback;
+  if (!MODEL_REQUIRED_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(raw, field))) {
+    return fallback;
+  }
+
+  const model = raw as Record<string, unknown>;
 
   const allowedConditions = ['calm', 'distressed', 'injured', 'panicked', 'unclear'];
   const strArray = (v: unknown): string[] =>
@@ -324,49 +340,51 @@ function sanitizeExtraction(raw: any, transcript: string): TriageResult {
     typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
 
   const fallbackScore = scoreOf(fallback);
-  const score = reconcileSeverity(raw.severity_score, raw.severity, fallbackScore);
-  const type = coerceIncidentType(raw.incident_type) ?? fallback.extraction.incident_type;
+  const score = reconcileSeverity(model.severity_score, model.severity, fallbackScore);
+  const type = coerceIncidentType(model.incident_type) ?? fallback.extraction.incident_type;
 
   const conditionRaw =
-    typeof raw.caller_condition === 'string' ? raw.caller_condition.toLowerCase().trim() : '';
+    typeof model.caller_condition === 'string' ? model.caller_condition.toLowerCase().trim() : '';
   const condition = allowedConditions.includes(conditionRaw) ? conditionRaw : 'unclear';
 
   // Models sometimes put the whole address in `city`; keep both, trust neither
   // blindly, and let the caller decide whether it is placeable.
-  const address = str(raw.location?.address, 240);
-  const city = str(raw.location?.city, 120);
+  const location = model.location as Record<string, unknown> | undefined;
+  const persons = model.persons_involved as Record<string, unknown> | undefined;
+  const address = str(location?.address, 240);
+  const city = str(location?.city, 120);
 
   const result: TriageResult = {
     method: 'model',
-    labels: strArray(raw.labels),
-    flags: strArray(raw.flags),
+    labels: strArray(model.labels),
+    flags: strArray(model.flags),
     extraction: {
       incident_type: type,
       incident_subtype:
-        str(raw.incident_subtype, 120) ??
-        str(raw.incident_type, 120) ??
+        str(model.incident_subtype, 120) ??
+        str(model.incident_type, 120) ??
         fallback.extraction.incident_subtype,
       severity: severityFromScore(score),
       location: {
         address: address ?? city,
-        landmarks: strArray(raw.location?.landmarks),
+        landmarks: strArray(location?.landmarks),
         city,
-        confidence: num(raw.location?.confidence, 0, 1, 0),
+        confidence: num(location?.confidence, 0, 1, 0),
       },
       persons_involved: {
-        count: Math.round(num(raw.persons_involved?.count, 0, 999, 1)),
-        injuries: Boolean(raw.persons_involved?.injuries),
-        descriptions: strArray(raw.persons_involved?.descriptions),
+        count: Math.round(num(persons?.count, 0, 999, 1)),
+        injuries: Boolean(persons?.injuries),
+        descriptions: strArray(persons?.descriptions),
       },
-      immediate_threats: strArray(raw.immediate_threats),
-      time_sensitive_factors: strArray(raw.time_sensitive_factors),
-      vehicles_involved: strArray(raw.vehicles_involved),
-      weapons_mentioned: strArray(raw.weapons_mentioned),
+      immediate_threats: strArray(model.immediate_threats),
+      time_sensitive_factors: strArray(model.time_sensitive_factors),
+      vehicles_involved: strArray(model.vehicles_involved),
+      weapons_mentioned: strArray(model.weapons_mentioned),
       caller_condition: condition as AIExtraction['caller_condition'],
-      summary: str(raw.summary, 400) ?? fallback.extraction.summary,
-      confidence_score: num(raw.confidence_score, 0, 1, 0.6),
-      missing_critical_info: strArray(raw.missing_critical_info),
-      recommended_questions: strArray(raw.recommended_questions),
+      summary: str(model.summary, 400) ?? fallback.extraction.summary,
+      confidence_score: num(model.confidence_score, 0, 1, 0.6),
+      missing_critical_info: strArray(model.missing_critical_info),
+      recommended_questions: strArray(model.recommended_questions),
     },
   };
 
@@ -453,8 +471,8 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
 
   if (!response) return local;
 
-  const parsed = applyEscalations(sanitizeExtraction(response.data, clean), clean);
-  parsed.method = `${llm.provider}:${response.model}`;
+  const parsed = applyEscalations(sanitizeModelExtraction(response.data, clean), clean);
+  if (parsed.method !== 'keyword') parsed.method = `${llm.provider}:${response.model}`;
 
   // The model can only raise severity above the local grade, never lower it.
   // A model that misses "no pulse" must not downgrade what the rules caught.

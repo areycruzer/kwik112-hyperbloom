@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateMetrics, compareCase } from './score.ts';
+import { aggregateMetrics, compareCase, formatMarkdownReport } from './score.ts';
 import type { EvaluationCase, EvaluationPrediction } from './types.ts';
 
 const expectedCase: EvaluationCase = {
@@ -45,4 +45,37 @@ test('location matching is case-insensitive and requires every expected term', (
   assert.equal(compareCase(expectedCase, prediction('critical')).location_match, true);
   const missingGate = { ...prediction('critical'), location_text: 'New Delhi Railway Station' };
   assert.equal(compareCase(expectedCase, missingGate).location_match, false);
+});
+
+test('required threat terms are scored and missing terms become exceptions', () => {
+  const result = compareCase(
+    {
+      ...expectedCase,
+      expected: { ...expectedCase.expected, required_threat_terms: ['no pulse', 'unresponsive'] },
+    },
+    { ...prediction('critical'), threat_text: ['Possible cardiac arrest'] },
+  );
+
+  assert.equal(result.threat_match, false);
+  assert.deepEqual(result.exceptions, ['missing_threat_terms: no pulse, unresponsive']);
+  const metrics = aggregateMetrics([result]);
+  assert.equal(metrics.threat_cases, 1);
+  assert.equal(metrics.threat_accuracy, 0);
+});
+
+test('Markdown report includes threat accuracy', () => {
+  const result = compareCase(
+    { ...expectedCase, expected: { ...expectedCase.expected, required_threat_terms: ['no pulse'] } },
+    { ...prediction('critical'), threat_text: [] },
+  );
+  const report = formatMarkdownReport({
+    metadata: {
+      benchmark_version: 'test', split: 'held_out', mode: 'local', evaluated_at: '2026-09-05T00:00:00.000Z',
+      provider: 'none', model: null, commit: null, node_version: process.version, case_count: 1, model_attempted: false,
+    },
+    metrics: aggregateMetrics([result]),
+    cases: [result],
+  });
+
+  assert.match(report, /\| Threat accuracy \| 0\.000 \(1 cases\) \|/);
 });

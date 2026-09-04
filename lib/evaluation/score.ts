@@ -54,6 +54,10 @@ export function compareCase(
   const location_match = evaluationCase.expected.location_required
     ? missingLocationTerms.length === 0
     : null;
+  const expectedThreatTerms = evaluationCase.expected.required_threat_terms ?? [];
+  const normalizedThreats = normalize((prediction.threat_text ?? []).join(' '));
+  const missingThreatTerms = expectedThreatTerms.filter((term) => !normalizedThreats.includes(normalize(term)));
+  const threat_match = expectedThreatTerms.length > 0 ? missingThreatTerms.length === 0 : null;
   const exceptions: string[] = [];
 
   if (!type_match) exceptions.push('type_mismatch');
@@ -61,6 +65,9 @@ export function compareCase(
   if (critical_false_negative) exceptions.push('critical_false_negative');
   if (location_match === false) {
     exceptions.push(`missing_location_terms: ${missingLocationTerms.join(', ')}`);
+  }
+  if (threat_match === false) {
+    exceptions.push(`missing_threat_terms: ${missingThreatTerms.join(', ')}`);
   }
   if (prediction.fell_back) exceptions.push('fallback');
 
@@ -78,6 +85,7 @@ export function compareCase(
     under_triage,
     over_triage,
     location_match,
+    threat_match,
     exceptions,
   };
 }
@@ -85,6 +93,7 @@ export function compareCase(
 export function aggregateMetrics(cases: CaseEvaluation[]): EvaluationMetrics {
   const base = metricSlice(cases);
   const locationCases = cases.filter((item) => item.location_match !== null);
+  const threatCases = cases.filter((item) => item.threat_match !== null);
   const byLanguage = (['en', 'hi', 'hinglish'] as EvaluationLanguage[]).reduce(
     (slices, language) => {
       slices[language] = metricSlice(cases.filter((item) => item.language === language));
@@ -109,6 +118,11 @@ export function aggregateMetrics(cases: CaseEvaluation[]): EvaluationMetrics {
     location_accuracy: ratio(
       locationCases.filter((item) => item.location_match === true).length,
       locationCases.length,
+    ),
+    threat_cases: threatCases.length,
+    threat_accuracy: ratio(
+      threatCases.filter((item) => item.threat_match === true).length,
+      threatCases.length,
     ),
     latency_p50_ms: percentile(cases.map((item) => item.predicted.latency_ms), 0.5),
     latency_p95_ms: percentile(cases.map((item) => item.predicted.latency_ms), 0.95),
@@ -160,6 +174,7 @@ export function formatMarkdownReport(run: EvaluationRun): string {
     `| Under-triage | ${metrics.under_triage_count} (${display(metrics.under_triage_rate)}) |`,
     `| Over-triage | ${metrics.over_triage_count} (${display(metrics.over_triage_rate)}) |`,
     `| Location accuracy | ${display(metrics.location_accuracy)} (${metrics.location_cases} cases) |`,
+    `| Threat accuracy | ${display(metrics.threat_accuracy)} (${metrics.threat_cases} cases) |`,
     `| Latency p50 (ms) | ${display(metrics.latency_p50_ms)} |`,
     `| Latency p95 (ms) | ${display(metrics.latency_p95_ms)} |`,
     `| Fallback count | ${metrics.fallback_count} |`,

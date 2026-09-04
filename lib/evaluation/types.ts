@@ -55,6 +55,7 @@ export interface CaseEvaluation {
   under_triage: boolean;
   over_triage: boolean;
   location_match: boolean | null;
+  threat_match: boolean | null;
   exceptions: string[];
 }
 
@@ -74,6 +75,8 @@ export interface EvaluationMetrics extends MetricSlice {
   over_triage_rate: number | null;
   location_cases: number;
   location_accuracy: number | null;
+  threat_cases: number;
+  threat_accuracy: number | null;
   latency_p50_ms: number | null;
   latency_p95_ms: number | null;
   fallback_count: number;
