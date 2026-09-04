@@ -19,7 +19,7 @@ const record = (value: unknown, label: string): UnknownRecord => {
 };
 const string = (value: unknown, label: string): string => {
   if (typeof value !== 'string' || value.trim() === '') fail(`${label} must be a non-empty string`);
-  return value;
+  return value as string;
 };
 const allowed = (value: unknown, values: Set<string>, label: string): string => {
   const item = string(value, label);
@@ -29,7 +29,7 @@ const allowed = (value: unknown, values: Set<string>, label: string): string => 
 const strings = (value: unknown, label: string, required = false): string[] | undefined => {
   if (value === undefined && !required) return undefined;
   if (!Array.isArray(value) || (required && value.length === 0)) fail(`${label} must be a non-empty string array`);
-  return value.map((item, index) => string(item, `${label}[${index}]`));
+  return (value as unknown[]).map((item, index) => string(item, `${label}[${index}]`));
 };
 
 export function validateCorpus(value: unknown, options: { enforceMinimums?: boolean } = {}): EvaluationCorpus {
@@ -37,9 +37,10 @@ export function validateCorpus(value: unknown, options: { enforceMinimums?: bool
   const version = string(corpus.version, 'version');
   if (corpus.synthetic !== true) fail('synthetic must be true');
   if (!Array.isArray(corpus.cases) || corpus.cases.length === 0) fail('cases must be a non-empty array');
+  const rawCases = corpus.cases as unknown[];
 
   const ids = new Set<string>();
-  const cases = corpus.cases.map((value, index): EvaluationCase => {
+  const cases = rawCases.map((value, index): EvaluationCase => {
     const item = record(value, `cases[${index}]`);
     const id = string(item.id, `cases[${index}].id`);
     if (ids.has(id)) fail(`duplicate id ${id}`);
@@ -47,10 +48,11 @@ export function validateCorpus(value: unknown, options: { enforceMinimums?: bool
 
     const tagsValue = item.tags;
     if (!Array.isArray(tagsValue)) fail(`cases[${index}].tags must be an array`);
-    const tags = tagsValue.map((tag, tagIndex) => allowed(tag, TAGS, `cases[${index}].tags[${tagIndex}]`)) as EvaluationCase['tags'];
+    const tags = (tagsValue as unknown[]).map((tag, tagIndex) => allowed(tag, TAGS, `cases[${index}].tags[${tagIndex}]`)) as EvaluationCase['tags'];
     const expected = record(item.expected, `cases[${index}].expected`);
     if (typeof expected.location_required !== 'boolean') fail(`cases[${index}].expected.location_required must be boolean`);
-    const locationTerms = strings(expected.expected_location_terms, `cases[${index}].expected.expected_location_terms`, expected.location_required);
+    const locationRequired = expected.location_required as boolean;
+    const locationTerms = strings(expected.expected_location_terms, `cases[${index}].expected.expected_location_terms`, locationRequired);
     const threatTerms = strings(expected.required_threat_terms, `cases[${index}].expected.required_threat_terms`);
 
     return {
@@ -62,7 +64,7 @@ export function validateCorpus(value: unknown, options: { enforceMinimums?: bool
       expected: {
         incident_type: allowed(expected.incident_type, INCIDENT_TYPES, `cases[${index}].expected.incident_type`),
         severity: allowed(expected.severity, SEVERITIES, `cases[${index}].expected.severity`) as EvaluationCase['expected']['severity'],
-        location_required: expected.location_required,
+        location_required: locationRequired,
         ...(locationTerms ? { expected_location_terms: locationTerms } : {}),
         ...(threatTerms ? { required_threat_terms: threatTerms } : {}),
       },
