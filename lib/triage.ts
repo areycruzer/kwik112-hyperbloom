@@ -316,6 +316,47 @@ const MODEL_REQUIRED_FIELDS = [
   'confidence_score', 'recommended_questions', 'labels', 'flags',
 ] as const;
 
+const MODEL_SEVERITIES = new Set(['critical', 'high', 'medium', 'low']);
+const MODEL_CALLER_CONDITIONS = new Set(['calm', 'distressed', 'injured', 'panicked', 'unclear']);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/**
+ * @description The prompt's location address/city can legitimately be absent
+ *              when a caller does not know them, so provenance validation uses
+ *              its required object shape and finite confidence instead. Every
+ *              other required scalar or list must be usable before a response
+ *              may be credited to the model.
+ */
+function hasUsableModelExtractionSchema(raw: unknown): raw is Record<string, unknown> {
+  if (!isRecord(raw) || !MODEL_REQUIRED_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(raw, field))) {
+    return false;
+  }
+
+  const location = raw.location;
+  const persons = raw.persons_involved;
+  const severityWord = typeof raw.severity === 'string' && MODEL_SEVERITIES.has(raw.severity.trim().toLowerCase());
+  const severityScore = typeof raw.severity_score === 'number' && Number.isFinite(raw.severity_score);
+
+  return coerceIncidentType(raw.incident_type) !== null &&
+    typeof raw.incident_subtype === 'string' && raw.incident_subtype.trim() !== '' &&
+    (severityWord || severityScore) &&
+    isRecord(location) && typeof location.confidence === 'number' && Number.isFinite(location.confidence) &&
+    isRecord(persons) && typeof persons.count === 'number' && Number.isFinite(persons.count) &&
+    typeof persons.injuries === 'boolean' &&
+    isStringArray(raw.immediate_threats) &&
+    typeof raw.caller_condition === 'string' && MODEL_CALLER_CONDITIONS.has(raw.caller_condition.trim().toLowerCase()) &&
+    typeof raw.summary === 'string' && raw.summary.trim() !== '' &&
+    typeof raw.confidence_score === 'number' && Number.isFinite(raw.confidence_score) &&
+    isStringArray(raw.recommended_questions) &&
+    isStringArray(raw.labels) &&
+    isStringArray(raw.flags);
+}
+
 /**
  * @description Accept only a complete model response before applying lossy
  *              coercions. A partial object is not model analysis: treating it
@@ -324,12 +365,9 @@ const MODEL_REQUIRED_FIELDS = [
  */
 export function sanitizeModelExtraction(raw: unknown, transcript: string): TriageResult {
   const fallback = keywordTriage(transcript);
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fallback;
-  if (!MODEL_REQUIRED_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(raw, field))) {
-    return fallback;
-  }
+  if (!hasUsableModelExtractionSchema(raw)) return fallback;
 
-  const model = raw as Record<string, unknown>;
+  const model = raw;
 
   const allowedConditions = ['calm', 'distressed', 'injured', 'panicked', 'unclear'];
   const strArray = (v: unknown): string[] =>

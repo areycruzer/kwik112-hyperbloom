@@ -75,7 +75,7 @@ Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
 | Location accuracy | 0.0% (0/25 location cases) |
 | Threat accuracy | 0.0% (0/3 threat cases) |
 | Latency p50 | 0.011 ms |
-| Latency p95 | 0.611 ms |
+| Latency p95 | 0.618 ms |
 | Fallback count | 0 |
 
 | Language | Cases | Type accuracy | Severity accuracy | Critical recall |
@@ -100,8 +100,8 @@ Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
 | Over-triage | 13.3% (4/30) |
 | Location accuracy | 0.0% (0/25 location cases) |
 | Threat accuracy | 0.0% (0/3 threat cases) |
-| Latency p50 | 0.025 ms |
-| Latency p95 | 0.639 ms |
+| Latency p50 | 0.030 ms |
+| Latency p95 | 2.166 ms |
 | Fallback count | 30 |
 
 The hybrid runner completed, but no GLM or OpenAI API key was configured, so all 30 cases used keyword fallback; this is not a model-backed result.

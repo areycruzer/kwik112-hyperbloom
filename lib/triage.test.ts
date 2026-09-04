@@ -1,18 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as triage from './triage.ts';
-import { enforceLocalSafetyFloor, localTriage } from './triage.ts';
+import { enforceLocalSafetyFloor, localTriage, sanitizeModelExtraction } from './triage.ts';
 
 test('schema-invalid model payloads retain keyword fallback provenance', () => {
-  const sanitizeModelExtraction = (triage as typeof triage & {
-    sanitizeModelExtraction?: (raw: unknown, transcript: string) => ReturnType<typeof localTriage>;
-  }).sanitizeModelExtraction;
-
   for (const raw of [{}, [], { incident_type: 'medical_emergency' }]) {
-    const result = sanitizeModelExtraction?.(raw, 'A person has no pulse.');
-    assert.equal(result?.method, 'keyword');
-    assert.equal(result?.extraction.severity, 'critical');
+    const result = sanitizeModelExtraction(raw, 'A person has no pulse.');
+    assert.equal(result.method, 'keyword');
+    assert.equal(result.extraction.severity, 'critical');
   }
+});
+
+test('null-filled schema payload falls back while usable minimal model payload remains model-sourced', () => {
+  const nullPayload = {
+    incident_type: null,
+    incident_subtype: null,
+    severity: null,
+    severity_score: null,
+    location: null,
+    persons_involved: null,
+    immediate_threats: null,
+    caller_condition: null,
+    summary: null,
+    confidence_score: null,
+    recommended_questions: null,
+    labels: null,
+    flags: null,
+  };
+  const usablePayload = {
+    incident_type: 'cardiac arrest',
+    incident_subtype: 'cardiac arrest',
+    severity: 'critical',
+    severity_score: null,
+    location: { confidence: 0.8 },
+    persons_involved: { count: 1, injuries: true },
+    immediate_threats: ['No pulse'],
+    caller_condition: 'calm',
+    summary: 'Caller reports a person without a pulse.',
+    confidence_score: 0.8,
+    recommended_questions: [],
+    labels: ['MEDICAL_EMERGENCY'],
+    flags: ['LIFE_THREATENING'],
+  };
+
+  assert.equal(sanitizeModelExtraction(nullPayload, 'A person has no pulse.').method, 'keyword');
+  assert.equal(sanitizeModelExtraction(usablePayload, 'A person has no pulse.').method, 'model');
 });
 
 test('model cannot downgrade a locally critical cardiac arrest', () => {
