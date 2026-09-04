@@ -4,9 +4,9 @@
  *              by the API routes so no route has to HTTP-call another one.
  */
 
-import { AIExtraction, Severity } from './types';
-import { logger } from './logger';
-import { requestJson, resolveLlm } from './llm';
+import type { AIExtraction, Severity } from './types.ts';
+import { logger } from './logger.ts';
+import { requestJson, resolveLlm } from './llm.ts';
 
 export interface EmotionFrame {
   [emotion: string]: number;
