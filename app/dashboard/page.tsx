@@ -733,6 +733,9 @@ function IncidentDetail({
     typeof location?.accuracy_radius === 'number' ? `±${location.accuracy_radius} m` : null;
   const threats = call.immediate_threats ?? [];
   const units = recommendedUnits(call);
+  const dispatchPlan = call.dispatch_plan;
+  const operatorQuestions = call.operator_questions ?? [];
+  const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
 
   return (
@@ -810,6 +813,25 @@ function IncidentDetail({
           </p>
         </Field>
 
+        {/* Safety audit */}
+        {safetyAudit && (
+          <Field label="Safety audit">
+            <div className="rounded-[6px] border border-rule bg-panel p-2">
+              <div className="grid grid-cols-3 gap-2">
+                <DataRow label="Local" value={`${safetyAudit.local_severity} / ${safetyAudit.local_score}`} mono />
+                <DataRow label="Model" value={`${safetyAudit.model_severity} / ${safetyAudit.model_score}`} mono />
+                <DataRow label="Final" value={`${safetyAudit.final_severity} / ${safetyAudit.final_score}`} mono />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Chip tone={safetyAudit.downgrade_blocked ? 'critical' : 'safe'}>
+                  {safetyAudit.downgrade_blocked ? 'Downgrade blocked' : 'No unsafe downgrade'}
+                </Chip>
+                <span className="text-xs text-ink-3">{safetyAudit.reason}</span>
+              </div>
+            </div>
+          </Field>
+        )}
+
         {/* Immediate threats */}
         {threats.length > 0 && (
           <Field label="Immediate threats">
@@ -823,9 +845,32 @@ function IncidentDetail({
           </Field>
         )}
 
-        {/* Recommended units */}
-        <Field label="Recommended units">
-          {units.length > 0 ? (
+        {/* Dispatch recommendation */}
+        <Field label="Dispatch recommendation">
+          {dispatchPlan ? (
+            <div className="rounded-[6px] border border-rule bg-panel p-2">
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                <Chip tone={severityTone(call.severity)}>{dispatchPlan.priority_code}</Chip>
+                <Chip tone={dispatchPlan.eta_risk === 'high' ? 'critical' : dispatchPlan.eta_risk === 'medium' ? 'mild' : 'safe'}>
+                  ETA risk {dispatchPlan.eta_risk}
+                </Chip>
+                <Chip tone={dispatchPlan.operator_confirmation_required ? 'mild' : 'safe'}>
+                  {dispatchPlan.operator_confirmation_required ? 'Confirm before dispatch' : 'Auto-ready'}
+                </Chip>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {dispatchPlan.units.map((unit) => (
+                  <div key={`${unit.service}-${unit.unit}`} className="rounded-[4px] border border-rule bg-ground px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-ink">{unit.unit}</span>
+                      <span className="label">{unit.service}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-3">{unit.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : units.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {units.map((unit) => (
                 <Chip key={unit} tone="accent">
@@ -835,6 +880,19 @@ function IncidentDetail({
             </div>
           ) : (
             <span className="text-sm text-ink-3">No units recommended yet.</span>
+          )}
+        </Field>
+
+        {/* Missing info assistant */}
+        <Field label="Operator next questions">
+          {operatorQuestions.length > 0 ? (
+            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-ink-2">
+              {operatorQuestions.map((question) => (
+                <li key={question}>{question}</li>
+              ))}
+            </ol>
+          ) : (
+            <span className="text-sm text-ink-3">No blocking questions identified.</span>
           )}
         </Field>
 

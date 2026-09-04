@@ -13,10 +13,13 @@
 import { EmergencyCall, Location } from '@/lib/types';
 import {
   EmotionFrame,
+  buildOperatorQuestions,
+  buildSafetyAudit,
   distressLevel,
   localTriage,
   priorityFromSeverity,
   rankEmotions,
+  recommendDispatchPlan,
   recommendUnits,
   scoreOf,
   severityFromScore,
@@ -269,6 +272,7 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     triage.extraction.location?.confidence ?? 0,
     callerText || fullText
   );
+  const operatorQuestions = buildOperatorQuestions(triage);
 
   const callId =
     providedId ||
@@ -325,7 +329,10 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     labels: triage.labels,
     flags: triage.flags,
     recommended_units: recommendUnits(triage.extraction.incident_type, severity),
-    special_instructions: triage.extraction.recommended_questions.join(' '),
+    dispatch_plan: recommendDispatchPlan(triage),
+    operator_questions: operatorQuestions,
+    safety_audit: triage.safetyAudit ?? buildSafetyAudit(triage, triage, triage),
+    special_instructions: operatorQuestions.join(' '),
 
     transcript: segments,
     priority_code: priorityFromSeverity(severity),

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { enforceLocalSafetyFloor, localTriage, sanitizeModelExtraction } from './triage.ts';
+import {
+  buildOperatorQuestions,
+  buildSafetyAudit,
+  enforceLocalSafetyFloor,
+  localTriage,
+  recommendDispatchPlan,
+  sanitizeModelExtraction,
+} from './triage.ts';
 
 test('schema-invalid model payloads retain keyword fallback provenance', () => {
   for (const raw of [{}, [], { incident_type: 'medical_emergency' }]) {
@@ -118,4 +125,40 @@ test('safety floor preserves a model escalation above local severity', () => {
   assert.equal(guarded.extraction.severity, 'critical');
   assert.equal((guarded as typeof guarded & { severityScore: number }).severityScore, 90);
   assert.deepEqual(guarded.extraction.immediate_threats, ['Model reported an active hazard']);
+});
+
+test('critical medical dispatch plan sends ALS first and requires operator confirmation', () => {
+  const triage = localTriage('Caller says patient has no pulse near Connaught Place.');
+  const plan = recommendDispatchPlan(triage);
+
+  assert.equal(plan.priority_code, 'P1');
+  assert.equal(plan.operator_confirmation_required, true);
+  assert.equal(plan.units[0]?.service, 'ems');
+  assert.match(plan.units[0]?.unit ?? '', /Advanced Life Support/i);
+  assert.match(plan.units[0]?.reason ?? '', /medical|cardiac|pulse/i);
+});
+
+test('operator questions prioritize missing address before secondary details', () => {
+  const triage = localTriage('A person is unconscious and not responding.');
+  const questions = buildOperatorQuestions(triage);
+
+  assert.match(questions[0] ?? '', /exact address|nearest landmark/i);
+  assert.ok(questions.some((question) => /conscious|breathing|injured|trapped/i.test(question)));
+});
+
+test('safety audit records when the model is blocked from downgrading local critical severity', () => {
+  const local = localTriage('Caller reports no pulse.');
+  const model = structuredClone(local);
+  model.method = 'openai:test-model';
+  model.extraction.severity = 'low';
+  (model as typeof model & { severityScore: number }).severityScore = 20;
+
+  const guarded = enforceLocalSafetyFloor(model, local);
+  const audit = buildSafetyAudit(model, local, guarded);
+
+  assert.equal(audit.model_severity, 'low');
+  assert.equal(audit.local_severity, 'critical');
+  assert.equal(audit.final_severity, 'critical');
+  assert.equal(audit.downgrade_blocked, true);
+  assert.match(audit.reason, /downgrade/i);
 });

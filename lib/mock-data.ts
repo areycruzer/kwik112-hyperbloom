@@ -34,6 +34,44 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.94,
     persons_involved: 2,
     immediate_threats: ['active flames', 'trapped occupants', 'heavy smoke'],
+    dispatch_plan: {
+      priority_code: 'P1',
+      eta_risk: 'high',
+      operator_confirmation_required: true,
+      units: [
+        {
+          service: 'fire',
+          unit: 'Fire Engine',
+          reason: 'Fire response: apartment fire, active flames, trapped occupants',
+        },
+        {
+          service: 'rescue',
+          unit: 'Rescue Ladder',
+          reason: 'Rescue support for callers trapped above ground level',
+        },
+        {
+          service: 'ems',
+          unit: 'Advanced Life Support Ambulance',
+          reason: 'Medical standby for smoke exposure and trapped occupants',
+        },
+      ],
+    },
+    operator_questions: [
+      'Is anyone trapped inside or exposed to smoke?',
+      'Which floor is the fire on right now?',
+      'Are stairs or lifts blocked?',
+      'Are you currently in a safe place?',
+    ],
+    safety_audit: {
+      local_severity: 'critical',
+      model_severity: 'critical',
+      final_severity: 'critical',
+      local_score: 90,
+      model_score: 95,
+      final_score: 95,
+      downgrade_blocked: false,
+      reason: 'Final severity accepted because it did not fall below the local safety floor.',
+    },
     created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
     ai_recommendation: {

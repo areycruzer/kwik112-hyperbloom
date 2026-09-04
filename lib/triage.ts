@@ -4,7 +4,7 @@
  *              by the API routes so no route has to HTTP-call another one.
  */
 
-import type { AIExtraction, Severity } from './types.ts';
+import type { AIExtraction, DispatchPlan, SafetyAudit, Severity } from './types.ts';
 import { logger } from './logger.ts';
 import { requestJson, resolveLlm } from './llm.ts';
 
@@ -119,6 +119,7 @@ export interface TriageResult {
   extraction: AIExtraction;
   labels: string[];
   flags: string[];
+  safetyAudit?: SafetyAudit;
   /** Which path produced this result, surfaced in the UI so an operator is
    *  never guessing whether a model or a keyword rule graded the call. */
   method: string;
@@ -561,7 +562,9 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
     });
   }
 
-  return enforceLocalSafetyFloor(parsed, local);
+  const final = enforceLocalSafetyFloor(parsed, local);
+  final.safetyAudit = buildSafetyAudit(parsed, local, final);
+  return final;
 }
 
 /**
@@ -570,7 +573,9 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
  */
 export function localTriage(transcript: string): TriageResult {
   const clean = transcript.trim();
-  return applyEscalations(keywordTriage(clean), clean);
+  const local = applyEscalations(keywordTriage(clean), clean);
+  local.safetyAudit = buildSafetyAudit(local, local, local);
+  return local;
 }
 
 /** @description Suggest units from the incident type. */
@@ -584,4 +589,115 @@ export function recommendUnits(type: string, severity: Severity): string[] {
   };
   const units = base[type] ?? ['Nearest Available Unit', 'Field Supervisor'];
   return severity === 'critical' ? ['Advanced Life Support Ambulance', ...units] : units;
+}
+
+/** @description Convert triage into a bounded dispatch recommendation. */
+export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
+  const { incident_type: type, severity, immediate_threats: threats } = triage.extraction;
+  const priority_code = priorityFromSeverity(severity);
+  const critical = severity === 'critical';
+  const reasonText = [
+    triage.extraction.incident_subtype,
+    ...threats,
+    triage.extraction.summary,
+  ].join(' ');
+
+  const units: DispatchPlan['units'] = [];
+  const add = (service: DispatchPlan['units'][number]['service'], unit: string, reason: string) => {
+    if (!units.some((entry) => entry.service === service && entry.unit === unit)) {
+      units.push({ service, unit, reason });
+    }
+  };
+
+  if (type === 'medical_emergency') {
+    add('ems', critical ? 'Advanced Life Support Ambulance' : 'Nearest Ambulance', `Medical response: ${reasonText}`);
+    if (critical) add('police', 'Nearest Patrol Assist', 'Scene access and crowd-control support');
+  } else if (type === 'fire') {
+    add('fire', 'Fire Engine', `Fire response: ${reasonText}`);
+    add('rescue', 'Rescue Ladder', 'Rescue support for trapped or exposed callers');
+    if (critical) add('ems', 'Advanced Life Support Ambulance', 'Medical standby for critical fire incident');
+  } else if (type === 'crime') {
+    add('police', 'Police Patrol', `Police response: ${reasonText}`);
+    if (critical || /weapon|knife|gun|armed|attack|stab|chaku|hamla/i.test(reasonText)) {
+      add('ems', 'Ambulance Standby', 'Medical standby for violent-risk incident');
+    }
+  } else if (type === 'accident') {
+    add('ems', critical ? 'Advanced Life Support Ambulance' : 'Nearest Ambulance', `Accident response: ${reasonText}`);
+    add('police', 'Traffic Police', 'Traffic control and access management');
+    if (critical) add('rescue', 'Rescue Tender', 'Extrication support for critical collision');
+  } else if (type === 'public_safety') {
+    add('civic', 'Municipal Response Unit', `Public safety response: ${reasonText}`);
+    if (severity === 'high') add('police', 'Police Patrol', 'Perimeter and public-safety support');
+  }
+
+  if (units.length === 0) {
+    add('police', 'Nearest Available Unit', 'Unclassified incident requires field verification');
+  }
+
+  return {
+    priority_code,
+    units,
+    eta_risk: critical ? 'high' : severity === 'high' ? 'medium' : 'low',
+    operator_confirmation_required: critical || (triage.extraction.location.confidence ?? 0) < 0.5,
+  };
+}
+
+/** @description Operator prompts ranked by what blocks safe dispatch first. */
+export function buildOperatorQuestions(triage: TriageResult): string[] {
+  const questions: string[] = [];
+  const add = (question: string) => {
+    if (!questions.some((existing) => existing.toLowerCase() === question.toLowerCase())) {
+      questions.push(question);
+    }
+  };
+
+  const location = triage.extraction.location;
+  if (!location.address || (location.confidence ?? 0) < 0.5) {
+    add('What is the exact address or nearest landmark?');
+  }
+
+  if (triage.extraction.incident_type === 'medical_emergency') {
+    add('Is the patient conscious and breathing right now?');
+  }
+  if (triage.extraction.incident_type === 'fire') {
+    add('Is anyone trapped inside or exposed to smoke?');
+  }
+  if (triage.extraction.incident_type === 'crime') {
+    add('Is the suspect still nearby and is any weapon visible?');
+  }
+  if (triage.extraction.incident_type === 'accident') {
+    add('How many people are injured or trapped?');
+  }
+
+  for (const question of triage.extraction.recommended_questions) {
+    add(question);
+  }
+
+  add('Are you currently in a safe place?');
+  return questions.slice(0, 4);
+}
+
+/** @description Explain the safety gate that produced the final triage grade. */
+export function buildSafetyAudit(
+  modelResult: TriageResult,
+  localResult: TriageResult,
+  finalResult: TriageResult,
+): SafetyAudit {
+  const localScore = scoreOf(localResult);
+  const modelScore = scoreOf(modelResult);
+  const finalScore = scoreOf(finalResult);
+  const downgradeBlocked = modelScore < localScore && finalScore >= localScore;
+
+  return {
+    local_severity: localResult.extraction.severity,
+    model_severity: modelResult.extraction.severity,
+    final_severity: finalResult.extraction.severity,
+    local_score: localScore,
+    model_score: modelScore,
+    final_score: finalScore,
+    downgrade_blocked: downgradeBlocked,
+    reason: downgradeBlocked
+      ? 'Model downgrade blocked by deterministic local safety floor.'
+      : 'Final severity accepted because it did not fall below the local safety floor.',
+  };
 }
