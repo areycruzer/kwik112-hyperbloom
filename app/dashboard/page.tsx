@@ -289,6 +289,10 @@ export default function DashboardPage() {
           </div>
         ),
       },
+      evidence: {
+        title: 'Buildathon Evidence',
+        node: <BuildathonEvidencePanel />,
+      },
     }),
     [
       selectedCall,
@@ -576,6 +580,58 @@ export default function DashboardPage() {
         onClose={() => setWorkflowOpen(false)}
         call={selectedCall ?? null}
       />
+    </div>
+  );
+}
+
+function BuildathonEvidencePanel() {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        <EvidenceMetric label="Critical recall" value="100%" tone="safe" />
+        <EvidenceMetric label="Severity accuracy" value="60%" tone="accent" />
+        <EvidenceMetric label="Location accuracy" value="48%" tone="mild" />
+        <EvidenceMetric label="Threat accuracy" value="100%" tone="safe" />
+      </div>
+      <div className="border-t border-rule pt-2">
+        <DataRow label="Held-out cases" value="30" mono />
+        <DataRow label="Critical FN" value="0" mono />
+        <DataRow label="Under-triage" value="7 / 30" mono />
+        <DataRow label="Hybrid fallback" value="30 / 30" mono />
+      </div>
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        <Chip tone="safe">No downgrade</Chip>
+        <Chip tone="accent">Synthetic benchmark</Chip>
+        <Chip tone="neutral">v1.0.0</Chip>
+      </div>
+    </div>
+  );
+}
+
+function EvidenceMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'critical' | 'mild' | 'safe' | 'accent' | 'neutral';
+}) {
+  return (
+    <div className="rounded-[6px] border border-rule bg-ground px-2 py-1.5">
+      <div className="label truncate">{label}</div>
+      <div
+        className={cn(
+          'tnum mt-1 text-lg font-semibold',
+          tone === 'safe' && 'text-safe',
+          tone === 'accent' && 'text-accent',
+          tone === 'mild' && 'text-mild',
+          tone === 'critical' && 'text-critical-bright',
+          tone === 'neutral' && 'text-ink',
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }

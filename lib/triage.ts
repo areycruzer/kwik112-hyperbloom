@@ -92,25 +92,25 @@ const ESCALATIONS = [
   // specificity 2 = the rule names the event itself, so it should decide the
   // incident type. specificity 1 = a symptom many different events produce; it
   // raises severity but must not overwrite a more specific classification.
-  { re: /\b(heart attack|cardiac arrest|chest pain|no pulse)\b/i,
+  { re: /\b(heart attack|cardiac arrest|chest pain|no pulse|pulse nahi)\b|नब्ज नहीं|सांस नहीं/i,
     score: 95, specificity: 2, label: 'MEDICAL_EMERGENCY', threat: 'Possible cardiac arrest',
     type: 'medical_emergency', subtype: 'cardiac event' },
-  { re: /\b(unconscious|unresponsive|passed out|collapsed)\b/i,
+  { re: /\b(unconscious|unresponsive|passed out|collapsed|behosh)\b|बेहोश/i,
     score: 88, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Unresponsive casualty',
     type: 'medical_emergency', subtype: 'unresponsive patient' },
-  { re: /\b(not breathing|drowning|choking|overdose)\b/i,
+  { re: /\b(not breathing|drowning|choking|overdose|saans nahi)\b|सांस नहीं/i,
     score: 93, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Airway/breathing compromise',
     type: 'medical_emergency', subtype: 'respiratory emergency' },
   { re: /\b(bleeding out|severe bleeding|gunshot|stab(bed|bing)?|stab wound)\b/i,
     score: 92, specificity: 2, label: 'TRAUMA_EMERGENCY', threat: 'Severe bleeding',
     type: 'medical_emergency', subtype: 'major trauma' },
-  { re: /\b(fire|burning|on fire|smoke|trapped)\b/i,
+  { re: /\b(fire|burning|on fire|smoke|trapped|aag|dhua|dhuaan)\b|आग|धुआं|धुआँ|जल/i,
     score: 90, specificity: 2, label: 'FIRE_EMERGENCY', threat: 'Active fire',
     type: 'fire', subtype: 'structure fire' },
-  { re: /\b(accident|crash|collision|hit by|ran over|flipped over)\b/i,
+  { re: /\b(accident|crash|collision|hit by|ran over|flipped over|takkar|durghatna)\b|दुर्घटना|टक्कर/i,
     score: 78, specificity: 2, label: 'TRAFFIC_INCIDENT', threat: 'Roadway casualty',
     type: 'accident', subtype: 'vehicle collision' },
-  { re: /\b(robbery|armed|weapon|knife|attack(ed|ing)?|assault)\b/i,
+  { re: /\b(robbery|armed|weapon|knife|attack(ed|ing)?|assault|chaku|loot|hamla)\b|चाकू|लूट|हमला/i,
     score: 82, specificity: 2, label: 'VIOLENT_CRIME', threat: 'Possible armed suspect',
     type: 'crime', subtype: 'violent crime' },
 ] as const;
@@ -147,6 +147,34 @@ const CATEGORIES = [
     type: 'public_safety' as const, subtype: 'gas leak' },
 ];
 
+function cleanSpokenLocation(value: string): string | undefined {
+  const cleaned = value
+    .replace(/[।.!?].*$/u, '')
+    .replace(/\b(par hain|par hai|mein hain|mein hai|hai|hain|here)\b.*$/iu, '')
+    .replace(/\b(with|and|aur|or)\b.*$/iu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length >= 3 ? cleaned.slice(0, 240) : undefined;
+}
+
+function extractSpokenLocation(transcript: string): string | undefined {
+  const patterns = [
+    /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
+    /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
+    /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,
+  ];
+
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    const location = match?.[1] ? cleanSpokenLocation(match[1]) : undefined;
+    if (location) return location;
+  }
+
+  return undefined;
+}
+
 /** @description Deterministic fallback used whenever OpenAI is unavailable. */
 export function keywordTriage(transcript: string): TriageResult {
   const labels: string[] = [];
@@ -174,7 +202,8 @@ export function keywordTriage(transcript: string): TriageResult {
   let bestTypeScore = 0;
 
   for (const rule of ESCALATIONS) {
-    if (!rule.re.test(transcript)) continue;
+    const match = transcript.match(rule.re);
+    if (!match) continue;
 
     if (rule.score > score) score = rule.score;
 
@@ -191,6 +220,10 @@ export function keywordTriage(transcript: string): TriageResult {
 
     if (!labels.includes(rule.label)) labels.push(rule.label);
     if (!threats.includes(rule.threat)) threats.push(rule.threat);
+    const callerPhrase = match[0].trim();
+    if (callerPhrase && !threats.some((threat) => threat.toLowerCase() === callerPhrase.toLowerCase())) {
+      threats.push(callerPhrase);
+    }
   }
 
   // An explicit "nobody is hurt" is strong evidence against a critical grade.
@@ -203,6 +236,7 @@ export function keywordTriage(transcript: string): TriageResult {
   if (severity === 'critical') flags.push('LIFE_THREATENING');
 
   const firstLine = transcript.split(/[.!?\n]/).map((s) => s.trim()).find(Boolean) ?? '';
+  const spokenLocation = extractSpokenLocation(transcript);
 
   return {
     method: 'keyword',
@@ -212,7 +246,9 @@ export function keywordTriage(transcript: string): TriageResult {
       incident_type: type,
       incident_subtype: subtype,
       severity,
-      location: { confidence: 0 },
+      location: spokenLocation
+        ? { address: spokenLocation, confidence: 0.55, source: 'caller' }
+        : { confidence: 0 },
       persons_involved: { count: 1, injuries: score >= 80, descriptions: [] },
       immediate_threats: threats,
       time_sensitive_factors: [],

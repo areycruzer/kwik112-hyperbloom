@@ -67,24 +67,24 @@ Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
 
 | Metric | Measured result |
 | --- | ---: |
-| Incident type accuracy | 46.7% |
-| Severity accuracy | 50.0% |
-| Critical recall | 66.7% (6/9) |
-| Under-triage | 36.7% (11/30) |
-| Over-triage | 13.3% (4/30) |
-| Location accuracy | 0.0% (0/25 location cases) |
-| Threat accuracy | 0.0% (0/3 threat cases) |
-| Latency p50 | 0.011 ms |
-| Latency p95 | 0.618 ms |
+| Incident type accuracy | 60.0% |
+| Severity accuracy | 60.0% |
+| Critical recall | 100.0% (9/9) |
+| Under-triage | 23.3% (7/30) |
+| Over-triage | 16.7% (5/30) |
+| Location accuracy | 48.0% (12/25 location cases) |
+| Threat accuracy | 100.0% (3/3 threat cases) |
+| Latency p50 | 0.024 ms |
+| Latency p95 | 1.060 ms |
 | Fallback count | 0 |
 
 | Language | Cases | Type accuracy | Severity accuracy | Critical recall |
 | --- | ---: | ---: | ---: | ---: |
 | English | 14 | 57.1% | 50.0% | 100.0% |
-| Hindi | 6 | 0.0% | 33.3% | 0.0% |
-| Hinglish | 10 | 60.0% | 60.0% | 66.7% |
+| Hindi | 6 | 50.0% | 66.7% | 100.0% |
+| Hinglish | 10 | 70.0% | 70.0% | 100.0% |
 
-These results are evidence for the deterministic local baseline, including its present weaknesses in Hindi and location extraction; they are not a claim of production performance.
+These results are evidence for the deterministic local baseline, including remaining weaknesses in exact incident typing and spoken-location extraction; they are not a claim of production performance.
 
 ### Hybrid held-out attempt
 
@@ -93,15 +93,15 @@ Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
 
 | Metric | Measured result |
 | --- | ---: |
-| Incident type accuracy | 46.7% |
-| Severity accuracy | 50.0% |
-| Critical recall | 66.7% (6/9) |
-| Under-triage | 36.7% (11/30) |
-| Over-triage | 13.3% (4/30) |
-| Location accuracy | 0.0% (0/25 location cases) |
-| Threat accuracy | 0.0% (0/3 threat cases) |
-| Latency p50 | 0.030 ms |
-| Latency p95 | 2.166 ms |
+| Incident type accuracy | 60.0% |
+| Severity accuracy | 60.0% |
+| Critical recall | 100.0% (9/9) |
+| Under-triage | 23.3% (7/30) |
+| Over-triage | 16.7% (5/30) |
+| Location accuracy | 48.0% (12/25 location cases) |
+| Threat accuracy | 100.0% (3/3 threat cases) |
+| Latency p50 | 0.043 ms |
+| Latency p95 | 1.567 ms |
 | Fallback count | 30 |
 
 The hybrid runner completed, but no GLM or OpenAI API key was configured, so all 30 cases used keyword fallback; this is not a model-backed result.

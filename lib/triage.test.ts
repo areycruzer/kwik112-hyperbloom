@@ -68,6 +68,29 @@ test('missing location produces an exact-address follow-up without inventing an 
   assert.ok(result.extraction.recommended_questions.some((q) => /address|landmark/i.test(q)));
 });
 
+test('Hindi no-pulse reports are locally critical medical emergencies', () => {
+  const result = localTriage('मेरे पिता की नब्ज नहीं चल रही है, हम नमूना मेट्रो गेट 3 पर हैं।');
+  assert.equal(result.extraction.incident_type, 'medical_emergency');
+  assert.equal(result.extraction.severity, 'critical');
+  assert.match(result.extraction.location.address ?? '', /नमूना मेट्रो गेट 3/);
+  assert.match(result.extraction.immediate_threats.join(' '), /नब्ज/);
+});
+
+test('Hindi fire reports are locally critical fire incidents', () => {
+  const result = localTriage('दुकान में आग लगी है और धुआं भर गया है, जगह डेमो बाजार है।');
+  assert.equal(result.extraction.incident_type, 'fire');
+  assert.equal(result.extraction.severity, 'critical');
+  assert.match(result.extraction.location.address ?? '', /डेमो बाजार/);
+});
+
+test('Hinglish critical reports keep type and spoken landmark terms', () => {
+  const result = localTriage('Mere father ki pulse nahi hai. Hum Kashmere Gate metro gate 3 par hain.');
+  assert.equal(result.extraction.incident_type, 'medical_emergency');
+  assert.equal(result.extraction.severity, 'critical');
+  assert.match(result.extraction.location.address ?? '', /Kashmere Gate metro gate 3/i);
+  assert.match(result.extraction.immediate_threats.join(' '), /pulse/i);
+});
+
 test('safety floor returns a distinct object without mutating the local threat list', () => {
   const local = localTriage('My father has no pulse.');
   const model = structuredClone(local);
