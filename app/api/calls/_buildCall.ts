@@ -11,6 +11,7 @@
  */
 
 import { EmergencyCall, Location } from '@/lib/types';
+import { HINGLISH_DEMO_LOCATION } from '@/lib/demo';
 import {
   EmotionFrame,
   buildOperatorQuestions,
@@ -113,6 +114,7 @@ function normalizeTranscript(input: unknown): Array<{
  *              a coordinate nobody reported.
  */
 const KNOWN_PLACES: Array<[RegExp, { latitude: number; longitude: number; city: string }]> = [
+  [/\bsample metro gate 1\b/i, HINGLISH_DEMO_LOCATION],
   [/\bgreater noida\b/i, { latitude: 28.4744, longitude: 77.503, city: 'Greater Noida' }],
   [/\bnoida\b/i, { latitude: 28.5355, longitude: 77.391, city: 'Noida' }],
   [/\brohini\b/i, { latitude: 28.7196, longitude: 77.1186, city: 'New Delhi' }],

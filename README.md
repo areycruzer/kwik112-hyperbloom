@@ -20,6 +20,17 @@ npm run dev
 
 Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard), choose **Start emergency call**, select a **Scripted caller**, then choose **Run scripted call**. This path needs no microphone or provider credential.
 
+### Five-minute judge run
+
+1. Open `/dashboard` and choose **Run 5-minute demo** in the lower-left corner.
+2. Choose **Test speaker**. The browser should say that Pulse112 audio is ready.
+3. Choose **Start intake**. For the primary path, start the live mic call and speak: “Mere papa respond nahi kar rahe, saans bhi nahi aa rahi,” followed by “Sample Metro Gate 1” when asked for the location.
+4. If Hume, the microphone, or the network is unavailable, select **5-minute demo — Hinglish cardiac arrest** and choose **Play synthetic fallback**. This path is audible, visibly labeled synthetic/simulated, and uses the same incident-creation endpoint as the live path.
+5. When triage completes, return to the board and use the demo guide to open the decision timeline. Record the **Intake**, **Dispatch**, and **Resolution** decisions; none are approved automatically.
+6. Finish on the guide’s **Audit proof complete** panel, which names the transcript source, prosody provenance, triage engine, human decisions, and selected units.
+
+Suggested timing: preflight `0:00–0:30`, call `0:30–1:45`, triage `1:45–2:30`, response assurance `2:30–3:30`, decisions/dispatch `3:30–4:30`, audit proof `4:30–5:00`.
+
 The application uses these optional environment variables. Set only the providers you intend to use; never commit a `.env` file or a key value.
 
 | Variable | Purpose |

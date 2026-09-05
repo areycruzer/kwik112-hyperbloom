@@ -71,6 +71,7 @@ import AlertsModule from '@/components/AlertsModule';
 import HistoryModule from '@/components/HistoryModule';
 import ForecastModule from '@/components/ForecastModule';
 import IncidentKanbanBoard from '@/components/IncidentKanbanBoard';
+import { FiveMinuteDemo } from '@/components/FiveMinuteDemo';
 
 // Leaflet needs the DOM; render the map client-side only.
 const EmergencyMap = dynamic(() => import('@/components/EmergencyMap'), {
@@ -117,6 +118,10 @@ export default function DashboardPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
 
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoIntakeStarted, setDemoIntakeStarted] = useState(false);
+  const [demoLaunchSignal, setDemoLaunchSignal] = useState(0);
+  const [demoCallId, setDemoCallId] = useState<string | null>(null);
   // Bumped when an alert is acknowledged so the alert memo (and therefore the
   // rail badge) recomputes against the freshly-persisted acknowledgement set.
   const [ackVersion, setAckVersion] = useState(0);
@@ -464,8 +469,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <span className="hidden xl:inline-flex"><Chip tone="accent">112 Pulse</Chip></span>
             <StartEmergencyCall
+              launchSignal={demoLaunchSignal}
+              initialScriptId="hinglish-five-minute"
               onCallCreated={(id) => {
                 setSelectedCallId(id);
+                if (demoActive) setDemoCallId(id);
                 setMainView('map');
                 setPanelView('detail');
               }}
@@ -669,6 +677,26 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- OVERLAYS ------------------------------------------------------ */}
+      <FiveMinuteDemo
+        call={demoActive ? (calls.find((call) => call.id === demoCallId) ?? null) : null}
+        active={demoActive}
+        intakeStarted={demoIntakeStarted}
+        onActivate={() => {
+          setDemoActive(true);
+          setDemoIntakeStarted(false);
+          setDemoCallId(null);
+        }}
+        onLaunchVoice={() => {
+          setDemoIntakeStarted(true);
+          setDemoLaunchSignal((value) => value + 1);
+        }}
+        onOpenWorkflow={() => selectedCall && setWorkflowOpen(true)}
+        onReset={() => {
+          setDemoActive(false);
+          setDemoIntakeStarted(false);
+          setDemoCallId(null);
+        }}
+      />
       <IncidentTimeline
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
