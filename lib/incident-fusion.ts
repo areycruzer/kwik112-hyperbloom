@@ -66,6 +66,9 @@ const SEVERITY_RANK: Record<Severity, number> = {
 const STOP_WORDS = new Set([
   'the', 'and', 'near', 'at', 'in', 'is', 'a', 'an', 'hai', 'mein', 'me',
   'sector', 'delhi', 'call', 'caller', 'emergency', 'report', 'reported',
+  // Type words are already compared separately and are not corroborating evidence.
+  'fire', 'aag', 'blaze', 'flames', 'smoke', 'burning', 'accident', 'traffic',
+  'crash', 'collision', 'medical', 'crime', 'incident',
 ]);
 
 function canonicalIncidentType(type: EmergencyCall['incident_type']): string {

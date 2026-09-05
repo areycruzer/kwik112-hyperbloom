@@ -98,6 +98,80 @@ test('Hinglish critical reports keep type and spoken landmark terms', () => {
   assert.match(result.extraction.immediate_threats.join(' '), /pulse/i);
 });
 
+test('Hinglish accident extracts the spoken landmark and affected-person count', () => {
+  const result = localTriage(
+    'Mere saamne bus accident hua hai, do log injured hain, Demo Chowk ke paas.',
+  );
+
+  assert.equal(result.extraction.incident_type, 'accident');
+  assert.match(result.extraction.location.address ?? '', /Demo Chowk/i);
+  assert.equal(result.extraction.persons_involved.count, 2);
+  assert.equal(result.extraction.persons_involved.injuries, true);
+});
+
+test('Hinglish location extraction does not include the incident clause', () => {
+  const result = localTriage('Bus accident Demo Chowk ke paas hua hai.');
+
+  assert.equal(result.extraction.location.address, 'Demo Chowk');
+});
+
+test('negated Hinglish injury report is not marked as an injury', () => {
+  const result = localTriage('Demo Colony mein accident hua hai, koi injured nahi hai.');
+
+  assert.equal(result.extraction.persons_involved.injuries, false);
+});
+
+test('injury polarity handles affirmative Hinglish and English negation', () => {
+  assert.equal(
+    localTriage('Demo Colony mein accident hua hai, koi injured hai.').extraction.persons_involved.injuries,
+    true,
+  );
+  assert.equal(
+    localTriage('The driver is not injured after the accident.').extraction.persons_involved.injuries,
+    false,
+  );
+  assert.equal(
+    localTriage('Building mein aag lagi hai, koi injured nahi hai.').extraction.persons_involved.injuries,
+    false,
+  );
+  assert.equal(
+    localTriage('No one was injured in the crash.').extraction.persons_involved.injuries,
+    false,
+  );
+  assert.equal(
+    localTriage('Nobody was hurt in the fire.').extraction.persons_involved.injuries,
+    false,
+  );
+  assert.equal(
+    localTriage('There are no injured people after the accident.').extraction.persons_involved.injuries,
+    false,
+  );
+});
+
+test('accident operator questions do not repeat the injury question', () => {
+  const triage = localTriage('Bus accident hua hai, log injured hain, Demo Chowk ke paas.');
+  const questions = buildOperatorQuestions(triage);
+
+  assert.equal(
+    questions.filter((question) => /injured|trapped/i.test(question)).length,
+    1,
+  );
+  assert.match(questions.find((question) => /injured|trapped/i.test(question)) ?? '', /how many/i);
+});
+
+test('operator questions deduplicate common location and casualty paraphrases', () => {
+  const triage = localTriage('Bus accident hua hai.');
+  triage.extraction.recommended_questions = [
+    'Where exactly did this happen?',
+    'How many victims are there?',
+  ];
+
+  const questions = buildOperatorQuestions(triage);
+
+  assert.equal(questions.includes('Where exactly did this happen?'), false);
+  assert.equal(questions.includes('How many victims are there?'), false);
+});
+
 test('safety floor returns a distinct object without mutating the local threat list', () => {
   const local = localTriage('My father has no pulse.');
   const model = structuredClone(local);

@@ -162,6 +162,8 @@ function extractSpokenLocation(transcript: string): string | undefined {
   const patterns = [
     /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\b(?:accident|crash|fire|aag|incident)\s+([^,.!?\n]+?)\s+ke\s+paas\b/iu,
+    /(?:^|[,;]\s*)([^,.!?\n]+?)\s+ke\s+paas\b/iu,
     /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
     /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
     /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,
@@ -174,6 +176,69 @@ function extractSpokenLocation(transcript: string): string | undefined {
   }
 
   return undefined;
+}
+
+const SPOKEN_COUNTS: Record<string, number> = {
+  one: 1,
+  ek: 1,
+  two: 2,
+  do: 2,
+  three: 3,
+  teen: 3,
+  four: 4,
+  char: 4,
+  chaar: 4,
+  five: 5,
+  paanch: 5,
+  panch: 5,
+  six: 6,
+  chhe: 6,
+  seven: 7,
+  saat: 7,
+  eight: 8,
+  aath: 8,
+  nine: 9,
+  nau: 9,
+  ten: 10,
+  das: 10,
+};
+
+function extractPersonsInvolved(transcript: string): number {
+  const match = transcript.match(
+    /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|chaar|paanch|panch|chhe|saat|aath|nau|das)\s+(?:log|people|persons?|patients?|victims?|aadmi|mahila|bachche|injured|hurt|wounded|ghayal|zakhmi|trapped)\b/iu,
+  );
+  if (!match?.[1]) return 1;
+  const numeric = Number(match[1]);
+  if (Number.isInteger(numeric)) return Math.min(Math.max(numeric, 1), 999);
+  return SPOKEN_COUNTS[match[1].toLowerCase()] ?? 1;
+}
+
+function injuryStatus(transcript: string): boolean | null {
+  const withoutNegatedInjuries = transcript
+    .replace(
+      /\b(?:nobody|no\s+one)\s+(?:(?:is|was|were|got|gets|has\s+been|had\s+been)\s+)?(?:injured|hurt|wounded|bleeding)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\bno\s+(?:injured|hurt|wounded|bleeding)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:koi|koee)\s+(?:\w+\s+){0,2}(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\s+(?:nahi|nahin)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:not|nahi|nahin)\s+(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\s+(?:nahi|nahin|not)\b/giu,
+      ' ',
+    );
+  if (/\b(injured|hurt|wounded|bleeding|ghayal|zakhmi)\b/iu.test(withoutNegatedInjuries)) {
+    return true;
+  }
+  return withoutNegatedInjuries === transcript ? null : false;
 }
 
 /** @description Deterministic fallback used whenever OpenAI is unavailable. */
@@ -238,6 +303,7 @@ export function keywordTriage(transcript: string): TriageResult {
 
   const firstLine = transcript.split(/[.!?\n]/).map((s) => s.trim()).find(Boolean) ?? '';
   const spokenLocation = extractSpokenLocation(transcript);
+  const reportedInjuryStatus = injuryStatus(transcript);
 
   return {
     method: 'keyword',
@@ -250,7 +316,11 @@ export function keywordTriage(transcript: string): TriageResult {
       location: spokenLocation
         ? { address: spokenLocation, confidence: 0.55, source: 'caller' }
         : { confidence: 0 },
-      persons_involved: { count: 1, injuries: score >= 80, descriptions: [] },
+      persons_involved: {
+        count: extractPersonsInvolved(transcript),
+        injuries: reportedInjuryStatus ?? score >= 80,
+        descriptions: [],
+      },
       immediate_threats: threats,
       time_sensitive_factors: [],
       vehicles_involved: [],
@@ -645,8 +715,15 @@ export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
 /** @description Operator prompts ranked by what blocks safe dispatch first. */
 export function buildOperatorQuestions(triage: TriageResult): string[] {
   const questions: string[] = [];
+  const intentOf = (question: string): string => {
+    if (/address|location|landmark|where\b.*(?:happen|occur|are|is)/i.test(question)) return 'location';
+    if (/injured|trapped|victims?|people affected|persons affected|how many\s+(?:people|persons?)/i.test(question)) return 'casualties';
+    if (/safe place|are you safe/i.test(question)) return 'caller-safety';
+    return question.toLowerCase();
+  };
   const add = (question: string) => {
-    if (!questions.some((existing) => existing.toLowerCase() === question.toLowerCase())) {
+    const intent = intentOf(question);
+    if (!questions.some((existing) => intentOf(existing) === intent)) {
       questions.push(question);
     }
   };

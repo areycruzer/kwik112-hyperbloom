@@ -84,6 +84,25 @@ test('requires corroborating shared text even when type, time, and coordinates m
   assert.deepEqual(suggestions, []);
 });
 
+test('does not treat a generic accident subtype as corroborating evidence', () => {
+  const suggestions = findFusionSuggestions([
+    call('a', {
+      incident_type: 'accident',
+      ai_summary: 'Car crash near Alpha Road',
+      immediate_threats: [],
+      caller_location: { address: 'Alpha Road', latitude: 28.7, longitude: 77.1 },
+    }),
+    call('b', {
+      incident_type: 'accident',
+      ai_summary: 'Bus crash near Beta Street',
+      immediate_threats: [],
+      caller_location: { address: 'Beta Street', latitude: 28.7, longitude: 77.1 },
+    }),
+  ]);
+
+  assert.deepEqual(suggestions, []);
+});
+
 test('does not fuse same-type calls outside distance or time boundaries', () => {
   const suggestions = findFusionSuggestions([
     call('base'),
