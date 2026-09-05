@@ -870,11 +870,14 @@ export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCall
   return (
     <>
       <button
+        type="button"
+        aria-label="Start 112 voice call"
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 rounded-md bg-critical px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-ink transition-transform hover:scale-105 hover:bg-critical-bright"
+        className="flex shrink-0 items-center gap-1.5 rounded-md bg-critical px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-ink transition-transform hover:scale-105 hover:bg-critical-bright lg:gap-2 lg:px-3.5"
       >
-        <Phone className="h-4 w-4" />
-        <span>Start 112 voice call</span>
+        <Phone className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="lg:hidden">112 call</span>
+        <span className="hidden lg:inline">Start 112 voice call</span>
       </button>
 
       {isOpen && (

@@ -60,13 +60,15 @@ export function IncidentFusionPanel({
       </div>
 
       <div className="mt-2 rounded-[4px] border border-rule bg-ground px-2 py-1.5 text-xs text-ink-3">
-        Fused intel: <span className="uppercase text-ink">{fused.severity}</span>
-        {' · '}max {fused.persons_involved} people (not summed)
+        Combined report: <span className="uppercase text-ink">{fused.severity}</span>
+        {' · '}up to {fused.persons_involved} people
         {fused.immediate_threats.length > 0 && ` · ${fused.immediate_threats.join(', ')}`}
       </div>
 
       {closest?.reasons.length ? (
-        <p className="mt-2 text-2xs text-ink-4">Evidence: {closest.reasons.join(' · ')}</p>
+        <p className="mt-2 text-2xs text-ink-4">
+          Why these calls may match: {closest.reasons.join(' · ')}
+        </p>
       ) : null}
 
       {decision ? (

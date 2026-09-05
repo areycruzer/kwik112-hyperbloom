@@ -28,6 +28,8 @@ interface EmergencyMapProps {
   onDispatchUnit?: (unitId: string, callId: string) => void;
   /** Roster-selected unit: drawn with a 1px accent ring, like a selected incident. */
   selectedUnitId?: string | null;
+  /** Changes whenever a sibling panel resizes the map container. */
+  layoutRevision?: string | number | boolean;
 }
 
 // Esri World_Imagery: bright satellite imagery, keyless, attribution required.
@@ -49,6 +51,7 @@ export default function EmergencyMap({
   selectedCallId,
   onMarkerClick,
   selectedUnitId = null,
+  layoutRevision,
 }: EmergencyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -62,6 +65,12 @@ export default function EmergencyMap({
   // Without this reactive gate the marker effects run before the map exists,
   // bail out, and never re-run — every marker silently vanishes.
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const frame = requestAnimationFrame(() => mapRef.current?.invalidateSize({ pan: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [layoutRevision, mapReady]);
 
   // First Responder Fleet — the shared roster, so the map markers and the
   // roster module can never disagree. Lifted to lib/units.ts (Task 11).
