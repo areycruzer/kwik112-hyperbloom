@@ -4,9 +4,9 @@
  *              by the API routes so no route has to HTTP-call another one.
  */
 
-import { AIExtraction, Severity } from './types';
-import { logger } from './logger';
-import { requestJson, resolveLlm } from './llm';
+import type { AIExtraction, DispatchPlan, SafetyAudit, Severity } from './types.ts';
+import { logger } from './logger.ts';
+import { requestJson, resolveLlm } from './llm.ts';
 
 export interface EmotionFrame {
   [emotion: string]: number;
@@ -92,25 +92,25 @@ const ESCALATIONS = [
   // specificity 2 = the rule names the event itself, so it should decide the
   // incident type. specificity 1 = a symptom many different events produce; it
   // raises severity but must not overwrite a more specific classification.
-  { re: /\b(heart attack|cardiac arrest|chest pain|no pulse)\b/i,
+  { re: /\b(heart attack|cardiac arrest|chest pain|no pulse|pulse nahi)\b|नब्ज नहीं|सांस नहीं/i,
     score: 95, specificity: 2, label: 'MEDICAL_EMERGENCY', threat: 'Possible cardiac arrest',
     type: 'medical_emergency', subtype: 'cardiac event' },
-  { re: /\b(unconscious|unresponsive|passed out|collapsed)\b/i,
+  { re: /\b(unconscious|unresponsive|passed out|collapsed|behosh)\b|बेहोश/i,
     score: 88, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Unresponsive casualty',
     type: 'medical_emergency', subtype: 'unresponsive patient' },
-  { re: /\b(not breathing|drowning|choking|overdose)\b/i,
+  { re: /\b(not breathing|drowning|choking|overdose|saans nahi)\b|सांस नहीं/i,
     score: 93, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Airway/breathing compromise',
     type: 'medical_emergency', subtype: 'respiratory emergency' },
   { re: /\b(bleeding out|severe bleeding|gunshot|stab(bed|bing)?|stab wound)\b/i,
     score: 92, specificity: 2, label: 'TRAUMA_EMERGENCY', threat: 'Severe bleeding',
     type: 'medical_emergency', subtype: 'major trauma' },
-  { re: /\b(fire|burning|on fire|smoke|trapped)\b/i,
+  { re: /\b(fire|burning|on fire|smoke|trapped|aag|dhua|dhuaan)\b|आग|धुआं|धुआँ|जल/i,
     score: 90, specificity: 2, label: 'FIRE_EMERGENCY', threat: 'Active fire',
     type: 'fire', subtype: 'structure fire' },
-  { re: /\b(accident|crash|collision|hit by|ran over|flipped over)\b/i,
+  { re: /\b(accident|crash|collision|hit by|ran over|flipped over|takkar|durghatna)\b|दुर्घटना|टक्कर/i,
     score: 78, specificity: 2, label: 'TRAFFIC_INCIDENT', threat: 'Roadway casualty',
     type: 'accident', subtype: 'vehicle collision' },
-  { re: /\b(robbery|armed|weapon|knife|attack(ed|ing)?|assault)\b/i,
+  { re: /\b(robbery|armed|weapon|knife|attack(ed|ing)?|assault|chaku|loot|hamla)\b|चाकू|लूट|हमला/i,
     score: 82, specificity: 2, label: 'VIOLENT_CRIME', threat: 'Possible armed suspect',
     type: 'crime', subtype: 'violent crime' },
 ] as const;
@@ -119,6 +119,7 @@ export interface TriageResult {
   extraction: AIExtraction;
   labels: string[];
   flags: string[];
+  safetyAudit?: SafetyAudit;
   /** Which path produced this result, surfaced in the UI so an operator is
    *  never guessing whether a model or a keyword rule graded the call. */
   method: string;
@@ -147,6 +148,99 @@ const CATEGORIES = [
     type: 'public_safety' as const, subtype: 'gas leak' },
 ];
 
+function cleanSpokenLocation(value: string): string | undefined {
+  const cleaned = value
+    .replace(/[।.!?].*$/u, '')
+    .replace(/\b(par hain|par hai|mein hain|mein hai|hai|hain|here)\b.*$/iu, '')
+    .replace(/\b(with|and|aur|or)\b.*$/iu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length >= 3 ? cleaned.slice(0, 240) : undefined;
+}
+
+function extractSpokenLocation(transcript: string): string | undefined {
+  const patterns = [
+    /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\b(?:accident|crash|fire|aag|incident)\s+([^,.!?\n]+?)\s+ke\s+paas\b/iu,
+    /(?:^|[,;]\s*)([^,.!?\n]+?)\s+ke\s+paas\b/iu,
+    /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
+    /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
+    /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,
+  ];
+
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    const location = match?.[1] ? cleanSpokenLocation(match[1]) : undefined;
+    if (location) return location;
+  }
+
+  return undefined;
+}
+
+const SPOKEN_COUNTS: Record<string, number> = {
+  one: 1,
+  ek: 1,
+  two: 2,
+  do: 2,
+  three: 3,
+  teen: 3,
+  four: 4,
+  char: 4,
+  chaar: 4,
+  five: 5,
+  paanch: 5,
+  panch: 5,
+  six: 6,
+  chhe: 6,
+  seven: 7,
+  saat: 7,
+  eight: 8,
+  aath: 8,
+  nine: 9,
+  nau: 9,
+  ten: 10,
+  das: 10,
+};
+
+function extractPersonsInvolved(transcript: string): number {
+  const match = transcript.match(
+    /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|chaar|paanch|panch|chhe|saat|aath|nau|das)\s+(?:log|people|persons?|patients?|victims?|aadmi|mahila|bachche|injured|hurt|wounded|ghayal|zakhmi|trapped)\b/iu,
+  );
+  if (!match?.[1]) return 1;
+  const numeric = Number(match[1]);
+  if (Number.isInteger(numeric)) return Math.min(Math.max(numeric, 1), 999);
+  return SPOKEN_COUNTS[match[1].toLowerCase()] ?? 1;
+}
+
+function injuryStatus(transcript: string): boolean | null {
+  const withoutNegatedInjuries = transcript
+    .replace(
+      /\b(?:nobody|no\s+one)\s+(?:(?:is|was|were|got|gets|has\s+been|had\s+been)\s+)?(?:injured|hurt|wounded|bleeding)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\bno\s+(?:injured|hurt|wounded|bleeding)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:koi|koee)\s+(?:\w+\s+){0,2}(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\s+(?:nahi|nahin)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:not|nahi|nahin)\s+(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\b/giu,
+      ' ',
+    )
+    .replace(
+      /\b(?:injured|hurt|wounded|bleeding|ghayal|zakhmi)\s+(?:nahi|nahin|not)\b/giu,
+      ' ',
+    );
+  if (/\b(injured|hurt|wounded|bleeding|ghayal|zakhmi)\b/iu.test(withoutNegatedInjuries)) {
+    return true;
+  }
+  return withoutNegatedInjuries === transcript ? null : false;
+}
+
 /** @description Deterministic fallback used whenever OpenAI is unavailable. */
 export function keywordTriage(transcript: string): TriageResult {
   const labels: string[] = [];
@@ -174,7 +268,8 @@ export function keywordTriage(transcript: string): TriageResult {
   let bestTypeScore = 0;
 
   for (const rule of ESCALATIONS) {
-    if (!rule.re.test(transcript)) continue;
+    const match = transcript.match(rule.re);
+    if (!match) continue;
 
     if (rule.score > score) score = rule.score;
 
@@ -191,6 +286,10 @@ export function keywordTriage(transcript: string): TriageResult {
 
     if (!labels.includes(rule.label)) labels.push(rule.label);
     if (!threats.includes(rule.threat)) threats.push(rule.threat);
+    const callerPhrase = match[0].trim();
+    if (callerPhrase && !threats.some((threat) => threat.toLowerCase() === callerPhrase.toLowerCase())) {
+      threats.push(callerPhrase);
+    }
   }
 
   // An explicit "nobody is hurt" is strong evidence against a critical grade.
@@ -203,6 +302,8 @@ export function keywordTriage(transcript: string): TriageResult {
   if (severity === 'critical') flags.push('LIFE_THREATENING');
 
   const firstLine = transcript.split(/[.!?\n]/).map((s) => s.trim()).find(Boolean) ?? '';
+  const spokenLocation = extractSpokenLocation(transcript);
+  const reportedInjuryStatus = injuryStatus(transcript);
 
   return {
     method: 'keyword',
@@ -212,8 +313,14 @@ export function keywordTriage(transcript: string): TriageResult {
       incident_type: type,
       incident_subtype: subtype,
       severity,
-      location: { confidence: 0 },
-      persons_involved: { count: 1, injuries: score >= 80, descriptions: [] },
+      location: spokenLocation
+        ? { address: spokenLocation, confidence: 0.55, source: 'caller' }
+        : { confidence: 0 },
+      persons_involved: {
+        count: extractPersonsInvolved(transcript),
+        injuries: reportedInjuryStatus ?? score >= 80,
+        descriptions: [],
+      },
       immediate_threats: threats,
       time_sensitive_factors: [],
       vehicles_involved: [],
@@ -310,10 +417,64 @@ function reconcileSeverity(rawScore: unknown, rawSeverity: unknown, fallbackScor
   return score;
 }
 
-/** @description Clamp and allow-list model output so it can never widen the type. */
-function sanitizeExtraction(raw: any, transcript: string): TriageResult {
+const MODEL_REQUIRED_FIELDS = [
+  'incident_type', 'incident_subtype', 'severity', 'severity_score', 'location',
+  'persons_involved', 'immediate_threats', 'caller_condition', 'summary',
+  'confidence_score', 'recommended_questions', 'labels', 'flags',
+] as const;
+
+const MODEL_SEVERITIES = new Set(['critical', 'high', 'medium', 'low']);
+const MODEL_CALLER_CONDITIONS = new Set(['calm', 'distressed', 'injured', 'panicked', 'unclear']);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/**
+ * @description The prompt's location address/city can legitimately be absent
+ *              when a caller does not know them, so provenance validation uses
+ *              its required object shape and finite confidence instead. Every
+ *              other required scalar or list must be usable before a response
+ *              may be credited to the model.
+ */
+function hasUsableModelExtractionSchema(raw: unknown): raw is Record<string, unknown> {
+  if (!isRecord(raw) || !MODEL_REQUIRED_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(raw, field))) {
+    return false;
+  }
+
+  const location = raw.location;
+  const persons = raw.persons_involved;
+  const severityWord = typeof raw.severity === 'string' && MODEL_SEVERITIES.has(raw.severity.trim().toLowerCase());
+  const severityScore = typeof raw.severity_score === 'number' && Number.isFinite(raw.severity_score);
+
+  return coerceIncidentType(raw.incident_type) !== null &&
+    typeof raw.incident_subtype === 'string' && raw.incident_subtype.trim() !== '' &&
+    (severityWord || severityScore) &&
+    isRecord(location) && typeof location.confidence === 'number' && Number.isFinite(location.confidence) &&
+    isRecord(persons) && typeof persons.count === 'number' && Number.isFinite(persons.count) &&
+    typeof persons.injuries === 'boolean' &&
+    isStringArray(raw.immediate_threats) &&
+    typeof raw.caller_condition === 'string' && MODEL_CALLER_CONDITIONS.has(raw.caller_condition.trim().toLowerCase()) &&
+    typeof raw.summary === 'string' && raw.summary.trim() !== '' &&
+    typeof raw.confidence_score === 'number' && Number.isFinite(raw.confidence_score) &&
+    isStringArray(raw.recommended_questions) &&
+    isStringArray(raw.labels) &&
+    isStringArray(raw.flags);
+}
+
+/**
+ * @description Accept only a complete model response before applying lossy
+ *              coercions. A partial object is not model analysis: treating it
+ *              as such would turn locally supplied defaults into false model
+ *              provenance.
+ */
+export function sanitizeModelExtraction(raw: unknown, transcript: string): TriageResult {
   const fallback = keywordTriage(transcript);
-  if (!raw || typeof raw !== 'object') return fallback;
+  if (!hasUsableModelExtractionSchema(raw)) return fallback;
+
+  const model = raw;
 
   const allowedConditions = ['calm', 'distressed', 'injured', 'panicked', 'unclear'];
   const strArray = (v: unknown): string[] =>
@@ -324,49 +485,51 @@ function sanitizeExtraction(raw: any, transcript: string): TriageResult {
     typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
 
   const fallbackScore = scoreOf(fallback);
-  const score = reconcileSeverity(raw.severity_score, raw.severity, fallbackScore);
-  const type = coerceIncidentType(raw.incident_type) ?? fallback.extraction.incident_type;
+  const score = reconcileSeverity(model.severity_score, model.severity, fallbackScore);
+  const type = coerceIncidentType(model.incident_type) ?? fallback.extraction.incident_type;
 
   const conditionRaw =
-    typeof raw.caller_condition === 'string' ? raw.caller_condition.toLowerCase().trim() : '';
+    typeof model.caller_condition === 'string' ? model.caller_condition.toLowerCase().trim() : '';
   const condition = allowedConditions.includes(conditionRaw) ? conditionRaw : 'unclear';
 
   // Models sometimes put the whole address in `city`; keep both, trust neither
   // blindly, and let the caller decide whether it is placeable.
-  const address = str(raw.location?.address, 240);
-  const city = str(raw.location?.city, 120);
+  const location = model.location as Record<string, unknown> | undefined;
+  const persons = model.persons_involved as Record<string, unknown> | undefined;
+  const address = str(location?.address, 240);
+  const city = str(location?.city, 120);
 
   const result: TriageResult = {
     method: 'model',
-    labels: strArray(raw.labels),
-    flags: strArray(raw.flags),
+    labels: strArray(model.labels),
+    flags: strArray(model.flags),
     extraction: {
       incident_type: type,
       incident_subtype:
-        str(raw.incident_subtype, 120) ??
-        str(raw.incident_type, 120) ??
+        str(model.incident_subtype, 120) ??
+        str(model.incident_type, 120) ??
         fallback.extraction.incident_subtype,
       severity: severityFromScore(score),
       location: {
         address: address ?? city,
-        landmarks: strArray(raw.location?.landmarks),
+        landmarks: strArray(location?.landmarks),
         city,
-        confidence: num(raw.location?.confidence, 0, 1, 0),
+        confidence: num(location?.confidence, 0, 1, 0),
       },
       persons_involved: {
-        count: Math.round(num(raw.persons_involved?.count, 0, 999, 1)),
-        injuries: Boolean(raw.persons_involved?.injuries),
-        descriptions: strArray(raw.persons_involved?.descriptions),
+        count: Math.round(num(persons?.count, 0, 999, 1)),
+        injuries: Boolean(persons?.injuries),
+        descriptions: strArray(persons?.descriptions),
       },
-      immediate_threats: strArray(raw.immediate_threats),
-      time_sensitive_factors: strArray(raw.time_sensitive_factors),
-      vehicles_involved: strArray(raw.vehicles_involved),
-      weapons_mentioned: strArray(raw.weapons_mentioned),
+      immediate_threats: strArray(model.immediate_threats),
+      time_sensitive_factors: strArray(model.time_sensitive_factors),
+      vehicles_involved: strArray(model.vehicles_involved),
+      weapons_mentioned: strArray(model.weapons_mentioned),
       caller_condition: condition as AIExtraction['caller_condition'],
-      summary: str(raw.summary, 400) ?? fallback.extraction.summary,
-      confidence_score: num(raw.confidence_score, 0, 1, 0.6),
-      missing_critical_info: strArray(raw.missing_critical_info),
-      recommended_questions: strArray(raw.recommended_questions),
+      summary: str(model.summary, 400) ?? fallback.extraction.summary,
+      confidence_score: num(model.confidence_score, 0, 1, 0.6),
+      missing_critical_info: strArray(model.missing_critical_info),
+      recommended_questions: strArray(model.recommended_questions),
     },
   };
 
@@ -402,6 +565,26 @@ export function scoreOf(result: TriageResult): number {
   return s === 'critical' ? 85 : s === 'high' ? 68 : s === 'medium' ? 48 : 25;
 }
 
+/** @description Prevent a model result from lowering deterministic local severity. */
+export function enforceLocalSafetyFloor(
+  modelResult: TriageResult,
+  localResult: TriageResult,
+): TriageResult {
+  const guarded = structuredClone(modelResult);
+  const localScore = scoreOf(localResult);
+  const modelScore = scoreOf(guarded);
+  if (modelScore >= localScore) return guarded;
+
+  (guarded as TriageResult & { severityScore: number }).severityScore = localScore;
+  guarded.extraction.severity = severityFromScore(localScore);
+  for (const threat of localResult.extraction.immediate_threats) {
+    if (!guarded.extraction.immediate_threats.includes(threat)) {
+      guarded.extraction.immediate_threats.push(threat);
+    }
+  }
+  return guarded;
+}
+
 /**
  * @description Run triage over a transcript. Uses the configured model (GLM by
  *              default) and falls back to deterministic keyword rules whenever
@@ -433,8 +616,8 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
 
   if (!response) return local;
 
-  const parsed = applyEscalations(sanitizeExtraction(response.data, clean), clean);
-  parsed.method = `${llm.provider}:${response.model}`;
+  const parsed = applyEscalations(sanitizeModelExtraction(response.data, clean), clean);
+  if (parsed.method !== 'keyword') parsed.method = `${llm.provider}:${response.model}`;
 
   // The model can only raise severity above the local grade, never lower it.
   // A model that misses "no pulse" must not downgrade what the rules caught.
@@ -443,20 +626,15 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
   // reports the real "model graded X, kept Y" rather than X === Y after raising.
   const modelScore = scoreOf(parsed);
   if (modelScore < localScore) {
-    (parsed as any).severityScore = localScore;
-    parsed.extraction.severity = severityFromScore(localScore);
-    for (const threat of local.extraction.immediate_threats) {
-      if (!parsed.extraction.immediate_threats.includes(threat)) {
-        parsed.extraction.immediate_threats.push(threat);
-      }
-    }
     logger.info('Model graded below local rules; keeping the higher grade', {
       modelScore,
       localScore,
     });
   }
 
-  return parsed;
+  const final = enforceLocalSafetyFloor(parsed, local);
+  final.safetyAudit = buildSafetyAudit(parsed, local, final);
+  return final;
 }
 
 /**
@@ -465,7 +643,9 @@ export async function triageTranscript(transcript: string): Promise<TriageResult
  */
 export function localTriage(transcript: string): TriageResult {
   const clean = transcript.trim();
-  return applyEscalations(keywordTriage(clean), clean);
+  const local = applyEscalations(keywordTriage(clean), clean);
+  local.safetyAudit = buildSafetyAudit(local, local, local);
+  return local;
 }
 
 /** @description Suggest units from the incident type. */
@@ -479,4 +659,122 @@ export function recommendUnits(type: string, severity: Severity): string[] {
   };
   const units = base[type] ?? ['Nearest Available Unit', 'Field Supervisor'];
   return severity === 'critical' ? ['Advanced Life Support Ambulance', ...units] : units;
+}
+
+/** @description Convert triage into a bounded dispatch recommendation. */
+export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
+  const { incident_type: type, severity, immediate_threats: threats } = triage.extraction;
+  const priority_code = priorityFromSeverity(severity);
+  const critical = severity === 'critical';
+  const reasonText = [
+    triage.extraction.incident_subtype,
+    ...threats,
+    triage.extraction.summary,
+  ].join(' ');
+
+  const units: DispatchPlan['units'] = [];
+  const add = (service: DispatchPlan['units'][number]['service'], unit: string, reason: string) => {
+    if (!units.some((entry) => entry.service === service && entry.unit === unit)) {
+      units.push({ service, unit, reason });
+    }
+  };
+
+  if (type === 'medical_emergency') {
+    add('ems', critical ? 'Advanced Life Support Ambulance' : 'Nearest Ambulance', `Medical response: ${reasonText}`);
+    if (critical) add('police', 'Nearest Patrol Assist', 'Scene access and crowd-control support');
+  } else if (type === 'fire') {
+    add('fire', 'Fire Engine', `Fire response: ${reasonText}`);
+    add('rescue', 'Rescue Ladder', 'Rescue support for trapped or exposed callers');
+    if (critical) add('ems', 'Advanced Life Support Ambulance', 'Medical standby for critical fire incident');
+  } else if (type === 'crime') {
+    add('police', 'Police Patrol', `Police response: ${reasonText}`);
+    if (critical || /weapon|knife|gun|armed|attack|stab|chaku|hamla/i.test(reasonText)) {
+      add('ems', 'Ambulance Standby', 'Medical standby for violent-risk incident');
+    }
+  } else if (type === 'accident') {
+    add('ems', critical ? 'Advanced Life Support Ambulance' : 'Nearest Ambulance', `Accident response: ${reasonText}`);
+    add('police', 'Traffic Police', 'Traffic control and access management');
+    if (critical) add('rescue', 'Rescue Tender', 'Extrication support for critical collision');
+  } else if (type === 'public_safety') {
+    add('civic', 'Municipal Response Unit', `Public safety response: ${reasonText}`);
+    if (severity === 'high') add('police', 'Police Patrol', 'Perimeter and public-safety support');
+  }
+
+  if (units.length === 0) {
+    add('police', 'Nearest Available Unit', 'Unclassified incident requires field verification');
+  }
+
+  return {
+    priority_code,
+    units,
+    eta_risk: critical ? 'high' : severity === 'high' ? 'medium' : 'low',
+    operator_confirmation_required: critical || (triage.extraction.location.confidence ?? 0) < 0.5,
+  };
+}
+
+/** @description Operator prompts ranked by what blocks safe dispatch first. */
+export function buildOperatorQuestions(triage: TriageResult): string[] {
+  const questions: string[] = [];
+  const intentOf = (question: string): string => {
+    if (/address|location|landmark|where\b.*(?:happen|occur|are|is)/i.test(question)) return 'location';
+    if (/injured|trapped|victims?|people affected|persons affected|how many\s+(?:people|persons?)/i.test(question)) return 'casualties';
+    if (/safe place|are you safe/i.test(question)) return 'caller-safety';
+    return question.toLowerCase();
+  };
+  const add = (question: string) => {
+    const intent = intentOf(question);
+    if (!questions.some((existing) => intentOf(existing) === intent)) {
+      questions.push(question);
+    }
+  };
+
+  const location = triage.extraction.location;
+  if (!location.address || (location.confidence ?? 0) < 0.5) {
+    add('What is the exact address or nearest landmark?');
+  }
+
+  if (triage.extraction.incident_type === 'medical_emergency') {
+    add('Is the patient conscious and breathing right now?');
+  }
+  if (triage.extraction.incident_type === 'fire') {
+    add('Is anyone trapped inside or exposed to smoke?');
+  }
+  if (triage.extraction.incident_type === 'crime') {
+    add('Is the suspect still nearby and is any weapon visible?');
+  }
+  if (triage.extraction.incident_type === 'accident') {
+    add('How many people are injured or trapped?');
+  }
+
+  for (const question of triage.extraction.recommended_questions) {
+    add(question);
+  }
+
+  add('Are you currently in a safe place?');
+  return questions.slice(0, 4);
+}
+
+/** @description Explain the safety gate that produced the final triage grade. */
+export function buildSafetyAudit(
+  modelResult: TriageResult,
+  localResult: TriageResult,
+  finalResult: TriageResult,
+): SafetyAudit {
+  const localScore = scoreOf(localResult);
+  const modelScore = scoreOf(modelResult);
+  const finalScore = scoreOf(finalResult);
+  const downgradeBlocked = modelScore < localScore && finalScore >= localScore;
+
+  return {
+    local_severity: localResult.extraction.severity,
+    model_severity: modelResult.extraction.severity,
+    final_severity: finalResult.extraction.severity,
+    local_score: localScore,
+    model_score: modelScore,
+    final_score: finalScore,
+    downgrade_blocked: downgradeBlocked,
+    reason: downgradeBlocked
+      ? 'Model downgrade blocked by deterministic local safety floor.'
+      : 'Final severity accepted because it did not fall below the local safety floor.',
+  };
 }

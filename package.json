@@ -7,6 +7,9 @@
     "build": "next build --turbopack",
     "start": "next start",
     "test": "node --test \"lib/**/*.test.ts\"",
+    "evaluate:local": "node scripts/evaluate-triage.ts --mode local --split held_out",
+    "evaluate:held-out": "node scripts/evaluate-triage.ts --mode hybrid --split held_out",
+    "evaluate:fusion": "node scripts/evaluate-fusion.ts",
     "check:layout": "node scripts/check-dashboard-layout.mjs"
   },
   "dependencies": {

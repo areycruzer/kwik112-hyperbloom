@@ -18,6 +18,8 @@ import {
   MapPin,
   Radio,
   Search,
+  Shield,
+  X,
 } from 'lucide-react';
 
 import { CallStatus, EmergencyCall } from '@/lib/types';
@@ -34,14 +36,34 @@ import {
   spokenLanguage,
 } from '@/lib/incident';
 import { cn } from '@/lib/utils';
+import {
+  compactIncidentSummary,
+  dashboardHeaderMetrics,
+  dashboardRegionVisibility,
+  defaultMobileIncidentOpen,
+  defaultUnitPanelOpen,
+  mobileNavigationInset,
+} from '@/lib/dashboard-presentation';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
 import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
-import { ModuleBoard } from '@/components/ModuleBoard';
 import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS } from '@/lib/units';
+import { useReservedFleet } from '@/lib/useReservedFleet';
+import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
+import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
+import {
+  findFusionSuggestions,
+  fusionDecisionFor,
+  isSeparateDispatchTransitionBlocked,
+  linkedPrimaryFor,
+  type FusionDecision,
+  type FusionDecisionAction,
+  type FusionSuggestion,
+} from '@/lib/incident-fusion';
+import { useFusionDecisions } from '@/lib/useFusionDecisions';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentTimeline from '@/components/IncidentTimeline';
@@ -49,6 +71,7 @@ import AlertsModule from '@/components/AlertsModule';
 import HistoryModule from '@/components/HistoryModule';
 import ForecastModule from '@/components/ForecastModule';
 import IncidentKanbanBoard from '@/components/IncidentKanbanBoard';
+import { FiveMinuteDemo } from '@/components/FiveMinuteDemo';
 
 // Leaflet needs the DOM; render the map client-side only.
 const EmergencyMap = dynamic(() => import('@/components/EmergencyMap'), {
@@ -59,8 +82,6 @@ const EmergencyMap = dynamic(() => import('@/components/EmergencyMap'), {
     </div>
   ),
 });
-
-const CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
 
 type SeverityFilter = 'all' | 'critical' | 'high' | 'other';
 type PanelView = 'queue' | 'detail';
@@ -85,16 +106,28 @@ export default function DashboardPage() {
   const [activeModule, setActiveModule] = useState<ModuleId>('monitoring');
   const [panelView, setPanelView] = useState<PanelView>('queue');
   const [mainView, setMainView] = useState<MainView>('map');
+  const [unitPanelOpen, setUnitPanelOpen] = useState(false);
+  const [mobileIncidentOpen, setMobileIncidentOpen] = useState(false);
+  const [mobileNavInset, setMobileNavInset] = useState(0);
+  const [regionVisibility, setRegionVisibility] = useState({
+    showModuleRail: true,
+    showIncidentSidebar: true,
+  });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
 
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoIntakeStarted, setDemoIntakeStarted] = useState(false);
+  const [demoLaunchSignal, setDemoLaunchSignal] = useState(0);
+  const [demoCallId, setDemoCallId] = useState<string | null>(null);
   // Bumped when an alert is acknowledged so the alert memo (and therefore the
   // rail badge) recomputes against the freshly-persisted acknowledgement set.
   const [ackVersion, setAckVersion] = useState(0);
 
   const [clock, setClock] = useState('');
+  const { decisions: fusionDecisions, decide: decideFusion } = useFusionDecisions();
 
   // Live clock, tabular so the digits do not jitter.
   useEffect(() => {
@@ -110,6 +143,18 @@ export default function DashboardPage() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const syncLayout = () => {
+      setRegionVisibility(dashboardRegionVisibility(window.innerWidth));
+      setMobileNavInset(mobileNavigationInset(window.innerWidth));
+    };
+    setUnitPanelOpen(defaultUnitPanelOpen(window.innerWidth));
+    setMobileIncidentOpen(defaultMobileIncidentOpen(window.innerWidth));
+    syncLayout();
+    window.addEventListener('resize', syncLayout);
+    return () => window.removeEventListener('resize', syncLayout);
   }, []);
 
   // Reading the selection through a ref keeps `loadCalls` stable, so the poll
@@ -183,6 +228,12 @@ export default function DashboardPage() {
    *              would merge it with `mockCalls` again and double the queue.
    */
   const handleUpdateCallStatus = useCallback((callId: string, newStatus: CallStatus) => {
+    if (isSeparateDispatchTransitionBlocked(callId, newStatus, fusionDecisions)) {
+      setSelectedCallId(callId);
+      setPanelView('detail');
+      setMainView('map');
+      return;
+    }
     setCalls((prev) => {
       const target = prev.find((c) => c.id === callId);
       if (!target) return prev;
@@ -206,7 +257,7 @@ export default function DashboardPage() {
         .join('|');
       return next;
     });
-  }, []);
+  }, [fusionDecisions]);
 
   const handleSelectCallAndNavigateToMap = useCallback((callId: string) => {
     setSelectedCallId(callId);
@@ -232,15 +283,25 @@ export default function DashboardPage() {
   }, []);
 
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
+  const fusionSuggestions = useMemo(() => findFusionSuggestions(calls), [calls]);
+  const fusionByCall = useMemo(() => {
+    const index = new Map<string, FusionSuggestion>();
+    for (const suggestion of fusionSuggestions) {
+      index.set(suggestion.primary_call_id, suggestion);
+      for (const id of suggestion.related_call_ids) index.set(id, suggestion);
+    }
+    return index;
+  }, [fusionSuggestions]);
+  const selectedFusion = selectedCall ? fusionByCall.get(selectedCall.id) : undefined;
+  const selectedFusionDecision = selectedCall
+    ? fusionDecisionFor(selectedCall.id, fusionDecisions, selectedFusion?.key)
+    : undefined;
+  const selectedLinkedPrimary = selectedCall
+    ? linkedPrimaryFor(selectedCall.id, fusionDecisions)
+    : null;
+  const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
 
-  // Stat-row figures, all computed from the live board.
-  const totalCount = calls.length;
-  const criticalCount = calls.filter((c) => c.severity === 'critical').length;
-  const highCount = calls.filter((c) => c.severity === 'high').length;
-  const resolvedCount = calls.filter((c) =>
-    CLOSED_STATUSES.has((c.status ?? '').toLowerCase()),
-  ).length;
-
+  // Primary figures appear once, in the command bar.
   // Operational alerts are derived from call state, then reduced by whatever the
   // operator has already acknowledged. The count feeds the rail's Alerts badge.
   const alerts = useMemo(() => {
@@ -261,46 +322,7 @@ export default function DashboardPage() {
     // moment an alert is acknowledged, so the rail badge decrements immediately.
   }, [calls, ackVersion]);
 
-  // Floating modules mounted over the map's right side (Task 11 / 11b). The
-  // roster is the first module; a compact live summary sits beside it so
-  // repositioning is observable. Both read real board data only.
-  const modules = useMemo(
-    () => ({
-      roster: {
-        title: 'Unit Roster',
-        node: (
-          <UnitRoster
-            units={TACTICAL_UNITS}
-            selectedCall={selectedCall ?? null}
-            selectedUnitId={selectedUnitId}
-            onSelectUnit={handleSelectUnit}
-          />
-        ),
-      },
-      summary: {
-        title: 'Board Summary',
-        node: (
-          <div className="flex flex-col">
-            <DataRow label="Total incidents" value={totalCount} mono />
-            <DataRow label="Critical" value={criticalCount} mono />
-            <DataRow label="High" value={highCount} mono />
-            <DataRow label="Resolved" value={resolvedCount} mono />
-            <DataRow label="Open alerts" value={alerts.length} mono />
-          </div>
-        ),
-      },
-    }),
-    [
-      selectedCall,
-      selectedUnitId,
-      handleSelectUnit,
-      totalCount,
-      criticalCount,
-      highCount,
-      resolvedCount,
-      alerts.length,
-    ],
-  );
+  const headerMetrics = dashboardHeaderMetrics(calls, alerts.length);
 
   const filteredCalls = calls.filter((call) => {
     const haystack = [
@@ -332,6 +354,7 @@ export default function DashboardPage() {
   const handleModuleSelect = useCallback((id: ModuleId) => {
     setActiveModule(id);
     setPanelView('queue');
+    setMobileIncidentOpen(false);
   }, []);
 
   // Alerts / History link to an incident: jump to it on the map with its detail
@@ -364,28 +387,51 @@ export default function DashboardPage() {
             </span>
             <div className="leading-tight">
               <div className="text-md font-semibold tracking-wide text-ink">DISPATCH AI</div>
-              <div className="text-2xs text-ink-3">Delhi Command Desk · National 112 Control</div>
+              <div className="hidden text-2xs text-ink-3 lg:block">Delhi Command Desk · National 112 Control</div>
             </div>
           </div>
 
           {/* Environment telemetry — real board figures only. */}
           <div className="hidden items-center gap-4 border-l border-rule pl-4 lg:flex">
-            <div className="leading-tight">
-              <div className="label">Incidents</div>
-              <div className="tnum text-sm text-ink-2">{totalCount}</div>
-            </div>
-            <div className="leading-tight">
-              <div className="label">Critical</div>
-              <div className="tnum text-sm text-critical-bright">{criticalCount}</div>
-            </div>
-            <div className="leading-tight">
-              <div className="label">Open alerts</div>
-              <div className="tnum text-sm text-mild">{alerts.length}</div>
-            </div>
+            {headerMetrics.map((metric) => (
+              <div key={metric.label} className="leading-tight">
+                <div className="label">{metric.label}</div>
+                <div
+                  className={cn(
+                    'tnum text-sm',
+                    metric.tone === 'critical'
+                      ? 'text-critical-bright'
+                      : metric.tone === 'warning'
+                        ? 'text-mild'
+                        : 'text-ink-2',
+                  )}
+                >
+                  {metric.value}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {activeModule === 'monitoring' && mainView === 'map' && (
+            <button
+              type="button"
+              aria-expanded={unitPanelOpen}
+              aria-controls="response-units-panel"
+              onClick={() => setUnitPanelOpen((open) => !open)}
+              className={cn(
+                'hidden items-center gap-1.5 rounded-[4px] border px-2.5 py-1.5 text-xs font-medium transition-colors sm:inline-flex',
+                unitPanelOpen
+                  ? 'border-accent bg-accent/10 text-accent-bright'
+                  : 'border-rule bg-panel text-ink-2 hover:border-rule-strong hover:text-ink',
+              )}
+            >
+              <Shield className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden lg:inline">Response </span>units
+            </button>
+          )}
+
           {/* Main-area view switch keeps the map and the incident board reachable.
               Only meaningful for the Monitoring module, which owns the main area. */}
           <div
@@ -421,10 +467,13 @@ export default function DashboardPage() {
 
           {/* 112 PULSE — the emotion-aware voice-intake action. */}
           <div className="flex items-center gap-2">
-            <Chip tone="accent">112 Pulse</Chip>
+            <span className="hidden xl:inline-flex"><Chip tone="accent">112 Pulse</Chip></span>
             <StartEmergencyCall
+              launchSignal={demoLaunchSignal}
+              initialScriptId="hinglish-five-minute"
               onCallCreated={(id) => {
                 setSelectedCallId(id);
+                if (demoActive) setDemoCallId(id);
                 setMainView('map');
                 setPanelView('detail');
               }}
@@ -434,21 +483,36 @@ export default function DashboardPage() {
       </header>
 
       {/* ---- BODY: RAIL · INCIDENT PANEL · MAIN ---------------------------- */}
-      <div className="flex min-h-0 flex-1">
-        <ModuleRail active={activeModule} onSelect={handleModuleSelect} alertCount={alerts.length} />
+      <div className="relative flex min-h-0 flex-1 pb-14 sm:pb-0">
+        {regionVisibility.showModuleRail && (
+          <ModuleRail active={activeModule} onSelect={handleModuleSelect} alertCount={alerts.length} />
+        )}
 
         {/* Incident panel — hidden in Board view so the kanban gets full width. */}
-        {!boardActive && (
-        <aside className="flex w-[360px] shrink-0 flex-col border-r border-rule-strong bg-ground xl:w-[400px]">
+        {!boardActive && (regionVisibility.showIncidentSidebar || mobileIncidentOpen) && (
+        <aside
+          style={{ bottom: mobileNavInset }}
+          className="absolute inset-x-0 top-0 z-[650] flex w-full shrink-0 flex-col border-r border-rule-strong bg-ground sm:static sm:w-[320px]"
+        >
           {/* Incident panel header */}
           <div className="flex shrink-0 items-center justify-between border-b border-rule-strong px-3 py-2.5">
             <span className="text-sm font-medium text-ink">Emergencies</span>
-            <span className="tnum text-ink-4">{totalCount}</span>
+            <button
+              type="button"
+              onClick={() => setMobileIncidentOpen(false)}
+              className="rounded-[4px] border border-rule px-2 py-1 text-2xs font-medium uppercase tracking-wide text-ink-2 sm:hidden"
+            >
+              View map
+            </button>
           </div>
 
           {panelView === 'detail' && selectedCall ? (
             <IncidentDetail
               call={selectedCall}
+              fusion={selectedFusion}
+              fusionDecision={selectedFusionDecision}
+              linkedPrimaryCallId={selectedLinkedPrimary}
+              onFusionDecision={(action) => selectedFusion && decideFusion(selectedFusion, action)}
               onBack={() => setPanelView('queue')}
               onOpenTimeline={() => {
                 setSelectedCallId(selectedCall.id);
@@ -486,23 +550,6 @@ export default function DashboardPage() {
                 </select>
               </div>
 
-              {/* Stat row */}
-              <div className="grid shrink-0 grid-cols-3 border-b border-rule-strong">
-                {[
-                  { label: 'Total', value: totalCount, tone: 'text-ink' },
-                  { label: 'Critical', value: criticalCount, tone: 'text-critical-bright' },
-                  { label: 'Resolved', value: resolvedCount, tone: 'text-safe' },
-                ].map((cell) => (
-                  <div
-                    key={cell.label}
-                    className="flex flex-col gap-0.5 border-r border-rule px-3 py-2 last:border-r-0"
-                  >
-                    <span className="label">{cell.label}</span>
-                    <span className={cn('tnum text-lg font-semibold', cell.tone)}>{cell.value}</span>
-                  </div>
-                ))}
-              </div>
-
               {/* Incident queue */}
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {filteredCalls.length === 0 ? (
@@ -513,6 +560,12 @@ export default function DashboardPage() {
                       <li key={call.id}>
                         <IncidentRow
                           call={call}
+                          fusion={fusionByCall.get(call.id)}
+                          fusionDecision={fusionDecisionFor(
+                            call.id,
+                            fusionDecisions,
+                            fusionByCall.get(call.id)?.key,
+                          )}
                           selected={selectedCall?.id === call.id}
                           onSelect={() => selectCall(call.id)}
                         />
@@ -541,22 +594,75 @@ export default function DashboardPage() {
           ) : activeModule === 'forecast' ? (
             <ForecastModule calls={calls} />
           ) : mainView === 'map' ? (
-            <>
-              <EmergencyMap
-                calls={calls}
-                selectedCallId={selectedCall?.id || null}
-                onMarkerClick={handleMarkerClick}
-                onDispatchUnit={handleDispatchUnit}
-                selectedUnitId={selectedUnitId}
-              />
-              {/* Floating module board over the map's right side. The wrapper is
-                  click-through; only the cards inside capture pointer events. */}
-              <div className="pointer-events-none absolute right-4 top-16 bottom-4 z-[500] flex w-[340px] max-w-[calc(100%-2rem)] justify-end">
-                <div className="pointer-events-auto w-full overflow-y-auto">
-                  <ModuleBoard modules={modules} />
-                </div>
+            <div className="relative flex h-full min-h-0 overflow-hidden">
+              <div className="relative min-w-0 flex-1">
+                <EmergencyMap
+                  calls={calls}
+                  units={operationalUnits}
+                  selectedCallId={selectedCall?.id || null}
+                  onMarkerClick={handleMarkerClick}
+                  onDispatchUnit={handleDispatchUnit}
+                  selectedUnitId={selectedUnitId}
+                  layoutRevision={unitPanelOpen}
+                />
+                {!unitPanelOpen && (
+                  <div className="absolute bottom-4 right-4 z-[550] flex flex-col items-end gap-2 sm:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setMobileIncidentOpen(true)}
+                      className="rounded-[4px] border border-rule-strong bg-deep/95 px-3 py-2 text-xs font-medium text-ink"
+                    >
+                      Incidents
+                    </button>
+                    <button
+                      type="button"
+                      aria-expanded={unitPanelOpen}
+                      aria-controls="response-units-panel"
+                      onClick={() => setUnitPanelOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-[4px] border border-accent bg-deep/95 px-3 py-2 text-xs font-medium text-accent-bright"
+                    >
+                      <Shield className="h-3.5 w-3.5" aria-hidden />
+                      Response units
+                    </button>
+                  </div>
+                )}
               </div>
-            </>
+
+              {unitPanelOpen && (
+                <aside
+                  id="response-units-panel"
+                  aria-label="Response units"
+                  className="absolute inset-y-0 right-0 z-[600] flex w-[280px] shrink-0 flex-col border-l border-rule-strong bg-ground shadow-2xl xl:static xl:z-auto xl:shadow-none"
+                >
+                  <div className="flex shrink-0 items-start justify-between gap-3 border-b border-rule-strong px-3 py-2.5">
+                    <div>
+                      <h2 className="text-sm font-semibold text-ink">Response units</h2>
+                      <p className="mt-0.5 text-2xs text-ink-4">
+                        {selectedCall?.caller_location?.address
+                          ? `Distance to ${selectedCall.caller_location.address}`
+                          : 'Select an incident to compare distance'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close response units"
+                      onClick={() => setUnitPanelOpen(false)}
+                      className="rounded-[4px] p-1 text-ink-3 transition-colors hover:bg-panel hover:text-ink"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                    <UnitRoster
+                      units={operationalUnits}
+                      selectedCall={selectedCall ?? null}
+                      selectedUnitId={selectedUnitId}
+                      onSelectUnit={handleSelectUnit}
+                    />
+                  </div>
+                </aside>
+              )}
+            </div>
           ) : (
             <div className="flex h-full flex-col overflow-hidden">
               <IncidentKanbanBoard
@@ -571,10 +677,31 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- OVERLAYS ------------------------------------------------------ */}
+      <FiveMinuteDemo
+        call={demoActive ? (calls.find((call) => call.id === demoCallId) ?? null) : null}
+        active={demoActive}
+        intakeStarted={demoIntakeStarted}
+        onActivate={() => {
+          setDemoActive(true);
+          setDemoIntakeStarted(false);
+          setDemoCallId(null);
+        }}
+        onLaunchVoice={() => {
+          setDemoIntakeStarted(true);
+          setDemoLaunchSignal((value) => value + 1);
+        }}
+        onOpenWorkflow={() => selectedCall && setWorkflowOpen(true)}
+        onReset={() => {
+          setDemoActive(false);
+          setDemoIntakeStarted(false);
+          setDemoCallId(null);
+        }}
+      />
       <IncidentTimeline
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
         call={selectedCall ?? null}
+        linkedPrimaryCallId={selectedLinkedPrimary}
       />
     </div>
   );
@@ -584,10 +711,14 @@ export default function DashboardPage() {
 
 function IncidentRow({
   call,
+  fusion,
+  fusionDecision,
   selected,
   onSelect,
 }: {
   call: EmergencyCall;
+  fusion?: FusionSuggestion;
+  fusionDecision?: FusionDecision;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -622,8 +753,10 @@ function IncidentRow({
         </div>
 
         {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
-        <p className="text-sm leading-relaxed text-ink-2">
-          {call.ai_summary || call.chief_complaint || 'Emergency call in progress; details pending.'}
+        <p className="line-clamp-2 text-sm leading-relaxed text-ink-2">
+          {compactIncidentSummary(
+            call.ai_summary || call.chief_complaint || 'Emergency call in progress; details pending.',
+          )}
         </p>
 
         {address && (
@@ -639,6 +772,13 @@ function IncidentRow({
         <DistressMeter level={distressOf(call)} compact />
         <div className="flex items-center gap-1.5">
           {awaitingRefinement(call) && <Chip tone="mild">Refining</Chip>}
+          {(fusion || fusionDecision) && (
+            <Chip tone={fusionDecision?.action === 'linked' ? 'safe' : 'accent'}>
+              {fusionDecision?.action === 'linked'
+                ? 'Calls linked'
+                : `${(fusion?.related_call_ids.length ?? fusionDecision?.related_call_ids.length ?? 0) + 1}-caller match`}
+            </Chip>
+          )}
           <span className="text-2xs uppercase tracking-wide text-ink-4">{triageSource(call)}</span>
           {/* Genuine detail affordance — navigates to the full incident dossier. */}
           <Link
@@ -659,10 +799,18 @@ function IncidentRow({
 
 function IncidentDetail({
   call,
+  fusion,
+  fusionDecision,
+  linkedPrimaryCallId,
+  onFusionDecision,
   onBack,
   onOpenTimeline,
 }: {
   call: EmergencyCall;
+  fusion?: FusionSuggestion;
+  fusionDecision?: FusionDecision;
+  linkedPrimaryCallId?: string | null;
+  onFusionDecision: (action: FusionDecisionAction) => void;
   onBack: () => void;
   onOpenTimeline: () => void;
 }) {
@@ -677,6 +825,9 @@ function IncidentDetail({
     typeof location?.accuracy_radius === 'number' ? `±${location.accuracy_radius} m` : null;
   const threats = call.immediate_threats ?? [];
   const units = recommendedUnits(call);
+  const dispatchPlan = call.dispatch_plan;
+  const operatorQuestions = call.operator_questions ?? [];
+  const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
 
   return (
@@ -693,6 +844,12 @@ function IncidentDetail({
       </div>
 
       <div className="flex flex-col gap-4 p-3.5">
+        <IncidentFusionPanel
+          callId={call.id}
+          suggestion={fusion}
+          decision={fusionDecision}
+          onDecision={onFusionDecision}
+        />
         {/* Header: symbol, subtype, priority */}
         <div className="flex items-start gap-3">
           <Symbol
@@ -712,15 +869,49 @@ function IncidentDetail({
           </div>
         </div>
 
-        {/* Caller + triage source */}
+        <SectionHeading>What happened</SectionHeading>
+
+        <Field label={confidenceGrade ? `AI summary · ${confidenceGrade} confidence` : 'AI summary'}>
+          <p className="text-sm leading-relaxed text-ink-2">
+            {call.ai_summary ||
+              call.ai_triage?.summary ||
+              call.chief_complaint ||
+              'No AI triage summary is available for this incident yet.'}
+          </p>
+        </Field>
+
+        {threats.length > 0 && (
+          <Field label="Immediate threats">
+            <div className="flex flex-wrap gap-1.5">
+              {threats.map((threat) => (
+                <Chip key={threat} tone="critical">{threat}</Chip>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <div className="rounded-[6px] border border-rule bg-panel p-3">
+          <DistressMeter level={distressOf(call)} />
+          {distressOf(call) == null && (
+            <p className="mt-1.5 text-2xs text-ink-4">No voice stress reading is available for this call.</p>
+          )}
+        </div>
+
+        <SectionHeading>Where and caller</SectionHeading>
+
+        {/* Caller identity and spoken language */}
         <div className="grid grid-cols-2 gap-2">
           <Field label="Caller">
             <span className="tnum text-sm text-ink">{call.caller_number || '—'}</span>
           </Field>
-          <Field label="Triage source">
-            <span className="text-sm text-ink">{triageSource(call)}</span>
+          <Field label="Spoken language">
+            <span className="text-sm text-ink">{spokenLanguage(call) ?? '—'}</span>
           </Field>
         </div>
+
+        <Field label="Triage source">
+          <span className="text-sm text-ink">{triageSource(call)}</span>
+        </Field>
 
         {/* Location with confidence + accuracy radius */}
         <Field label="Location">
@@ -737,39 +928,56 @@ function IncidentDetail({
           </span>
         </Field>
 
-        {/* Spoken language — the language the caller actually used, detected by
-            Hume EVI. An em-dash when none was detected (e.g. a scripted demo),
-            consistent with how absent distress is shown. */}
-        <Field label="Spoken language">
-          <span className="text-sm text-ink">{spokenLanguage(call) ?? '—'}</span>
-        </Field>
-
-        {/* Full AI summary */}
-        <Field label={confidenceGrade ? `AI summary · ${confidenceGrade} confidence` : 'AI summary'}>
-          <p className="text-sm leading-relaxed text-ink-2">
-            {call.ai_summary ||
-              call.ai_triage?.summary ||
-              call.chief_complaint ||
-              'No AI triage summary is available for this incident yet.'}
-          </p>
-        </Field>
-
-        {/* Immediate threats */}
-        {threats.length > 0 && (
-          <Field label="Immediate threats">
-            <div className="flex flex-wrap gap-1.5">
-              {threats.map((threat) => (
-                <Chip key={threat} tone="critical">
-                  {threat}
+        {/* Safety audit */}
+        {safetyAudit && (
+          <details className="rounded-[6px] border border-rule bg-panel">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-ink-2 hover:text-ink">
+              Why this priority?
+            </summary>
+            <div className="border-t border-rule p-2">
+              <div className="grid grid-cols-3 gap-2">
+                <DataRow label="Local" value={`${safetyAudit.local_severity} / ${safetyAudit.local_score}`} mono />
+                <DataRow label="Model" value={`${safetyAudit.model_severity} / ${safetyAudit.model_score}`} mono />
+                <DataRow label="Final" value={`${safetyAudit.final_severity} / ${safetyAudit.final_score}`} mono />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Chip tone={safetyAudit.downgrade_blocked ? 'critical' : 'safe'}>
+                  {safetyAudit.downgrade_blocked ? 'Downgrade blocked' : 'No unsafe downgrade'}
                 </Chip>
-              ))}
+                <span className="text-xs text-ink-3">{safetyAudit.reason}</span>
+              </div>
             </div>
-          </Field>
+          </details>
         )}
 
-        {/* Recommended units */}
-        <Field label="Recommended units">
-          {units.length > 0 ? (
+        <SectionHeading>Recommended response</SectionHeading>
+
+        {/* Dispatch recommendation */}
+        <Field label="Dispatch recommendation">
+          {dispatchPlan ? (
+            <div className="rounded-[6px] border border-rule bg-panel p-2">
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                <Chip tone={severityTone(call.severity)}>{dispatchPlan.priority_code}</Chip>
+                <Chip tone={dispatchPlan.eta_risk === 'high' ? 'critical' : dispatchPlan.eta_risk === 'medium' ? 'mild' : 'safe'}>
+                  ETA risk {dispatchPlan.eta_risk}
+                </Chip>
+                <Chip tone={dispatchPlan.operator_confirmation_required ? 'mild' : 'safe'}>
+                  {dispatchPlan.operator_confirmation_required ? 'Confirm before dispatch' : 'Auto-ready'}
+                </Chip>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {dispatchPlan.units.map((unit) => (
+                  <div key={`${unit.service}-${unit.unit}`} className="rounded-[4px] border border-rule bg-ground px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-ink">{unit.unit}</span>
+                      <span className="label">{unit.service}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-3">{unit.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : units.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {units.map((unit) => (
                 <Chip key={unit} tone="accent">
@@ -782,16 +990,25 @@ function IncidentDetail({
           )}
         </Field>
 
-        {/* Distress meter */}
-        <div className="rounded-[6px] border border-rule bg-panel p-3">
-          <DistressMeter level={distressOf(call)} />
-          {distressOf(call) == null && (
-            <p className="mt-1.5 text-2xs text-ink-4">
-              No prosody captured. Distress appears for calls taken through the live 112 Pulse voice
-              station.
-            </p>
+        {/* Response assurance: grounds generic service advice in the live fleet. */}
+        <Field label="Response assurance">
+          <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
+        </Field>
+
+        <SectionHeading>Operator actions</SectionHeading>
+
+        {/* Missing info assistant */}
+        <Field label="Operator next questions">
+          {operatorQuestions.length > 0 ? (
+            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-ink-2">
+              {operatorQuestions.map((question) => (
+                <li key={question}>{question}</li>
+              ))}
+            </ol>
+          ) : (
+            <span className="text-sm text-ink-3">No blocking questions identified.</span>
           )}
-        </div>
+        </Field>
 
         {/* Primary action → incident timeline (Task 13 overlay) */}
         <button
@@ -804,6 +1021,14 @@ function IncidentDetail({
         </button>
       </div>
     </div>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="border-b border-rule pb-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">
+      {children}
+    </h3>
   );
 }
 

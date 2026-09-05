@@ -30,6 +30,16 @@ import { cn } from '@/lib/utils';
 import { Symbol } from '@/components/ui/symbol';
 import { Panel, DataRow, Chip, Meter, type ChipTone } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
+import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
+import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
+import {
+  findFusionSuggestions,
+  fusionDecisionFor,
+  linkedPrimaryFor,
+  readFusionDecisions,
+  type FusionDecision,
+  type FusionSuggestion,
+} from '@/lib/incident-fusion';
 import {
   severityTone,
   priorityCode,
@@ -87,13 +97,24 @@ export default function CallDetailPage({ params }: PageProps) {
   const [call, setCall] = useState<EmergencyCall | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [timeline, setTimeline] = useState<TimelineState | null>(null);
+  const [fusion, setFusion] = useState<FusionSuggestion>();
+  const [fusionDecision, setFusionDecision] = useState<FusionDecision>();
+  const [linkedPrimaryCallId, setLinkedPrimaryCallId] = useState<string | null>(null);
 
   useEffect(() => {
     let found: EmergencyCall | undefined;
     try {
       const stored = localStorage.getItem('kwik_emergency_calls');
       const all = stored ? JSON.parse(stored) : [];
-      found = [...(Array.isArray(all) ? all : []), ...mockCalls].find((c) => c?.id === callId);
+      const combined = [...(Array.isArray(all) ? all : []), ...mockCalls];
+      found = combined.find((c) => c?.id === callId);
+      const suggestion = findFusionSuggestions(combined).find((candidate) =>
+        [candidate.primary_call_id, ...candidate.related_call_ids].includes(callId),
+      );
+      const decisions = readFusionDecisions();
+      setFusion(suggestion);
+      setFusionDecision(fusionDecisionFor(callId, decisions, suggestion?.key));
+      setLinkedPrimaryCallId(linkedPrimaryFor(callId, decisions));
     } catch (e) {
       console.error(e);
       found = mockCalls.find((c) => c.id === callId);
@@ -256,6 +277,20 @@ export default function CallDetailPage({ params }: PageProps) {
             </div>
           </Panel>
 
+          <Panel title="Response assurance">
+            <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
+          </Panel>
+
+          {(fusion || fusionDecision) && (
+            <Panel title="Multi-caller fusion">
+              <IncidentFusionPanel
+                callId={call.id}
+                suggestion={fusion}
+                decision={fusionDecision}
+              />
+            </Panel>
+          )}
+
           <Panel
             title="Full transcript"
             action={<span className="tnum text-2xs text-ink-4">{segments.length} segments</span>}
@@ -351,6 +386,18 @@ export default function CallDetailPage({ params }: PageProps) {
                   >
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-ink">{point}</span>
+                      {record?.proposal && (
+                        <>
+                          <span className="mt-0.5 text-xs text-ink-2">
+                            {record.proposal.heading}
+                          </span>
+                          {record.proposal.items.map((item) => (
+                            <span key={item} className="tnum mt-0.5 text-2xs text-ink-3">
+                              {item}
+                            </span>
+                          ))}
+                        </>
+                      )}
                       {record?.note && (
                         <span className="mt-0.5 break-words text-xs text-ink-3">{record.note}</span>
                       )}

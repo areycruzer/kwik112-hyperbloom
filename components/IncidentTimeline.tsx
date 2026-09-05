@@ -25,11 +25,16 @@ import { Chip, type ChipTone } from '@/components/ui/panel';
 import { Symbol } from '@/components/ui/symbol';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { recommendedUnits } from '@/lib/incident';
+import { assessDispatch } from '@/lib/dispatch-assurance';
+import { TACTICAL_UNITS } from '@/lib/units';
+import { releaseUnits, reserveUnits } from '@/lib/dispatch-reservations';
+import { useReservedFleet } from '@/lib/useReservedFleet';
 import { useDialogFocus } from '@/lib/useDialogFocus';
 import {
   DECISION_POINTS,
   type DecisionPoint,
   type DecisionRecord,
+  type DecisionProposalSnapshot,
   type TimelineState,
   readTimeline,
   writeTimeline,
@@ -44,15 +49,12 @@ interface IncidentTimelineProps {
   open: boolean;
   onClose: () => void;
   call: EmergencyCall | null;
+  linkedPrimaryCallId?: string | null;
 }
 
 type DecisionAction = 'confirmed' | 'amended' | 'overridden';
 
-interface Proposal {
-  heading: string;
-  body: string;
-  items: string[];
-}
+type Proposal = DecisionProposalSnapshot;
 
 const POINT_LABELS: Record<DecisionPoint, string> = {
   INTAKE: 'Intake',
@@ -83,7 +85,12 @@ const ACTION_LABEL: Record<DecisionAction, string> = {
  * hardcoded to a service: a utility incident yields its own summary, units, and
  * threats, never fire/EMS boilerplate.
  */
-function proposalFor(point: DecisionPoint, call: EmergencyCall): Proposal {
+function proposalFor(
+  point: DecisionPoint,
+  call: EmergencyCall,
+  fleet = TACTICAL_UNITS,
+  linkedPrimaryCallId?: string | null,
+): Proposal {
   const summary =
     call.ai_summary || call.chief_complaint || 'No AI summary captured for this incident.';
 
@@ -98,15 +105,43 @@ function proposalFor(point: DecisionPoint, call: EmergencyCall): Proposal {
       };
     }
     case 'DISPATCH': {
-      const units = recommendedUnits(call);
+      if (linkedPrimaryCallId) {
+        return {
+          heading: `Use shared response from #${linkedPrimaryCallId}`,
+          body: 'Operator-linked duplicate call. Separate unit dispatch is blocked to prevent double allocation.',
+          items: [`Primary incident #${linkedPrimaryCallId}`],
+        };
+      }
+      const assurance = assessDispatch(call, fleet);
+      const units = assurance.assignments.map(
+        (assignment) =>
+          `${assignment.callsign} (${assignment.unit_id}) · ETA ${assignment.eta_minutes} min · ${assignment.status === 'on_target' ? 'ON TARGET' : 'AT RISK'}`,
+      );
+      const fallbackUnits = recommendedUnits(call);
+
+      if (!assurance.dispatch_ready) {
+        return {
+          heading:
+            assurance.status === 'location_required'
+              ? 'Verify location before dispatch'
+              : assurance.status === 'plan_required'
+                ? 'Create a service-level dispatch plan'
+                : 'Escalate uncovered services before dispatch',
+          body: assurance.reason,
+          items: units.length > 0 ? units : fallbackUnits,
+        };
+      }
+
       return {
         heading: units.length
-          ? 'Dispatch the recommended units'
+          ? assurance.status === 'at_risk'
+            ? `Response target at risk · dispatch or escalate now`
+            : `Dispatch within configured ${assurance.target_minutes}-minute target`
           : 'No recommended units on file',
         body: units.length
-          ? 'The units below were recommended for this incident. Confirm, amend the roster, or override.'
+          ? assurance.reason
           : 'No unit recommendation was produced for this incident. Dispatch on operator judgment, then record the decision.',
-        items: units,
+        items: units.length > 0 ? units : fallbackUnits,
       };
     }
     case 'RESOLUTION': {
@@ -122,12 +157,18 @@ function proposalFor(point: DecisionPoint, call: EmergencyCall): Proposal {
   }
 }
 
-export default function IncidentTimeline({ open, onClose, call }: IncidentTimelineProps) {
+export default function IncidentTimeline({
+  open,
+  onClose,
+  call,
+  linkedPrimaryCallId,
+}: IncidentTimelineProps) {
   const callId = call?.id ?? null;
 
   const [timeline, setTimeline] = useState<TimelineState>(() => emptyTimeline(callId ?? ''));
   const [action, setAction] = useState<DecisionAction>('confirmed');
   const [note, setNote] = useState('');
+  const [reservationError, setReservationError] = useState('');
 
   // Initial focus, Tab trap, Escape-to-close, and focus restore — from the one
   // shared hook the voice station also uses, so the two dialogs cannot diverge.
@@ -143,6 +184,7 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     setTimeline(readTimeline(callId));
     setAction('confirmed');
     setNote('');
+    setReservationError('');
   }, [callId, open]);
 
   const pending = useMemo(() => currentPoint(timeline), [timeline]);
@@ -154,22 +196,51 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
   }, [timeline]);
 
   const overrideMissingNote = action === 'overridden' && note.trim() === '';
+  const operationalFleet = useReservedFleet(TACTICAL_UNITS, call?.id ?? '');
+  const dispatchAssurance = useMemo(
+    () => (call ? assessDispatch(call, operationalFleet) : null),
+    [call, operationalFleet],
+  );
+  const duplicateDispatchBlocked = pending === 'DISPATCH' && Boolean(linkedPrimaryCallId);
+  const dispatchBlocked =
+    pending === 'DISPATCH' && dispatchAssurance?.dispatch_ready === false;
+  const blockedConfirmation = duplicateDispatchBlocked || (dispatchBlocked && action !== 'overridden');
 
-  const submit = useCallback(() => {
-    if (!pending) return;
+  const submit = useCallback(async () => {
+    if (!pending || !call || blockedConfirmation) return;
     const trimmed = note.trim();
+    const proposal = proposalFor(pending, call, operationalFleet, linkedPrimaryCallId);
+
+    if (pending === 'DISPATCH' && action !== 'overridden') {
+      const reservation = await reserveUnits(
+        call.id,
+        dispatchAssurance?.assignments.map((assignment) => assignment.unit_id) ?? [],
+      );
+      if (!reservation.ok) {
+        setReservationError(
+          `Unit reservation changed. Recheck: ${reservation.conflicts.join(', ')}.`,
+        );
+        return;
+      }
+    }
+
+    if (pending === 'RESOLUTION' && action !== 'overridden') {
+      await releaseUnits(call.id);
+    }
+
     let record: DecisionRecord;
     if (action === 'overridden') {
       // Guarded by the disabled submit, but never build the record without a
       // note: `recordDecision` throws otherwise.
       if (trimmed === '') return;
-      record = { point: pending, action: 'overridden', at: new Date().toISOString(), note: trimmed };
+      record = { point: pending, action: 'overridden', at: new Date().toISOString(), note: trimmed, proposal };
     } else {
       record = {
         point: pending,
         action,
         at: new Date().toISOString(),
         ...(trimmed ? { note: trimmed } : {}),
+        proposal,
       };
     }
     const next = recordDecision(timeline, record);
@@ -177,7 +248,8 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     setTimeline(next);
     setAction('confirmed');
     setNote('');
-  }, [action, note, pending, timeline]);
+    setReservationError('');
+  }, [action, blockedConfirmation, call, dispatchAssurance, linkedPrimaryCallId, note, operationalFleet, pending, timeline]);
 
   if (!open || !call) return null;
 
@@ -242,8 +314,8 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
         {/* Decision points */}
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {DECISION_POINTS.map((point) => {
-            const proposal = proposalFor(point, call);
             const record = decidedByPoint.get(point);
+            const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet, linkedPrimaryCallId);
             const isCurrent = point === pending;
             const isDecided = Boolean(record);
             const isUpcoming = !isDecided && !isCurrent;
@@ -366,13 +438,29 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
                       </p>
                     )}
 
+                    {blockedConfirmation && (
+                      <p className="flex items-center gap-1.5 text-xs text-critical-bright" role="alert">
+                        <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                        {duplicateDispatchBlocked
+                          ? `Separate dispatch is blocked because this call shares response with #${linkedPrimaryCallId}.`
+                          : 'Dispatch confirmation is blocked. Resolve the assurance issue, or choose Override and document why.'}
+                      </p>
+                    )}
+
+                    {reservationError && (
+                      <p className="flex items-center gap-1.5 text-xs text-critical-bright" role="alert">
+                        <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                        {reservationError}
+                      </p>
+                    )}
+
                     <button
                       type="button"
                       onClick={submit}
-                      disabled={overrideMissingNote}
+                      disabled={overrideMissingNote || blockedConfirmation}
                       className={
                         'w-full rounded-[4px] border px-3 py-2 text-sm font-semibold transition-colors ' +
-                        (overrideMissingNote
+                        (overrideMissingNote || blockedConfirmation
                           ? 'cursor-not-allowed border-rule bg-panel text-ink-4'
                           : 'border-accent bg-accent/15 text-accent hover:bg-accent/25')
                       }

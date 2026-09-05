@@ -155,6 +155,7 @@ try {
     { width: 1536, height: 900 },
     { width: 1280, height: 800 },
     { width: 768, height: 900 },
+    { width: 390, height: 844 },
   ]) {
     const result = await inspectViewport(viewport.width, viewport.height);
     if (result.error) throw new Error(result.error);

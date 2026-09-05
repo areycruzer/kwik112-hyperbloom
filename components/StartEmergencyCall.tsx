@@ -34,9 +34,12 @@ import { Chip, Meter } from '@/components/ui/panel';
 import { distressColor } from '@/lib/design/symbols';
 import { useDialogFocus } from '@/lib/useDialogFocus';
 import { cn } from '@/lib/utils';
+import { HINGLISH_DEMO_LINES } from '@/lib/demo';
 
 interface StartEmergencyCallProps {
   onCallCreated?: (callId: string) => void;
+  launchSignal?: number;
+  initialScriptId?: string;
 }
 
 interface TranscriptLine {
@@ -54,11 +57,18 @@ interface TranscriptLine {
  * `prosody_source: 'simulated'`, never passed off as a live measurement.
  */
 interface ScriptLine {
+  role?: 'user' | 'assistant';
   text: string;
   emotions?: Record<string, number>;
 }
 
 const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLine[] }> = [
+  {
+    id: 'hinglish-five-minute',
+    name: '5-minute demo — Hinglish cardiac arrest',
+    phone: '+91 00000 00112',
+    lines: HINGLISH_DEMO_LINES.map((line) => ({ ...line })),
+  },
   {
     id: 'cardiac',
     name: 'Cardiac arrest — Connaught Place',
@@ -125,6 +135,28 @@ const SCRIPTS: Array<{ id: string; name: string; phone: string; lines: ScriptLin
         text: 'Nobody is hurt at all, it is just flooding the pavement.',
         emotions: { Calmness: 0.88, Neutral: 0.8 },
       },
+    ],
+  },
+  {
+    id: 'calm-cardiac',
+    name: 'Safety demo - calm cardiac arrest',
+    phone: '+91 00000 00000',
+    lines: [
+      { role: 'user', text: 'I am speaking calmly. My father has no pulse and is not breathing.',
+        emotions: { Calmness: 0.86, Neutral: 0.71 } },
+      { role: 'assistant', text: 'Tell me your exact address or nearest landmark.' },
+      { role: 'user', text: 'We are at the public entrance of Sample Metro Gate 1.',
+        emotions: { Calmness: 0.78, Anxiety: 0.18 } },
+    ],
+  },
+  {
+    id: 'missing-location',
+    name: 'Failure demo - location unknown',
+    phone: '+91 00000 00000',
+    lines: [
+      { role: 'user', text: 'There has been a serious crash. One person is unconscious. I do not know this road.',
+        emotions: { Distress: 0.72, Fear: 0.61 } },
+      { role: 'assistant', text: 'Look for a road sign, shop name, milestone, or nearby landmark.' },
     ],
   },
 ];
@@ -211,9 +243,11 @@ function publishCall(
 function CallStation({
   onClose,
   onCallCreated,
+  initialScriptId,
 }: {
   onClose: () => void;
   onCallCreated?: (callId: string) => void;
+  initialScriptId?: string;
 }) {
   const { connect, disconnect, status, messages, chatMetadata, isMuted, mute, unmute, micFft } =
     useVoice();
@@ -228,7 +262,7 @@ function CallStation({
   const [triageMethod, setTriageMethod] = useState<string>('');
   const [refining, setRefining] = useState(false);
   const [changed, setChanged] = useState<string[]>([]);
-  const [scriptId, setScriptId] = useState(SCRIPTS[0].id);
+  const [scriptId, setScriptId] = useState(initialScriptId ?? SCRIPTS[0].id);
   const [scriptedLines, setScriptedLines] = useState<TranscriptLine[]>([]);
   // Prosody frames revealed by the scripted timer, so the emotion panel animates
   // during a demo the way it does off the live socket.
@@ -245,6 +279,7 @@ function CallStation({
   const clearScriptTimers = useCallback(() => {
     scriptTimersRef.current.forEach((t) => clearTimeout(t));
     scriptTimersRef.current = [];
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
   }, []);
 
   // Belt-and-braces: clear any pending scripted timers when the station unmounts
@@ -496,7 +531,7 @@ function CallStation({
     setPhase('scripted');
 
     const built: TranscriptLine[] = script.lines.map((line) => ({
-      role: 'user',
+      role: line.role ?? 'user',
       text: line.text,
       timestamp: new Date().toISOString(),
       emotions: line.emotions,
@@ -508,6 +543,17 @@ function CallStation({
     built.forEach((line, index) => {
       const timer = setTimeout(() => {
         setScriptedLines((prev) => [...prev, line]);
+        if (
+          script.id === 'hinglish-five-minute' &&
+          typeof window !== 'undefined' &&
+          'speechSynthesis' in window
+        ) {
+          const utterance = new SpeechSynthesisUtterance(line.text);
+          utterance.lang = 'hi-IN';
+          utterance.rate = line.role === 'assistant' ? 0.92 : 1.02;
+          utterance.pitch = line.role === 'assistant' ? 0.92 : 1.08;
+          window.speechSynthesis.speak(utterance);
+        }
         if (line.emotions) {
           collectedFrames.push(line.emotions);
           setScriptedFrames((prev) => [...prev, line.emotions as Record<string, number>]);
@@ -605,9 +651,9 @@ function CallStation({
                 </button>
 
                 <div className="space-y-2 border-t border-rule pt-3">
-                  <span className="label block">Or run a scripted caller</span>
+                  <span className="label block">Or run the audible fallback</span>
                   <p className="text-xs leading-relaxed text-ink-4">
-                    No microphone needed. The script goes through the same triage pipeline as a live call.
+                    No microphone needed. Synthetic speech goes through the same triage pipeline as a live call.
                   </p>
                   <select
                     value={scriptId}
@@ -626,7 +672,7 @@ function CallStation({
                     className="flex w-full items-center justify-center gap-2 rounded-md border border-rule-strong bg-panel-raised px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-ink-2 hover:text-ink"
                   >
                     <Play className="h-3.5 w-3.5" />
-                    Run scripted call
+                    Play synthetic fallback
                   </button>
                 </div>
               </>
@@ -841,22 +887,37 @@ function CallStation({
   );
 }
 
-export default function StartEmergencyCall({ onCallCreated }: StartEmergencyCallProps) {
+export default function StartEmergencyCall({
+  onCallCreated,
+  launchSignal = 0,
+  initialScriptId,
+}: StartEmergencyCallProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (launchSignal > 0) setIsOpen(true);
+  }, [launchSignal]);
 
   return (
     <>
       <button
+        type="button"
+        aria-label="Start 112 voice call"
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 rounded-md bg-critical px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-ink transition-transform hover:scale-105 hover:bg-critical-bright"
+        className="flex shrink-0 items-center gap-1.5 rounded-md bg-critical px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-ink transition-transform hover:scale-105 hover:bg-critical-bright lg:gap-2 lg:px-3.5"
       >
-        <Phone className="h-4 w-4" />
-        <span>Start 112 voice call</span>
+        <Phone className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="lg:hidden">112 call</span>
+        <span className="hidden lg:inline">Start 112 voice call</span>
       </button>
 
       {isOpen && (
         <VoiceProvider>
-          <CallStation onClose={() => setIsOpen(false)} onCallCreated={onCallCreated} />
+          <CallStation
+            onClose={() => setIsOpen(false)}
+            onCallCreated={onCallCreated}
+            initialScriptId={initialScriptId}
+          />
         </VoiceProvider>
       )}
     </>

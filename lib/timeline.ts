@@ -12,6 +12,16 @@ export type DecisionPoint = 'INTAKE' | 'DISPATCH' | 'RESOLUTION';
 
 export const DECISION_POINTS: readonly DecisionPoint[] = ['INTAKE', 'DISPATCH', 'RESOLUTION'];
 
+export interface DecisionProposalSnapshot {
+  heading: string;
+  body: string;
+  items: string[];
+}
+
+type DecisionContext = {
+  proposal?: DecisionProposalSnapshot;
+};
+
 /**
  * An override REQUIRES a justification note; confirm/amend may omit it. Modeled
  * as a discriminated union so the compiler forbids an override without a note at
@@ -19,8 +29,8 @@ export const DECISION_POINTS: readonly DecisionPoint[] = ['INTAKE', 'DISPATCH', 
  * (data parsed from localStorage, untyped callers).
  */
 export type DecisionRecord =
-  | { point: DecisionPoint; action: 'confirmed' | 'amended'; at: string; note?: string }
-  | { point: DecisionPoint; action: 'overridden'; at: string; note: string };
+  | ({ point: DecisionPoint; action: 'confirmed' | 'amended'; at: string; note?: string } & DecisionContext)
+  | ({ point: DecisionPoint; action: 'overridden'; at: string; note: string } & DecisionContext);
 
 export interface TimelineState {
   callId: string;
@@ -58,7 +68,40 @@ export function isComplete(state: TimelineState): boolean {
 
 const TIMELINE_STORAGE_KEY = 'dispatch_timeline';
 
-type TimelineMap = Record<string, DecisionRecord[]>;
+type TimelineMap = Record<string, unknown>;
+
+function validProposal(value: unknown): value is DecisionProposalSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proposal = value as Record<string, unknown>;
+  return (
+    typeof proposal.heading === 'string' &&
+    typeof proposal.body === 'string' &&
+    Array.isArray(proposal.items) &&
+    proposal.items.every((item) => typeof item === 'string')
+  );
+}
+
+function sanitizeStoredRecord(value: unknown): DecisionRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    !DECISION_POINTS.includes(record.point as DecisionPoint) ||
+    !['confirmed', 'amended', 'overridden'].includes(String(record.action)) ||
+    typeof record.at !== 'string'
+  ) {
+    return null;
+  }
+
+  const action = record.action as DecisionRecord['action'];
+  const note = typeof record.note === 'string' ? record.note : undefined;
+  if (action === 'overridden' && (!note || note.trim() === '')) return null;
+  const proposal = validProposal(record.proposal) ? record.proposal : undefined;
+  const context = proposal ? { proposal } : {};
+
+  return action === 'overridden'
+    ? { point: record.point as DecisionPoint, action, at: record.at, note: note as string, ...context }
+    : { point: record.point as DecisionPoint, action, at: record.at, ...(note ? { note } : {}), ...context };
+}
 
 function readAll(): TimelineMap {
   if (typeof window === 'undefined') return {};
@@ -78,7 +121,11 @@ function readAll(): TimelineMap {
 
 export function readTimeline(callId: string): TimelineState {
   const all = readAll();
-  return { callId, records: Array.isArray(all[callId]) ? all[callId] : [] };
+  const stored = all[callId];
+  const records = Array.isArray(stored)
+    ? stored.map(sanitizeStoredRecord).filter((record): record is DecisionRecord => record !== null)
+    : [];
+  return { callId, records };
 }
 
 export function writeTimeline(state: TimelineState): void {
