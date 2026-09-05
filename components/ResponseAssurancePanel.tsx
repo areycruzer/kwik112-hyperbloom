@@ -17,9 +17,11 @@ const STATUS_LABEL = {
 export function ResponseAssurancePanel({
   call,
   fleet = TACTICAL_UNITS,
+  linkedPrimaryCallId,
 }: {
   call: EmergencyCall;
   fleet?: readonly TacticalUnit[];
+  linkedPrimaryCallId?: string | null;
 }) {
   const operationalFleet = useReservedFleet(fleet, call.id);
   const assurance = assessDispatch(call, operationalFleet);
@@ -29,6 +31,22 @@ export function ResponseAssurancePanel({
       : assurance.status === 'at_risk'
         ? 'mild'
         : 'critical';
+
+  if (linkedPrimaryCallId) {
+    return (
+      <div className="rounded-[6px] border border-accent bg-accent/5 p-3">
+        <div className="flex flex-wrap gap-1.5">
+          <Chip tone="accent">SHARED RESPONSE</Chip>
+          <Chip tone="critical">Separate dispatch blocked</Chip>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-ink-2">
+          This caller is linked to primary incident{' '}
+          <span className="tnum font-semibold">#{linkedPrimaryCallId}</span>. Units and response
+          assurance are controlled from the primary incident to prevent duplicate dispatch.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-[6px] border border-rule bg-panel p-2">

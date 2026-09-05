@@ -44,6 +44,17 @@ import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS } from '@/lib/units';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
+import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
+import {
+  findFusionSuggestions,
+  fusionDecisionFor,
+  isSeparateDispatchTransitionBlocked,
+  linkedPrimaryFor,
+  type FusionDecision,
+  type FusionDecisionAction,
+  type FusionSuggestion,
+} from '@/lib/incident-fusion';
+import { useFusionDecisions } from '@/lib/useFusionDecisions';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentTimeline from '@/components/IncidentTimeline';
@@ -97,6 +108,7 @@ export default function DashboardPage() {
   const [ackVersion, setAckVersion] = useState(0);
 
   const [clock, setClock] = useState('');
+  const { decisions: fusionDecisions, decide: decideFusion } = useFusionDecisions();
 
   // Live clock, tabular so the digits do not jitter.
   useEffect(() => {
@@ -185,6 +197,12 @@ export default function DashboardPage() {
    *              would merge it with `mockCalls` again and double the queue.
    */
   const handleUpdateCallStatus = useCallback((callId: string, newStatus: CallStatus) => {
+    if (isSeparateDispatchTransitionBlocked(callId, newStatus, fusionDecisions)) {
+      setSelectedCallId(callId);
+      setPanelView('detail');
+      setMainView('map');
+      return;
+    }
     setCalls((prev) => {
       const target = prev.find((c) => c.id === callId);
       if (!target) return prev;
@@ -208,7 +226,7 @@ export default function DashboardPage() {
         .join('|');
       return next;
     });
-  }, []);
+  }, [fusionDecisions]);
 
   const handleSelectCallAndNavigateToMap = useCallback((callId: string) => {
     setSelectedCallId(callId);
@@ -234,6 +252,25 @@ export default function DashboardPage() {
   }, []);
 
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
+  const fusionSuggestions = useMemo(() => findFusionSuggestions(calls), [calls]);
+  const fusionByCall = useMemo(() => {
+    const index = new Map<string, FusionSuggestion>();
+    for (const suggestion of fusionSuggestions) {
+      index.set(suggestion.primary_call_id, suggestion);
+      for (const id of suggestion.related_call_ids) index.set(id, suggestion);
+    }
+    return index;
+  }, [fusionSuggestions]);
+  const selectedFusion = selectedCall ? fusionByCall.get(selectedCall.id) : undefined;
+  const selectedFusionDecision = selectedCall
+    ? fusionDecisionFor(selectedCall.id, fusionDecisions, selectedFusion?.key)
+    : undefined;
+  const selectedLinkedPrimary = selectedCall
+    ? linkedPrimaryFor(selectedCall.id, fusionDecisions)
+    : null;
+  const linkedCallCount = calls.filter(
+    (call) => linkedPrimaryFor(call.id, fusionDecisions) !== null,
+  ).length;
   const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
 
   // Stat-row figures, all computed from the live board.
@@ -289,6 +326,8 @@ export default function DashboardPage() {
             <DataRow label="High" value={highCount} mono />
             <DataRow label="Resolved" value={resolvedCount} mono />
             <DataRow label="Open alerts" value={alerts.length} mono />
+            <DataRow label="Fusion candidates" value={fusionSuggestions.length} mono />
+            <DataRow label="Duplicate dispatches blocked" value={linkedCallCount} mono />
           </div>
         ),
       },
@@ -307,6 +346,8 @@ export default function DashboardPage() {
       highCount,
       resolvedCount,
       alerts.length,
+      fusionSuggestions.length,
+      linkedCallCount,
     ],
   );
 
@@ -457,6 +498,10 @@ export default function DashboardPage() {
           {panelView === 'detail' && selectedCall ? (
             <IncidentDetail
               call={selectedCall}
+              fusion={selectedFusion}
+              fusionDecision={selectedFusionDecision}
+              linkedPrimaryCallId={selectedLinkedPrimary}
+              onFusionDecision={(action) => selectedFusion && decideFusion(selectedFusion, action)}
               onBack={() => setPanelView('queue')}
               onOpenTimeline={() => {
                 setSelectedCallId(selectedCall.id);
@@ -521,6 +566,12 @@ export default function DashboardPage() {
                       <li key={call.id}>
                         <IncidentRow
                           call={call}
+                          fusion={fusionByCall.get(call.id)}
+                          fusionDecision={fusionDecisionFor(
+                            call.id,
+                            fusionDecisions,
+                            fusionByCall.get(call.id)?.key,
+                          )}
                           selected={selectedCall?.id === call.id}
                           onSelect={() => selectCall(call.id)}
                         />
@@ -584,6 +635,7 @@ export default function DashboardPage() {
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
         call={selectedCall ?? null}
+        linkedPrimaryCallId={selectedLinkedPrimary}
       />
     </div>
   );
@@ -645,10 +697,14 @@ function EvidenceMetric({
 
 function IncidentRow({
   call,
+  fusion,
+  fusionDecision,
   selected,
   onSelect,
 }: {
   call: EmergencyCall;
+  fusion?: FusionSuggestion;
+  fusionDecision?: FusionDecision;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -700,6 +756,13 @@ function IncidentRow({
         <DistressMeter level={distressOf(call)} compact />
         <div className="flex items-center gap-1.5">
           {awaitingRefinement(call) && <Chip tone="mild">Refining</Chip>}
+          {(fusion || fusionDecision) && (
+            <Chip tone={fusionDecision?.action === 'linked' ? 'safe' : 'accent'}>
+              {fusionDecision?.action === 'linked'
+                ? 'Calls linked'
+                : `${(fusion?.related_call_ids.length ?? fusionDecision?.related_call_ids.length ?? 0) + 1}-caller match`}
+            </Chip>
+          )}
           <span className="text-2xs uppercase tracking-wide text-ink-4">{triageSource(call)}</span>
           {/* Genuine detail affordance — navigates to the full incident dossier. */}
           <Link
@@ -720,10 +783,18 @@ function IncidentRow({
 
 function IncidentDetail({
   call,
+  fusion,
+  fusionDecision,
+  linkedPrimaryCallId,
+  onFusionDecision,
   onBack,
   onOpenTimeline,
 }: {
   call: EmergencyCall;
+  fusion?: FusionSuggestion;
+  fusionDecision?: FusionDecision;
+  linkedPrimaryCallId?: string | null;
+  onFusionDecision: (action: FusionDecisionAction) => void;
   onBack: () => void;
   onOpenTimeline: () => void;
 }) {
@@ -757,6 +828,12 @@ function IncidentDetail({
       </div>
 
       <div className="flex flex-col gap-4 p-3.5">
+        <IncidentFusionPanel
+          callId={call.id}
+          suggestion={fusion}
+          decision={fusionDecision}
+          onDecision={onFusionDecision}
+        />
         {/* Header: symbol, subtype, priority */}
         <div className="flex items-start gap-3">
           <Symbol
@@ -890,7 +967,7 @@ function IncidentDetail({
 
         {/* Response assurance: grounds generic service advice in the live fleet. */}
         <Field label="Response assurance">
-          <ResponseAssurancePanel call={call} />
+          <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
         </Field>
 
         {/* Missing info assistant */}

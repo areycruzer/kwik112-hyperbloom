@@ -49,6 +49,7 @@ interface IncidentTimelineProps {
   open: boolean;
   onClose: () => void;
   call: EmergencyCall | null;
+  linkedPrimaryCallId?: string | null;
 }
 
 type DecisionAction = 'confirmed' | 'amended' | 'overridden';
@@ -88,6 +89,7 @@ function proposalFor(
   point: DecisionPoint,
   call: EmergencyCall,
   fleet = TACTICAL_UNITS,
+  linkedPrimaryCallId?: string | null,
 ): Proposal {
   const summary =
     call.ai_summary || call.chief_complaint || 'No AI summary captured for this incident.';
@@ -103,6 +105,13 @@ function proposalFor(
       };
     }
     case 'DISPATCH': {
+      if (linkedPrimaryCallId) {
+        return {
+          heading: `Use shared response from #${linkedPrimaryCallId}`,
+          body: 'Operator-linked duplicate call. Separate unit dispatch is blocked to prevent double allocation.',
+          items: [`Primary incident #${linkedPrimaryCallId}`],
+        };
+      }
       const assurance = assessDispatch(call, fleet);
       const units = assurance.assignments.map(
         (assignment) =>
@@ -148,7 +157,12 @@ function proposalFor(
   }
 }
 
-export default function IncidentTimeline({ open, onClose, call }: IncidentTimelineProps) {
+export default function IncidentTimeline({
+  open,
+  onClose,
+  call,
+  linkedPrimaryCallId,
+}: IncidentTimelineProps) {
   const callId = call?.id ?? null;
 
   const [timeline, setTimeline] = useState<TimelineState>(() => emptyTimeline(callId ?? ''));
@@ -187,14 +201,15 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     () => (call ? assessDispatch(call, operationalFleet) : null),
     [call, operationalFleet],
   );
+  const duplicateDispatchBlocked = pending === 'DISPATCH' && Boolean(linkedPrimaryCallId);
   const dispatchBlocked =
     pending === 'DISPATCH' && dispatchAssurance?.dispatch_ready === false;
-  const blockedConfirmation = dispatchBlocked && action !== 'overridden';
+  const blockedConfirmation = duplicateDispatchBlocked || (dispatchBlocked && action !== 'overridden');
 
   const submit = useCallback(async () => {
     if (!pending || !call || blockedConfirmation) return;
     const trimmed = note.trim();
-    const proposal = proposalFor(pending, call, operationalFleet);
+    const proposal = proposalFor(pending, call, operationalFleet, linkedPrimaryCallId);
 
     if (pending === 'DISPATCH' && action !== 'overridden') {
       const reservation = await reserveUnits(
@@ -234,7 +249,7 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
     setAction('confirmed');
     setNote('');
     setReservationError('');
-  }, [action, blockedConfirmation, call, dispatchAssurance, note, operationalFleet, pending, timeline]);
+  }, [action, blockedConfirmation, call, dispatchAssurance, linkedPrimaryCallId, note, operationalFleet, pending, timeline]);
 
   if (!open || !call) return null;
 
@@ -300,7 +315,7 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {DECISION_POINTS.map((point) => {
             const record = decidedByPoint.get(point);
-            const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet);
+            const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet, linkedPrimaryCallId);
             const isCurrent = point === pending;
             const isDecided = Boolean(record);
             const isUpcoming = !isDecided && !isCurrent;
@@ -426,7 +441,9 @@ export default function IncidentTimeline({ open, onClose, call }: IncidentTimeli
                     {blockedConfirmation && (
                       <p className="flex items-center gap-1.5 text-xs text-critical-bright" role="alert">
                         <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-                        Dispatch confirmation is blocked. Resolve the assurance issue, or choose Override and document why.
+                        {duplicateDispatchBlocked
+                          ? `Separate dispatch is blocked because this call shares response with #${linkedPrimaryCallId}.`
+                          : 'Dispatch confirmation is blocked. Resolve the assurance issue, or choose Override and document why.'}
                       </p>
                     )}
 
