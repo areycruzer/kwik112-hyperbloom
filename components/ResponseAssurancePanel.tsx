@@ -1,0 +1,81 @@
+'use client';
+
+import type { EmergencyCall } from '@/lib/types';
+import { assessDispatch } from '@/lib/dispatch-assurance';
+import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
+import { useReservedFleet } from '@/lib/useReservedFleet';
+import { Chip, type ChipTone } from '@/components/ui/panel';
+
+const STATUS_LABEL = {
+  on_target: 'ON TARGET',
+  at_risk: 'AT RISK',
+  no_coverage: 'NO COVERAGE',
+  location_required: 'LOCATION REQUIRED',
+  plan_required: 'PLAN REQUIRED',
+} as const;
+
+export function ResponseAssurancePanel({
+  call,
+  fleet = TACTICAL_UNITS,
+}: {
+  call: EmergencyCall;
+  fleet?: readonly TacticalUnit[];
+}) {
+  const operationalFleet = useReservedFleet(fleet, call.id);
+  const assurance = assessDispatch(call, operationalFleet);
+  const statusTone: ChipTone =
+    assurance.status === 'on_target'
+      ? 'safe'
+      : assurance.status === 'at_risk'
+        ? 'mild'
+        : 'critical';
+
+  return (
+    <div className="rounded-[6px] border border-rule bg-panel p-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Chip tone={statusTone}>{STATUS_LABEL[assurance.status]}</Chip>
+        <Chip tone="accent">
+          {assurance.priority_code} · configured {assurance.target_minutes} min target
+        </Chip>
+        <Chip tone={assurance.dispatch_ready ? 'safe' : 'critical'}>
+          {assurance.dispatch_ready ? 'Dispatch ready' : 'Dispatch blocked'}
+        </Chip>
+      </div>
+
+      <p className="mt-2 text-xs leading-relaxed text-ink-3">{assurance.reason}</p>
+
+      {assurance.assignments.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {assurance.assignments.map((assignment) => (
+            <div
+              key={`${assignment.requested_service}-${assignment.unit_id}`}
+              className="rounded-[4px] border border-rule bg-ground px-2 py-1.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-ink">
+                  {assignment.callsign}
+                  <span className="tnum ml-1.5 text-2xs font-normal text-ink-4">
+                    {assignment.unit_id}
+                  </span>
+                </span>
+                <Chip tone={assignment.status === 'on_target' ? 'safe' : 'mild'}>
+                  ETA {assignment.eta_minutes} min
+                </Chip>
+              </div>
+              <p className="mt-1 text-xs text-ink-3">
+                {assignment.requested_service} · {assignment.distance_km.toFixed(1)} km ·{' '}
+                {assignment.rationale}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {assurance.uncovered_services.length > 0 && (
+        <p className="mt-2 text-xs font-medium text-critical-bright">
+          Mutual aid required: {assurance.uncovered_services.join(', ')}
+        </p>
+      )}
+    </div>
+  );
+}

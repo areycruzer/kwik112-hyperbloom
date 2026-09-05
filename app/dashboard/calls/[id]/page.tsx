@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { Symbol } from '@/components/ui/symbol';
 import { Panel, DataRow, Chip, Meter, type ChipTone } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
+import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
 import {
   severityTone,
   priorityCode,
@@ -256,6 +257,10 @@ export default function CallDetailPage({ params }: PageProps) {
             </div>
           </Panel>
 
+          <Panel title="Response assurance">
+            <ResponseAssurancePanel call={call} />
+          </Panel>
+
           <Panel
             title="Full transcript"
             action={<span className="tnum text-2xs text-ink-4">{segments.length} segments</span>}
@@ -351,6 +356,18 @@ export default function CallDetailPage({ params }: PageProps) {
                   >
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-ink">{point}</span>
+                      {record?.proposal && (
+                        <>
+                          <span className="mt-0.5 text-xs text-ink-2">
+                            {record.proposal.heading}
+                          </span>
+                          {record.proposal.items.map((item) => (
+                            <span key={item} className="tnum mt-0.5 text-2xs text-ink-3">
+                              {item}
+                            </span>
+                          ))}
+                        </>
+                      )}
                       {record?.note && (
                         <span className="mt-0.5 break-words text-xs text-ink-3">{record.note}</span>
                       )}

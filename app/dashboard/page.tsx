@@ -42,6 +42,8 @@ import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
 import { ModuleBoard } from '@/components/ModuleBoard';
 import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS } from '@/lib/units';
+import { useReservedFleet } from '@/lib/useReservedFleet';
+import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentTimeline from '@/components/IncidentTimeline';
@@ -232,6 +234,7 @@ export default function DashboardPage() {
   }, []);
 
   const selectedCall = calls.find((c) => c.id === selectedCallId) || calls[0];
+  const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
 
   // Stat-row figures, all computed from the live board.
   const totalCount = calls.length;
@@ -270,7 +273,7 @@ export default function DashboardPage() {
         title: 'Unit Roster',
         node: (
           <UnitRoster
-            units={TACTICAL_UNITS}
+            units={operationalUnits}
             selectedCall={selectedCall ?? null}
             selectedUnitId={selectedUnitId}
             onSelectUnit={handleSelectUnit}
@@ -296,6 +299,7 @@ export default function DashboardPage() {
     }),
     [
       selectedCall,
+      operationalUnits,
       selectedUnitId,
       handleSelectUnit,
       totalCount,
@@ -548,6 +552,7 @@ export default function DashboardPage() {
             <>
               <EmergencyMap
                 calls={calls}
+                units={operationalUnits}
                 selectedCallId={selectedCall?.id || null}
                 onMarkerClick={handleMarkerClick}
                 onDispatchUnit={handleDispatchUnit}
@@ -881,6 +886,11 @@ function IncidentDetail({
           ) : (
             <span className="text-sm text-ink-3">No units recommended yet.</span>
           )}
+        </Field>
+
+        {/* Response assurance: grounds generic service advice in the live fleet. */}
+        <Field label="Response assurance">
+          <ResponseAssurancePanel call={call} />
         </Field>
 
         {/* Missing info assistant */}
