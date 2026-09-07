@@ -18,6 +18,9 @@ const ESCALATIONS = [
   { re: /\b(not breathing|drowning|choking|overdose|saans nahi)\b|सांस नहीं/i,
     score: 93, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Airway/breathing compromise',
     type: 'medical_emergency', subtype: 'respiratory emergency' },
+  { re: /\bheat\s*stroke\b/i,
+    score: 72, specificity: 2, label: 'MEDICAL_EMERGENCY', threat: 'Reported heatstroke',
+    type: 'medical_emergency', subtype: 'heat-related illness' },
   { re: /\b(bleeding out|severe bleeding|gunshot|stab(bed|bing)?|stab wound)\b/i,
     score: 92, specificity: 2, label: 'TRAUMA_EMERGENCY', threat: 'Severe bleeding',
     type: 'medical_emergency', subtype: 'major trauma' },
@@ -66,6 +69,7 @@ export function priorityFromSeverity(severity: Severity): 'P1' | 'P2' | 'P3' | '
 
 function cleanSpokenLocation(value: string): string | undefined {
   const cleaned = value
+    .replace(/^(?:caller\s+is|i\s+am|i'm|main|mai|mein|hum|ham)\s+/iu, '')
     .replace(/[।.!?].*$/u, '')
     .replace(/\b(par hain|par hai|mein hain|mein hai|hai|hain|here)\b.*$/iu, '')
     .replace(/\b(with|and|aur|or)\b.*$/iu, '')
@@ -78,10 +82,12 @@ function extractSpokenLocation(transcript: string): string | undefined {
   const patterns = [
     /\b(?:main|hum|ham)\s+([^.!?\n]+?)\s+ke\s+(?:saamne|samne|bahar|baahar|peeche)\s+(?:hoon|hun|hain|hai)\b/iu,
     /(?:मैं|हम)\s+([^।.!?\n]+?)\s+के\s+(?:सामने|बाहर|पीछे)\s+(?:हूँ|हूं|हैं|है)/u,
+    /\b(?:opposite|opp\.?)\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /(?:^|[.!?]\s*)((?:gate|pillar|sector|gali)\s+[^.!?\n]+?)(?=\s+(?:par|mein|me|(?:ke|k)\s+(?:paas|pass))\b|[.!?\n]|$)/iu,
     /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
-    /\b(?:accident|crash|fire|aag|incident)\s+([^,.!?\n]+?)\s+ke\s+paas\b/iu,
-    /(?:^|[,;]\s*)([^,.!?\n]+?)\s+ke\s+paas\b/iu,
+    /\b(?:accident|crash|fire|aag|incident)\s+([^,.!?\n]+?)\s+(?:ke|k)\s+(?:paas|pass)\b/iu,
+    /(?:^|[,;]\s*)([^,.!?\n]+?)\s+(?:ke|k)\s+(?:paas|pass)\b/iu,
     /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
     /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
     /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,

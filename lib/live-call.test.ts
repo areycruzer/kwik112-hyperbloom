@@ -85,3 +85,24 @@ test('does not let dispatcher words create a false caller grade', () => {
   assert.equal(payload.grade?.incidentType, 'public_safety');
   assert.equal(payload.grade?.severity, 'low');
 });
+
+test('applies the local medical floor to a tourist reporting heat stroke', () => {
+  const payload = buildLiveCallPayload({
+    state: 'update',
+    callId: 'call-john',
+    transcript: [
+      {
+        role: 'user',
+        text: 'My friend has heat stroke, is confused, vomiting, and can barely stand at India Gate.',
+        timestamp: '2026-09-07T10:00:01.000Z',
+      },
+    ],
+    detectedLanguage: 'en',
+    prosodySource: 'simulated',
+    at: '2026-09-07T10:00:02.000Z',
+  });
+
+  assert.equal(payload.grade?.incidentType, 'medical_emergency');
+  assert.equal(payload.grade?.severity, 'high');
+  assert.equal(payload.grade?.priorityCode, 'P2');
+});

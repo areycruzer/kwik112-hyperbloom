@@ -25,14 +25,25 @@ test('judge caller presets are directly playable by the scripted voice station',
   }
 });
 
-test('presets preserve the approved cardiac, fire, and collision scenarios', () => {
+test('presets preserve the approved caller-to-scenario mapping', () => {
   const ramesh = judgeCallerPreset('ramesh');
   const john = judgeCallerPreset('john');
   const sharma = judgeCallerPreset('sharma-ji');
+  const rameshText = ramesh.lines.map((line) => line.text).join(' ');
+  const johnText = john.lines.map((line) => line.text).join(' ');
+  const sharmaText = sharma.lines.map((line) => line.text).join(' ');
 
-  assert.match(ramesh.lines.map((line) => line.text).join(' '), /papa.*respond nahi.*saans.*Sample Metro Gate 1/i);
-  assert.match(john.lines.map((line) => line.text).join(' '), /fire|smoke/i);
-  assert.match(john.lines.map((line) => line.text).join(' '), /Nehru Place/i);
-  assert.match(sharma.lines.map((line) => line.text).join(' '), /accident|takkar/i);
-  assert.match(sharma.lines.map((line) => line.text).join(' '), /Pitampura/i);
+  assert.equal(ramesh.incidentType, 'accident');
+  assert.match(rameshText, /roadside|road.*accident|accident.*road/i);
+  assert.match(rameshText, /ke paas|k paas|ke pass/i);
+
+  assert.equal(john.incidentType, 'medical_emergency');
+  assert.match(johnText, /tourist/i);
+  assert.match(johnText, /heat ?stroke/i);
+  assert.doesNotMatch(johnText, /[^\x00-\x7F]/);
+
+  assert.equal(sharma.incidentType, 'medical_emergency');
+  assert.match(sharmaText, /नब्ज|सांस|बेहोश/);
+  assert.match(sharmaText, /नमूना मेट्रो गेट 1/);
+  assert.doesNotMatch(sharmaText, /[A-Za-z]/);
 });
