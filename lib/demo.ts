@@ -98,7 +98,7 @@ export function demoAuditRows(
       label: 'Incident',
       value: `#${call.id} · ${call.incident_subtype || call.incident_type || 'unclassified'} · ${(call.severity || 'ungraded').toUpperCase()}`,
     },
-    { label: 'Transcript', value: synthetic ? 'Synthetic fallback audio' : 'Live Hume EVI transcript' },
+    { label: 'Call path', value: synthetic ? 'Scripted caller · browser speech' : 'Live Hume EVI voice call' },
     {
       label: 'Prosody',
       value: synthetic ? 'Simulated — not a measured signal' : 'Measured by Hume EVI',

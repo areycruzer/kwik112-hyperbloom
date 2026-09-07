@@ -146,7 +146,43 @@ async function inspectViewport(width, height) {
     })()`,
   });
 
-  return evaluation.result.value;
+  const liveCallEvaluation = await send('Runtime.evaluate', {
+    returnByValue: true,
+    awaitPromise: true,
+    expression: `(async () => {
+      window.dispatchEvent(new CustomEvent('kwik-live-call', { detail: {
+        version: 1,
+        state: 'update',
+        callId: 'layout-check',
+        at: new Date().toISOString(),
+        transcript: [
+          { role: 'assistant', text: 'What is your exact location?', timestamp: new Date().toISOString() },
+          { role: 'user', text: 'Sample Metro Gate 1, public entrance.', timestamp: new Date().toISOString() },
+        ],
+        detectedLanguage: 'hi',
+        prosodySource: 'simulated',
+        grade: {
+          incidentType: 'medical_emergency', incidentSubtype: 'cardiac event',
+          severity: 'critical', severityScore: 100, priorityCode: 'P1',
+          location: { address: 'Sample Metro Gate 1' }, summary: 'Caller reports no pulse.',
+          method: 'keyword',
+        },
+      }}));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const strip = document.querySelector('[aria-label="Live 112 call"]');
+      const body = strip?.nextElementSibling;
+      if (!strip || !body) return { error: 'Live call strip landmarks are missing' };
+      const stripRect = strip.getBoundingClientRect();
+      const bodyRect = body.getBoundingClientRect();
+      return {
+        stripOverflow: strip.scrollWidth > strip.clientWidth + 1,
+        stripWidth: Math.round(stripRect.width),
+        bodyStartsAfterStrip: bodyRect.top >= stripRect.bottom - 1,
+      };
+    })()`,
+  });
+
+  return { ...evaluation.result.value, ...liveCallEvaluation.result.value };
 }
 
 try {
@@ -155,11 +191,11 @@ try {
     { width: 1536, height: 900 },
     { width: 1280, height: 800 },
     { width: 768, height: 900 },
-    { width: 390, height: 844 },
+    { width: 375, height: 844 },
   ]) {
     const result = await inspectViewport(viewport.width, viewport.height);
     if (result.error) throw new Error(result.error);
-    if (result.headerOverflow || result.secondaryOverflow || result.horizontalCollision || result.verticalClipping) {
+    if (result.headerOverflow || result.secondaryOverflow || result.horizontalCollision || result.verticalClipping || result.stripOverflow || !result.bodyStartsAfterStrip) {
       throw new Error(`${viewport.width}px layout failed: ${JSON.stringify(result)}`);
     }
     console.log(`${viewport.width}px layout passed: ${JSON.stringify(result)}`);

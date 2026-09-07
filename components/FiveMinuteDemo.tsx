@@ -130,13 +130,13 @@ export function FiveMinuteDemo({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={testSpeaker} className="flex items-center justify-center gap-1.5 rounded-[4px] border border-rule-strong px-2 py-2 text-xs text-ink-2 hover:border-accent hover:text-ink"><Headphones className="h-3.5 w-3.5" /> Test speaker</button>
-                <button type="button" onClick={onLaunchVoice} className="flex items-center justify-center gap-1.5 rounded-[4px] bg-accent px-2 py-2 text-xs font-bold text-deep hover:bg-accent-bright"><Mic className="h-3.5 w-3.5" /> Start intake</button>
+                <button type="button" onClick={onLaunchVoice} className="flex items-center justify-center gap-1.5 rounded-[4px] bg-accent px-2 py-2 text-xs font-bold text-deep hover:bg-accent-bright"><Mic className="h-3.5 w-3.5" /> Start 112 voice call</button>
               </div>
-              {hume === 'warning' && <p className="text-[10px] text-mild">Hume unavailable — choose the clearly labeled synthetic fallback in the voice station.</p>}
+              {hume === 'warning' && <p className="text-[10px] text-mild">Hume unavailable — play the clearly labeled scripted caller in the voice station.</p>}
             </div>
           )}
 
-          {step === 'live_call' && <p className="text-xs text-ink-2">Complete the live call, or play the synthetic Hinglish fallback. Ending playback publishes the same real incident workflow.</p>}
+          {step === 'live_call' && <p className="text-xs text-ink-2">Complete the voice-first 112 call, or play the scripted Hinglish caller. Either path publishes into the same dispatcher workflow.</p>}
           {step === 'ai_triage' && (
             <button type="button" onClick={onOpenWorkflow} className="w-full rounded-[4px] bg-accent px-3 py-2 text-xs font-bold text-deep">Review AI triage &amp; record intake decision</button>
           )}

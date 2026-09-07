@@ -8,8 +8,11 @@ import {
   defaultMobileIncidentOpen,
   defaultUnitPanelOpen,
   mobileNavigationInset,
+  nextLiveCallPayload,
+  presentLiveCall,
   unitRosterAccessibleLabel,
 } from './dashboard-presentation.ts';
+import type { KwikLiveCallPayload } from './live-call.ts';
 import type { EmergencyCall } from './types.ts';
 
 const calls = [
@@ -70,4 +73,82 @@ test('unit roster accessible label includes operational context', () => {
     ),
     'Medic 302, EMS unit EMS-302, Ready, 1.7 km away, speed 42 km/h',
   );
+});
+
+test('live call presentation exposes recent turns and deterministic provenance', () => {
+  const payload: KwikLiveCallPayload = {
+    version: 1,
+    state: 'update',
+    callId: 'live-112',
+    at: '2026-09-07T10:00:03.000Z',
+    transcript: [
+      { role: 'user', text: 'First caller detail', timestamp: '2026-09-07T10:00:00.000Z' },
+      { role: 'assistant', text: 'What is your location?', timestamp: '2026-09-07T10:00:01.000Z' },
+      { role: 'user', text: 'Sample Metro Gate 1', timestamp: '2026-09-07T10:00:02.000Z' },
+    ],
+    detectedLanguage: 'hi',
+    prosodySource: 'measured',
+    grade: {
+      incidentType: 'medical_emergency',
+      incidentSubtype: 'cardiac event',
+      severity: 'critical',
+      severityScore: 100,
+      priorityCode: 'P1',
+      location: { address: 'Sample Metro Gate 1' },
+      summary: 'Caller reports no pulse.',
+      method: 'keyword',
+    },
+  };
+
+  assert.deepEqual(presentLiveCall(payload, 2), {
+    turns: [
+      { speaker: 'Dispatcher', text: 'What is your location?' },
+      { speaker: 'Caller', text: 'Sample Metro Gate 1' },
+    ],
+    language: 'HI',
+    prosody: 'Measured',
+    grade: 'Current grade: CRITICAL (rules)',
+  });
+});
+
+test('live call presentation identifies a caller that has not produced a grade', () => {
+  const payload: KwikLiveCallPayload = {
+    version: 1,
+    state: 'start',
+    callId: 'live-112',
+    at: '2026-09-07T10:00:00.000Z',
+    transcript: [],
+    detectedLanguage: null,
+    prosodySource: 'absent',
+    grade: null,
+  };
+
+  assert.deepEqual(presentLiveCall(payload), {
+    turns: [],
+    language: 'Detecting',
+    prosody: 'Absent',
+    grade: 'Waiting for caller',
+  });
+});
+
+test('a late end event cannot clear a newer live call', () => {
+  const current = {
+    version: 1,
+    state: 'start',
+    callId: 'new-call',
+    at: '2026-09-07T10:00:02.000Z',
+    transcript: [],
+    detectedLanguage: null,
+    prosodySource: 'absent',
+    grade: null,
+  } satisfies KwikLiveCallPayload;
+  const staleEnd = {
+    ...current,
+    state: 'end',
+    callId: 'old-call',
+  } satisfies KwikLiveCallPayload;
+  const matchingEnd = { ...staleEnd, callId: 'new-call' } satisfies KwikLiveCallPayload;
+
+  assert.equal(nextLiveCallPayload(current, staleEnd), current);
+  assert.equal(nextLiveCallPayload(current, matchingEnd), null);
 });

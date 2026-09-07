@@ -37,14 +37,14 @@ export function IncidentFusionPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
           <GitMerge className="h-4 w-4 text-accent" aria-hidden />
-          Multi-caller incident match
+          Possible same incident — human review required
         </span>
         <Chip tone={decision?.action === 'linked' ? 'safe' : decision ? 'neutral' : 'accent'}>
           {decision
             ? decision.action === 'linked'
               ? 'Linked by operator'
               : 'Kept separate'
-            : `${Math.round(confidence * 100)}% match`}
+            : `${Math.round(confidence * 100)}% similarity`}
         </Chip>
       </div>
 
@@ -60,7 +60,7 @@ export function IncidentFusionPanel({
       </div>
 
       <div className="mt-2 rounded-[4px] border border-rule bg-ground px-2 py-1.5 text-xs text-ink-3">
-        Combined report: <span className="uppercase text-ink">{fused.severity}</span>
+        Review preview: <span className="uppercase text-ink">{fused.severity}</span>
         {' · '}up to {fused.persons_involved} people
         {fused.immediate_threats.length > 0 && ` · ${fused.immediate_threats.join(', ')}`}
       </div>

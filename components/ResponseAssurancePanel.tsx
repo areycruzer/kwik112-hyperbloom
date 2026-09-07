@@ -77,7 +77,7 @@ export function ResponseAssurancePanel({
                   </span>
                 </span>
                 <Chip tone={assignment.status === 'on_target' ? 'safe' : 'mild'}>
-                  ETA {assignment.eta_minutes} min
+                  Est. arrival {assignment.eta_minutes} min
                 </Chip>
               </div>
               <p className="mt-1 text-xs text-ink-3">
@@ -94,6 +94,7 @@ export function ResponseAssurancePanel({
           Mutual aid required: {assurance.uncovered_services.join(', ')}
         </p>
       )}
+      <p className="mt-2 text-2xs text-ink-4">simulated travel model</p>
     </div>
   );
 }

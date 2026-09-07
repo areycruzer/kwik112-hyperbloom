@@ -43,7 +43,11 @@ import {
   defaultMobileIncidentOpen,
   defaultUnitPanelOpen,
   mobileNavigationInset,
+  nextLiveCallPayload,
+  presentLiveCall,
 } from '@/lib/dashboard-presentation';
+import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
+import { selectPreArrivalGuidance } from '@/lib/first-aid';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
@@ -116,6 +120,7 @@ export default function DashboardPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [liveCall, setLiveCall] = useState<KwikLiveCallPayload | null>(null);
 
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [demoActive, setDemoActive] = useState(false);
@@ -221,6 +226,15 @@ export default function DashboardPage() {
     window.addEventListener('kwik-call-updated', handleCallUpdated);
     return () => window.removeEventListener('kwik-call-updated', handleCallUpdated);
   }, [loadCalls]);
+
+  useEffect(() => {
+    const handleLiveCall = (event: Event) => {
+      const payload = (event as CustomEvent<KwikLiveCallPayload>).detail;
+      if (payload) setLiveCall((current) => nextLiveCallPayload(current, payload));
+    };
+    window.addEventListener(KWIK_LIVE_CALL_EVENT, handleLiveCall);
+    return () => window.removeEventListener(KWIK_LIVE_CALL_EVENT, handleLiveCall);
+  }, []);
 
   /**
    * @description Persist only the changed call. Writing the whole merged list
@@ -481,6 +495,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {liveCall && <LiveCallStrip payload={liveCall} />}
 
       {/* ---- BODY: RAIL · INCIDENT PANEL · MAIN ---------------------------- */}
       <div className="relative flex min-h-0 flex-1 pb-14 sm:pb-0">
@@ -776,7 +792,7 @@ function IncidentRow({
             <Chip tone={fusionDecision?.action === 'linked' ? 'safe' : 'accent'}>
               {fusionDecision?.action === 'linked'
                 ? 'Calls linked'
-                : `${(fusion?.related_call_ids.length ?? fusionDecision?.related_call_ids.length ?? 0) + 1}-caller match`}
+                : 'Review possible duplicate'}
             </Chip>
           )}
           <span className="text-2xs uppercase tracking-wide text-ink-4">{triageSource(call)}</span>
@@ -792,6 +808,40 @@ function IncidentRow({
         </div>
       </div>
     </div>
+  );
+}
+
+function LiveCallStrip({ payload }: { payload: KwikLiveCallPayload }) {
+  const presentation = presentLiveCall(payload);
+
+  return (
+    <section
+      aria-label="Live 112 call"
+      className="grid min-h-16 shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 border-b border-accent/50 bg-panel px-3 py-2 sm:min-h-14 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-4"
+    >
+      <div className="flex items-center gap-2 self-start sm:self-center">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-critical-bright" aria-hidden />
+        <h2 className="whitespace-nowrap text-xs font-bold text-ink">LIVE 112 CALL</h2>
+      </div>
+      <div className="min-w-0 overflow-hidden">
+        {presentation.turns.length ? (
+          <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3">
+            {presentation.turns.map((turn, index) => (
+              <p key={`${turn.speaker}-${index}`} className="truncate text-xs text-ink-2">
+                <span className="font-semibold text-ink-3">{turn.speaker}:</span> {turn.text}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="truncate text-xs text-ink-3">Listening for caller transcript…</p>
+        )}
+      </div>
+      <div className="col-span-2 mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-ink-3 sm:col-span-1 sm:mt-0 sm:justify-end">
+        <span>Language: {presentation.language}</span>
+        <span>Prosody: {presentation.prosody}</span>
+        <span className="font-semibold text-ink">{presentation.grade}</span>
+      </div>
+    </section>
   );
 }
 
@@ -829,6 +879,10 @@ function IncidentDetail({
   const operatorQuestions = call.operator_questions ?? [];
   const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
+  const guidance = selectPreArrivalGuidance({
+    incidentType: call.incident_type,
+    severity: call.severity ?? 'low',
+  });
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -951,6 +1005,20 @@ function IncidentDetail({
         )}
 
         <SectionHeading>Recommended response</SectionHeading>
+
+        <Field label="Pre-arrival guidance (dispatcher reads)">
+          <div className="rounded-[6px] border border-mild/40 bg-mild/5 p-2.5">
+            <p className="text-xs font-semibold text-ink">{guidance.title}</p>
+            <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-xs leading-relaxed text-ink-2">
+              {guidance.instructions.map((instruction) => (
+                <li key={instruction}>{instruction}</li>
+              ))}
+            </ul>
+            <p className="mt-2 border-t border-mild/20 pt-1.5 text-2xs leading-relaxed text-mild">
+              {guidance.caution}
+            </p>
+          </div>
+        </Field>
 
         {/* Dispatch recommendation */}
         <Field label="Dispatch recommendation">

@@ -282,7 +282,7 @@ export default function CallDetailPage({ params }: PageProps) {
           </Panel>
 
           {(fusion || fusionDecision) && (
-            <Panel title="Multi-caller fusion">
+            <Panel title="Possible same incident — human review required">
               <IncidentFusionPanel
                 callId={call.id}
                 suggestion={fusion}

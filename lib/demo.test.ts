@@ -85,13 +85,13 @@ test('scripted assistant asks one question at a time and never claims dispatch',
   }
 });
 
-test('audit rows name transcript and triage provenance without implying measurement', () => {
+test('audit rows name the scripted caller and triage provenance without implying measurement', () => {
   const rows = demoAuditRows(call, [
     { point: 'INTAKE', action: 'confirmed', at: '2026-09-05T10:01:00.000Z' },
   ]);
   assert.deepEqual(rows.slice(0, 3), [
     { label: 'Incident', value: '#demo-1 · cardiac arrest · CRITICAL' },
-    { label: 'Transcript', value: 'Synthetic fallback audio' },
+    { label: 'Call path', value: 'Scripted caller · browser speech' },
     { label: 'Prosody', value: 'Simulated — not a measured signal' },
   ]);
   assert.ok(rows.some((row) => row.label === 'Triage' && row.value === 'Local safety rules'));
