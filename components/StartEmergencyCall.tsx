@@ -45,6 +45,10 @@ import {
   type KwikLiveCallProsodySource,
   type KwikLiveCallState,
 } from '@/lib/live-call';
+import {
+  emergencyVoiceConnectSettings,
+  emergencyVoiceSessionSettings,
+} from '@/lib/voice-launch';
 
 interface StartEmergencyCallProps {
   onCallCreated?: (callId: string) => void;
@@ -158,8 +162,17 @@ function CallStation({
   // can enter a render-phase update loop in suspended/throttled WebViews when
   // the component subscribes to it, which freezes the whole station. The mic
   // level meter is cosmetic; live transcription and prosody do not need it.
-  const { connect, disconnect, status, messages, chatMetadata, isMuted, mute, unmute } =
-    useVoice();
+  const {
+    connect,
+    disconnect,
+    sendSessionSettings,
+    status,
+    messages,
+    chatMetadata,
+    isMuted,
+    mute,
+    unmute,
+  } = useVoice();
 
   const [phase, setPhase] = useState<
     'idle' | 'connecting' | 'live' | 'scripted' | 'triaging' | 'done' | 'error'
@@ -414,11 +427,13 @@ function CallStation({
       await connect({
         auth: { type: 'accessToken', value: data.accessToken },
         configId: data.configId ?? undefined,
+        sessionSettings: emergencyVoiceConnectSettings(),
       });
       if (attempt !== connectionAttemptRef.current) {
         await disconnect();
         return;
       }
+      sendSessionSettings(emergencyVoiceSessionSettings());
       startedAt.current = Date.now();
       setDuration(0);
       beginLiveCallEvent('measured', detectedLanguage);
@@ -432,7 +447,14 @@ function CallStation({
       setSessionKind(null);
       setPhase('error');
     }
-  }, [connect, disconnect, clearScriptTimers, beginLiveCallEvent, detectedLanguage]);
+  }, [
+    connect,
+    disconnect,
+    sendSessionSettings,
+    clearScriptTimers,
+    beginLiveCallEvent,
+    detectedLanguage,
+  ]);
 
   /**
    * Optimistic triage. Local rules grade the call and it appears on the board at
