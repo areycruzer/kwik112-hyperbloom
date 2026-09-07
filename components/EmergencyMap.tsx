@@ -1,24 +1,32 @@
 /**
- * Situational map — satellite basemap with triangle/circle symbology.
+ * Situational map — satellite basemap with pin/disc symbology.
  *
  * The basemap is Esri World_Imagery (bright satellite), the far more legible
  * reference-product choice over the near-featureless dark canvas. Incidents are
- * filled triangles (severity colour) and units are filled circles (service
- * colour), both built by `buildSymbol` and mounted through Leaflet `divIcon`.
+ * map pins carrying a glyph for what happened — a heart, a flame, a car — in
+ * the severity colour; units are bare glyphs in their service colour. Both are
+ * built by `buildSymbol` and mounted through Leaflet `divIcon`. A pin is drawn
+ * larger than a unit glyph on purpose: the incident is what the operator is
+ * looking for, and a frameless unit glyph fills far more of its box than a pin
+ * fills of its own, so equal nominal sizes read as units dominating the map.
+ *
+ * Markers carry no printed name. Every marker used to trail a name plate, which
+ * on a busy sector stacked into a wall of text over the geography the operator
+ * is trying to read. The names live on hover instead, as tooltips, so the map
+ * stays a map and identification is one pointer-move away.
  */
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
 import { escapeHtml } from '@/lib/utils';
-import { buildSymbol, glyphForIncidentType } from '@/lib/design/symbols';
+import { buildSymbol, glyphForIncidentType, SYMBOL_ANCHOR } from '@/lib/design/symbols';
 import { priorityCode, distressOf } from '@/lib/incident';
 import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
 import { assessDispatch } from '@/lib/dispatch-assurance';
-import { Navigation, Shield } from 'lucide-react';
 
 interface EmergencyMapProps {
   calls: EmergencyCall[];
@@ -28,6 +36,13 @@ interface EmergencyMapProps {
   onDispatchUnit?: (unitId: string, callId: string) => void;
   /** Roster-selected unit: drawn with a 1px accent ring, like a selected incident. */
   selectedUnitId?: string | null;
+  /**
+   * Whether the responder fleet is drawn. Owned by the dashboard, not by this
+   * map: the fleet on the map and the roster panel are one thing an operator
+   * turns on, so a single control in the command bar drives both. A second
+   * toggle living on the map could disagree with the panel beside it.
+   */
+  showUnits: boolean;
   /** Changes whenever a sibling panel resizes the map container. */
   layoutRevision?: string | number | boolean;
 }
@@ -45,12 +60,39 @@ function cssToken(name: string, fallback: string): string {
   return value || fallback;
 }
 
+/**
+ * @description Give a marker its hover name, without disturbing one already on
+ *              screen.
+ *
+ *              The marker effects re-run on every data refresh, and the obvious
+ *              `unbindTooltip()` + `bindTooltip()` there destroys the open
+ *              tooltip the operator is reading — the name flickers out from
+ *              under the pointer roughly once a second. Binding once and then
+ *              only pushing new content when the text actually differs keeps an
+ *              open tooltip open, and still tracks a changed priority code or
+ *              callsign.
+ */
+function bindHoverName(marker: any, html: string, offsetY: number): void {
+  const existing = marker.getTooltip();
+  if (!existing) {
+    marker.bindTooltip(html, {
+      direction: 'top',
+      offset: [0, offsetY],
+      className: 'kwik-map-tooltip',
+      opacity: 1,
+    });
+    return;
+  }
+  if (existing.getContent() !== html) existing.setContent(html);
+}
+
 export default function EmergencyMap({
   calls,
   units = TACTICAL_UNITS,
   selectedCallId,
   onMarkerClick,
   selectedUnitId = null,
+  showUnits,
   layoutRevision,
 }: EmergencyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -59,7 +101,6 @@ export default function EmergencyMap({
   const incidentMarkersRef = useRef<Map<string, any>>(new Map());
   const unitMarkersRef = useRef<Map<string, any>>(new Map());
   const routePolylineRef = useRef<any>(null);
-  const [showUnits, setShowUnits] = useState(true);
   // Leaflet loads asynchronously. Effects that draw onto the map key off this so
   // they re-run once it exists, rather than relying on a poll to retry them.
   // Without this reactive gate the marker effects run before the map exists,
@@ -148,7 +189,7 @@ export default function EmergencyMap({
     }
   }, [selectedCallId]);
 
-  // Render incident markers as filled triangles built by `buildSymbol`.
+  // Render incident markers as severity-coloured pins built by `buildSymbol`.
   //
   // Depends only on `calls`, `selectedCallId`, `onMarkerClick`, and `mapReady`.
   // The parent memoises `onMarkerClick` and only changes the `calls` identity
@@ -168,8 +209,9 @@ export default function EmergencyMap({
       const label = call.incident_subtype || call.incident_type || 'Incident';
 
       // buildSymbol escapes its own interpolated values (label, glyph, kind)
-      // internally, so its SVG string is safe to embed directly. Incidents are
-      // filled triangles; the name label and any distress ring come from spec.
+      // internally, so its SVG string is safe to embed directly. `label` names
+      // the pin for assistive tech; without `plate` nothing is drawn beside it,
+      // and the name is surfaced on hover below instead.
       const svg = buildSymbol({
         kind: 'incident',
         glyph: glyphForIncidentType(call.incident_type),
@@ -177,14 +219,22 @@ export default function EmergencyMap({
         distress: distressOf(call),
         label,
         selected: isSelected,
-        size: 34,
+        size: 46,
       });
 
+      // A pin marks its coordinate with its tip, not its centre. The symbol is
+      // authored in a 24-unit box, so the tip scales with the rendered size —
+      // hard-coding the old centre anchor would float every pin above its
+      // incident by half a marker.
+      const incidentSize = 46;
       const icon = L.divIcon({
         className: 'kwik-map-marker',
         html: svg,
-        iconSize: [34, 34],
-        iconAnchor: [17, 17],
+        iconSize: [incidentSize, incidentSize],
+        iconAnchor: [
+          (SYMBOL_ANCHOR.incident.x / 24) * incidentSize,
+          (SYMBOL_ANCHOR.incident.y / 24) * incidentSize,
+        ],
       });
 
       let marker = incidentMarkersRef.current.get(call.id);
@@ -197,25 +247,32 @@ export default function EmergencyMap({
         marker.setIcon(icon);
       }
 
+      // The name, on hover only. `label` is caller-derived incident text, so it
+      // goes through escapeHtml like every other string bound into map markup.
+      const tooltipHtml =
+        `<span class="tnum text-ink-3">${escapeHtml(priorityCode(call))}</span> ${escapeHtml(label)}`;
+      bindHoverName(marker, tooltipHtml, -38);
+
       // Every interpolated value below is caller-derived — incident text on this
       // platform is LLM-transcribed caller speech, and a hostile
       // `caller_location.address` has executed in a real browser before — so each
       // one must pass through escapeHtml. See lib/utils#escapeHtml.
-      const summary = call.ai_summary || call.chief_complaint || 'Emergency reported';
+      // Four facts, and only four: what, how urgent, where, when. The popup used
+      // to also carry the AI summary paragraph and repeat the grade a second
+      // time as a severity word — "CODE 2" in the corner and "HIGH" at the foot
+      // are the same grade said twice, and an operator reading a map is picking
+      // a marker, not reading a case file. The full narrative is one click away
+      // in the incident panel, which is where it belongs.
       const popupHtml = `
-        <div class="min-w-[200px] space-y-1.5">
-          <div class="flex items-center justify-between gap-2 border-b border-rule pb-1.5">
+        <div class="min-w-[190px] space-y-1.5">
+          <div class="flex items-center justify-between gap-3 border-b border-rule pb-1.5">
             <span class="text-sm font-semibold capitalize text-ink">${escapeHtml(call.incident_subtype || call.incident_type)}</span>
-            <span class="label">${escapeHtml(priorityCode(call))}</span>
+            <span class="tnum shrink-0 text-xs font-semibold text-ink-2">${escapeHtml(priorityCode(call))}</span>
           </div>
-          <p class="text-sm leading-relaxed text-ink-2">${escapeHtml(summary)}</p>
-          <div class="text-xs text-ink-3">
+          <div class="text-xs text-ink-2">
             <span class="break-words">${escapeHtml(location.address || 'Triangulated coordinate')}</span>
           </div>
-          <div class="flex items-center justify-between gap-2 border-t border-rule pt-1.5 text-2xs text-ink-4">
-            <span class="tnum">${escapeHtml(getTimeElapsed(call.created_at))}</span>
-            <span class="uppercase tracking-wide">${escapeHtml(call.severity || 'ungraded')}</span>
-          </div>
+          <div class="tnum text-2xs text-ink-4">${escapeHtml(getTimeElapsed(call.created_at))}</div>
         </div>
       `;
 
@@ -234,7 +291,8 @@ export default function EmergencyMap({
     });
   }, [calls, selectedCallId, onMarkerClick, mapReady]);
 
-  // Render the first-responder fleet as filled circles built by `buildSymbol`.
+  // Render the first-responder fleet as service-coloured discs built by
+  // `buildSymbol`.
   useEffect(() => {
     if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
@@ -250,16 +308,23 @@ export default function EmergencyMap({
         kind: 'unit',
         glyph: unit.type,
         service: unit.type,
-        label: unit.id,
+        label: `${unit.callsign} (${unit.id})`,
         selected: unit.id === selectedUnitId,
         size: 30,
       });
 
+      // A unit is a frameless glyph, so it sits centred on its coordinate —
+      // read from the same table the pin's tip comes from rather than
+      // re-derived here, so the two can never drift apart.
+      const unitSize = 30;
       const icon = L.divIcon({
         className: 'kwik-map-marker',
         html: svg,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
+        iconSize: [unitSize, unitSize],
+        iconAnchor: [
+          (SYMBOL_ANCHOR.unit.x / 24) * unitSize,
+          (SYMBOL_ANCHOR.unit.y / 24) * unitSize,
+        ],
       });
 
       let marker = unitMarkersRef.current.get(unit.id);
@@ -271,6 +336,14 @@ export default function EmergencyMap({
         marker.setIcon(icon);
       }
 
+      // Callsign and id on hover, replacing the plate that used to ride beside
+      // every unit.
+      bindHoverName(
+        marker,
+        `${escapeHtml(unit.callsign)} <span class="text-ink-3">${escapeHtml(unit.id)}</span>`,
+        -16,
+      );
+
       // Unit fields are internal mock data, but escaping stays uniform so no
       // string built here is ever a markup sink.
       marker.bindPopup(
@@ -281,7 +354,7 @@ export default function EmergencyMap({
             <span class="label">${escapeHtml(unit.status)}</span>
           </div>
           <div class="text-xs text-ink-3">
-            <span class="capitalize">${escapeHtml(unit.type)}</span> · Speed <span class="tnum text-ink-2">${escapeHtml(unit.speed)}</span>
+            <span>${escapeHtml(unit.agency)}</span> · Speed <span class="tnum text-ink-2">${escapeHtml(unit.speed)}</span>
           </div>
         </div>
       `,
@@ -404,7 +477,6 @@ export default function EmergencyMap({
     };
   }, [selectedCallId, selectedUnitId, calls, tacticalUnits, mapReady]);
 
-  const toggleUnits = useCallback(() => setShowUnits((v) => !v), []);
 
   return (
     <div className="relative h-full min-h-[450px] w-full flex-1 overflow-hidden bg-deep">
@@ -417,40 +489,24 @@ export default function EmergencyMap({
         style={{ width: '100%', height: '100%', backgroundColor: 'var(--deep)' }}
       />
 
-      {/* Situational HUD (top-left). */}
+      {/* Situational HUD (top-left). A "Units (n)" toggle used to sit under this
+          strip. It duplicated the command bar's Response units control and could
+          contradict it — fleet hidden on the map while the roster listing that
+          same fleet sat open beside it. One control now drives both. */}
       <div className="pointer-events-auto absolute left-4 top-4 z-[400] flex flex-col gap-2">
         <div className="flex items-center gap-2 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-safe" aria-hidden />
           <span className="label text-ink-2">Situational map</span>
           <span className="tnum text-2xs text-ink-4">
-            {calls.length} incidents · {tacticalUnits.length} units
+            {calls.length} incidents
+            {showUnits ? ` · ${tacticalUnits.length} units` : ''}
           </span>
-        </div>
-
-        <div className="flex items-center gap-1 rounded-[6px] border border-rule-strong bg-deep/85 p-1">
-          <button
-            type="button"
-            onClick={toggleUnits}
-            aria-pressed={showUnits}
-            className={
-              showUnits
-                ? 'inline-flex items-center gap-1.5 rounded-[4px] border border-accent bg-panel px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink'
-                : 'inline-flex items-center gap-1.5 rounded-[4px] border border-transparent px-2.5 py-1 text-2xs font-medium uppercase tracking-wide text-ink-3 hover:text-ink-2'
-            }
-          >
-            <Shield className="h-3 w-3" aria-hidden />
-            Units ({tacticalUnits.length})
-          </button>
         </div>
       </div>
 
-      {/* Responder-vector badge (top-right). */}
-      {selectedCallId && (
-        <div className="absolute right-4 top-4 z-[400] flex items-center gap-2 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-2">
-          <Navigation className="h-3.5 w-3.5 text-accent" aria-hidden />
-          <span className="label text-ink-2">Responder vector active</span>
-        </div>
-      )}
+      {/* A "Responder vector active" badge used to sit here. It restated what
+          the drawn route already shows, carried no figure and no control, and
+          took the top-right corner of the map to do it. */}
 
       {/* Legend (bottom-left). */}
       <div className="absolute bottom-4 left-4 z-[400] flex items-center gap-3 rounded-[6px] border border-rule-strong bg-deep/85 px-3 py-2 text-2xs text-ink-3">

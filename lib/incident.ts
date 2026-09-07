@@ -23,12 +23,29 @@ export function severityTone(severity?: string): ChipTone {
   return 'neutral';
 }
 
-/** The priority code a call carries, or one derived from its severity. */
+/**
+ * Two priority schemes exist in stored data. `PriorityCode` permits both the
+ * P-scale and a legacy "Code N" scale, and `RESPONSE_TARGET_MINUTES` in
+ * dispatch-assurance treats them as the same three grades — Code 3 and P1 both
+ * carry the 8-minute target, Code 2 and P2 the 15-minute one, Code 1 and P3 the
+ * 30-minute one. Nothing was translating them for display, so the same grade
+ * surfaced as "P2" in the incident queue and "CODE 2" on the map, which reads
+ * as two different things to the one person who has to act on it.
+ */
+const LEGACY_PRIORITY_CODES: Record<string, string> = {
+  'Code 3': 'P1',
+  'Code 2': 'P2',
+  'Code 1': 'P3',
+};
+
+/**
+ * The priority code a call carries, or one derived from its severity, always on
+ * the P-scale. Every view reads its grade through here, so they cannot disagree.
+ */
 export function priorityCode(call: EmergencyCall): string {
-  return (
-    call.priority_code ||
-    (call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3')
-  );
+  const stored = call.priority_code;
+  if (stored) return LEGACY_PRIORITY_CODES[stored] ?? stored;
+  return call.severity === 'critical' ? 'P1' : call.severity === 'high' ? 'P2' : 'P3';
 }
 
 /**

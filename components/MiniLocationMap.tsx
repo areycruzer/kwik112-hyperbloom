@@ -77,12 +77,12 @@ export default function MiniLocationMap({
           .tileLayer(SATELLITE_TILE_URL, { maxZoom: 18, attribution: SATELLITE_ATTRIBUTION })
           .addTo(map);
 
-        // The shared incident symbol — a severity-coloured filled triangle.
+        // The shared incident symbol — a severity-coloured pin.
         const svg = buildSymbol({
           kind: 'incident',
           glyph: glyphForIncidentType(incidentType),
           severity,
-          size: 30,
+          size: 34,
         });
         const icon = L.default.divIcon({
           className: 'kwik-map-marker',

@@ -29,8 +29,8 @@ function removeFakeWindow(): void {
 }
 
 const fleet: TacticalUnit[] = [
-  { id: 'EMS-1', callsign: 'Medic 1', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7, lng: 77.1, status: 'available', speed: '0 km/h' },
-  { id: 'EMS-2', callsign: 'Medic 2', type: 'ems', capabilities: ['ems', 'als'], lat: 28.8, lng: 77.2, status: 'available', speed: '0 km/h' },
+  { id: 'EMS-1', callsign: 'Medic 1', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7, lng: 77.1, status: 'available', speed: '0 km/h' },
+  { id: 'EMS-2', callsign: 'Medic 2', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.8, lng: 77.2, status: 'available', speed: '0 km/h' },
 ];
 
 test('confirmed units become unavailable to other incidents but remain visible to their own call', async () => {

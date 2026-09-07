@@ -66,12 +66,24 @@ test('phone layout reserves the full content width for the map', () => {
 });
 
 test('unit roster accessible label includes operational context', () => {
+  const unit = {
+    id: 'CATS-302',
+    callsign: 'Ambulance 302',
+    agency: 'CATS Delhi',
+    speed: '42 km/h',
+    status: 'available' as const,
+  };
+
   assert.equal(
-    unitRosterAccessibleLabel(
-      { id: 'EMS-302', callsign: 'Medic 302', type: 'ems', speed: '42 km/h', status: 'available' },
-      '1.7 km',
-    ),
-    'Medic 302, EMS unit EMS-302, Ready, 1.7 km away, speed 42 km/h',
+    unitRosterAccessibleLabel(unit, '1.7 km', '4 min'),
+    'Ambulance 302, CATS Delhi unit CATS-302, Ready, 1.7 km away, speed 42 km/h, ETA 4 min',
+  );
+
+  // With no incident selected there is no ETA to announce, and the label must
+  // simply stop rather than read out an em-dash or a fabricated arrival time.
+  assert.equal(
+    unitRosterAccessibleLabel(unit, '—'),
+    'Ambulance 302, CATS Delhi unit CATS-302, Ready, — away, speed 42 km/h',
   );
 });
 
