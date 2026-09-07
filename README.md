@@ -1,148 +1,117 @@
-# Pulse112 - Auditable AI Decision Copilot for Emergency Dispatch
+# Kwik 112
 
-> Pulse112 turns a fragmented multilingual emergency report into an immediately actionable incident card, then safely improves it with AI while a human dispatcher remains in control.
+> Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
 
-- **Problem:** Dispatchers act on incomplete multilingual reports under time pressure.
-- **User:** 112 call-takers and dispatchers.
-- **Working loop:** Voice/transcript -> instant local grade -> AI refinement -> human decision -> audit trail.
-- **Why AI:** Multilingual extraction, ambiguity detection, summarization, and follow-up questions.
-- **Evidence:** Versioned synthetic held-out benchmark, latency measurements, language slices, and failure tests.
-- **Safety:** No autonomous dispatch, no AI downgrade below local rules, low-confidence warnings, and explicit provenance.
+| Held-out local benchmark | Result |
+| --- | ---: |
+| Critical recall | **100% (9/9)**; Wilson 95% lower bound 0.70 |
+| Incident type / severity accuracy | **60% / 60%** |
+| Under-triage / over-triage | **23.3% / 16.7%** |
+| Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
+| Local latency | **p50 ~0.046ms / p95 ~3.80ms** |
 
-**Scope:** This is a synthetic-data decision-support prototype. It is not affiliated with or deployed by India's ERSS, and it does not autonomously dispatch responders.
+**Judge this build in 120 seconds:** [place a test call](/dashboard?voice=1#voice-station) · [open the console](/dashboard) · [reproduce the benchmark](#reproduce-the-evidence) · [inspect raw results](evaluation/results/local-held_out-latest.json)
 
-## Run the demo
+## Working Build
+
+**One scripted caller can traverse voice intake, instant local grading, asynchronous refinement, and the dispatcher board without provider credentials.** Open `/dashboard?voice=1#voice-station`, choose Ramesh, John, or Sharma ji, and play the scripted caller. A live Hume EVI session is optional.
+
+The station streams transcript turns, detected language, and MEASURED or SIMULATED prosody provenance. The board shows a rules grade while the call is active; call completion creates an incident immediately and then refines it in place when a model is configured.
+
+## End-to-End Thinking
+
+**Every dispatch passes through three named human checkpoints: INTAKE, DISPATCH, and RESOLUTION.** The operator sees transcript source, triage source, prosody provenance, unit reservation, override notes, and the final audit receipt in the [dispatch console](/dashboard).
+
+```text
+112 voice or scripted call
+  -> live transcript and language
+  -> deterministic local grade
+  -> optional structured model refinement (escalate only)
+  -> human intake and dispatch decision
+  -> unit reservation and resolution audit
+```
+
+Pre-arrival guidance is selected deterministically from conservative dispatcher-read cards. The caller is never asked to read, tap, install an app, or leave the call. Guidance follows the safety posture of the [2024 AHA/Red Cross first-aid guidelines](https://www.ahajournals.org/doi/epdf/10.1161/CIR.0000000000001281); dispatcher-assisted CPR has been associated with improved survival versus no bystander CPR in a large cohort ([Rea et al., 2001](https://pubmed.ncbi.nlm.nih.gov/11714643/)).
+
+## Innovation
+
+**The deterministic grade is available before any model response, and model output is prevented from lowering that safety floor.** `lib/triage-local.ts` supplies browser-safe multilingual rules; `lib/triage.ts` wraps the caller transcript as untrusted data, validates structured output, rejects invented facts, and applies the no-downgrade rule.
+
+Optional Hume prosody is supplementary context with explicit provenance, not an autonomous severity signal. A randomized trial found that machine-learning support did not significantly improve dispatcher recognition in its primary comparison, while standalone alerts traded higher sensitivity for lower specificity ([Blomberg et al., 2021](https://pubmed.ncbi.nlm.nih.gov/33404620/)). Kwik 112 therefore exposes evidence to the operator rather than replacing the operator.
+
+## Impact
+
+**The held-out corpus retained all 9 of 9 critical cases as critical.** This is a safety-oriented result on 30 versioned synthetic calls, not evidence of clinical or production performance.
+
+Published US field-triage guidance targets under-triage at 5% or less while accepting 25–35% over-triage ([Newgard et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35475939/)). A systematic review found much wider observed ranges and substantial heterogeneity ([Lupton et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35191799/)). These sources provide context; they are not a direct baseline for this synthetic call corpus.
+
+India's official Emergency Response Support System accepts voice and other channels, with call-taking and computer-aided dispatch roles described by the [Ministry of Home Affairs](https://www.mha.gov.in/en/commoncontent/emergency-response-support-system-erss). Kwik 112 is an independent demonstration and has no connection to that infrastructure.
+
+The multilingual context is grounded in India's official [2011 Census language tables](https://www.censusindia.gov.in/nada/index.php/catalog/42458); the benchmark itself measures only the versioned English, Hindi, and Hinglish cases in this repository.
+
+## Technical Depth
+
+**The committed local run covers 30 held-out calls and reports 60% type accuracy, 60% severity accuracy, 23.3% under-triage, and 16.7% over-triage.** Corpus version: `1.0.0`; split: `held_out`; mode: `local`; provider: `none`.
+
+| Metric | Verified result |
+| --- | ---: |
+| Critical recall | 100% (9/9), Wilson 95% lower bound 0.70 |
+| Incident type accuracy | 60% (18/30) |
+| Severity accuracy | 60% (18/30) |
+| Under-triage | 23.3% (7/30) |
+| Over-triage | 16.7% (5/30) |
+| Location accuracy | 100% (25/25 location cases) |
+| Threat accuracy | 100% (3/3 threat cases) |
+| Local latency | p50 ~0.046ms; p95 ~3.80ms |
+
+The fusion benchmark contains 40 cases: 20 true positives, 20 true negatives, 0 false positives, and 0 false negatives. Its AND gate requires matching incident type, no more than 750m, no more than 10 minutes, and at least one specific shared term. The approach is informed by the spatiotemporal clustering literature ([Birant and Kut, 2007](https://dblp.org/rec/journals/dke/BirantK07.html)), but this implementation is a conservative deterministic gate. Possible matches remain human-review candidates; the UI does not claim they are merged.
+
+### Reproduce the evidence
 
 ```bash
 npm install
-npm run dev
-```
-
-Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard), choose **Start emergency call**, select a **Scripted caller**, then choose **Run scripted call**. This path needs no microphone or provider credential.
-
-### Five-minute judge run
-
-1. Open `/dashboard` and choose **Run 5-minute demo** in the lower-left corner.
-2. Choose **Test speaker**. The browser should say that Pulse112 audio is ready.
-3. Choose **Start intake**. For the primary path, start the live mic call and speak: “Mere papa respond nahi kar rahe, saans bhi nahi aa rahi,” followed by “Sample Metro Gate 1” when asked for the location.
-4. If Hume, the microphone, or the network is unavailable, select **5-minute demo — Hinglish cardiac arrest** and choose **Play synthetic fallback**. This path is audible, visibly labeled synthetic/simulated, and uses the same incident-creation endpoint as the live path.
-5. When triage completes, return to the board and use the demo guide to open the decision timeline. Record the **Intake**, **Dispatch**, and **Resolution** decisions; none are approved automatically.
-6. Finish on the guide’s **Audit proof complete** panel, which names the transcript source, prosody provenance, triage engine, human decisions, and selected units.
-
-Suggested timing: preflight `0:00–0:30`, call `0:30–1:45`, triage `1:45–2:30`, response assurance `2:30–3:30`, decisions/dispatch `3:30–4:30`, audit proof `4:30–5:00`.
-
-The application uses these optional environment variables. Set only the providers you intend to use; never commit a `.env` file or a key value.
-
-| Variable | Purpose |
-| --- | --- |
-| `GLM_API_KEY` | Enables GLM structured triage. |
-| `GLM_BASE_URL` | Optional GLM-compatible endpoint override. |
-| `GLM_MODEL` | Optional GLM model override. |
-| `OPENAI_API_KEY` | Enables OpenAI structured triage when GLM is not configured. |
-| `OPENAI_MODEL` | Optional OpenAI model override. |
-| `LLM_TIMEOUT_MS` | Model request timeout; local fallback applies on failure. |
-| `HUME_API_KEY` | Server-side Hume credential. |
-| `HUME_SECRET_KEY` | Server-side Hume credential. |
-| `NEXT_PUBLIC_HUME_CONFIG_ID` | Optional Hume EVI configuration identifier. |
-| `DEEPGRAM_API_KEY` | Optional Deepgram transcription credential. |
-| `LOG_LEVEL` | Server log verbosity. |
-
-## Architecture and safety boundary
-
-```text
-Voice / scripted transcript
-  -> deterministic local triage (instant)
-  -> incident card published to dispatcher
-  -> asynchronous LLM structured extraction
-  -> schema validation + no-downgrade safety floor
-  -> operator confirms / amends / overrides
-  -> audit timeline + derived operational alerts
-```
-
-Hume prosody is optional supplementary context, not a dispatch decision. It requires configured credentials and microphone access for a live voice session; scripted calls label their prosody as simulated. Browser-local state supports the demo only and is not production persistence. Browser/IP location is an approximation, not carrier location.
-
-## Evidence
-
-All benchmark cases are versioned synthetic data. Run the test suite and evaluations with:
-
-```bash
 npm test
 npm run evaluate:local
-npm run evaluate:held-out
+npm run evaluate:fusion
+npm run build
+npm run check:raw-html
 ```
 
-### Local held-out benchmark
+Fresh triage outputs are written to `evaluation/results/local-held_out-latest.json` and `.md`. Each result records the benchmark version, split, mode, provider, source commit, Node.js runtime, case-level predictions, and latency distribution. Held-out labels were not changed during Round 2 location-cue tuning; benchmark contamination remains a known evaluation risk in language-model work ([Golchin and Surdeanu, TACL 2025](https://aclanthology.org/2025.tacl-1.37/)).
 
-Command: `npm run evaluate:local`
-Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
+### Scope facts
 
-| Metric | Measured result |
-| --- | ---: |
-| Incident type accuracy | 60.0% |
-| Severity accuracy | 60.0% |
-| Critical recall | 100.0% (9/9) |
-| Under-triage | 23.3% (7/30) |
-| Over-triage | 16.7% (5/30) |
-| Location accuracy | 48.0% (12/25 location cases) |
-| Threat accuracy | 100.0% (3/3 threat cases) |
-| Latency p50 | 0.024 ms |
-| Latency p95 | 1.060 ms |
-| Fallback count | 0 |
+| Boundary | Current state |
+| --- | --- |
+| Evaluation | Versioned synthetic corpus; no real caller PII |
+| Emergency network | No live 112, ERSS, government, or C-DAC integration |
+| Dispatch authority | AI assists; a human records every dispatch decision |
+| State | Browser-local demo state; no production database or authentication |
+| Voice | Hume EVI is optional; scripted browser speech is labeled SIMULATED |
+| Model refinement | GLM is preferred when configured; OpenAI is the fallback provider |
+| Failure mode | Missing keys, timeout, malformed output, or provider failure preserves the local grade |
+| Emotion data | Hume supplies prosody; OpenAI refinement is not represented as producing emotion scores |
 
-| Language | Cases | Type accuracy | Severity accuracy | Critical recall |
-| --- | ---: | ---: | ---: | ---: |
-| English | 14 | 57.1% | 50.0% | 100.0% |
-| Hindi | 6 | 50.0% | 66.7% | 100.0% |
-| Hinglish | 10 | 70.0% | 70.0% | 100.0% |
+Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It is also distinct from the unrelated Devpost project named Pulse112.
 
-These results are evidence for the deterministic local baseline, including remaining weaknesses in exact incident typing and spoken-location extraction; they are not a claim of production performance.
+### Codex and OpenAI contribution
 
-### Hybrid held-out attempt
+The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits. The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. Model responses use a constrained JSON schema, provenance validation, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
 
-Command: `npm run evaluate:held-out`
-Benchmark: `1.0.0`; split: `held_out`; cases: `30`; provider: none
+The operator checkpoints align with the human-oversight principle in [EU AI Act Article 14](https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng). Risk documentation follows the general posture of the [NIST Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence); neither reference is presented as certification or regulatory compliance.
 
-| Metric | Measured result |
-| --- | ---: |
-| Incident type accuracy | 60.0% |
-| Severity accuracy | 60.0% |
-| Critical recall | 100.0% (9/9) |
-| Under-triage | 23.3% (7/30) |
-| Over-triage | 16.7% (5/30) |
-| Location accuracy | 48.0% (12/25 location cases) |
-| Threat accuracy | 100.0% (3/3 threat cases) |
-| Latency p50 | 0.043 ms |
-| Latency p95 | 1.567 ms |
-| Fallback count | 30 |
+## Presentation
 
-The hybrid runner completed, but no GLM or OpenAI API key was configured, so all 30 cases used keyword fallback; this is not a model-backed result.
+**The video package is scripted to finish within 120 seconds and puts the caller experience in minute one.** See [the recording script and transcript](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt). The hosted video URL is intentionally left pending until upload handoff.
 
-## Failure demonstrations
+### 120-second transcript
 
-Run the regression suite with `npm test`. It includes these named demonstrations:
+**0:00–0:58 — the call.** Every Indian already knows how to use it: dial 112. A Hinglish caller reports a roadside crash. Kwik 112 asks for the exact location, checks immediate danger, and keeps each question short. The live console receives transcript, language, and provenance while deterministic rules grade the call. When intake ends, the incident appears immediately. Model refinement may escalate severity but cannot downgrade the rules grade. A human confirms intake, selects units, and makes the dispatch decision.
 
-- `hybrid failure falls back to local triage without aborting`
-- `hybrid timeout falls back to the local prediction without aborting`
-- `model cannot downgrade a locally critical cardiac arrest`
-- `prompt injection text cannot suppress an active fire rule`
-- `missing location produces an exact-address follow-up without inventing an address`
+**0:58–1:55 — the evidence.** The audit timeline preserves the transcript source, prosody provenance, triage engine, override notes, units, and resolution. The held-out local benchmark reports critical recall of 100%, 9 of 9, with 60% type accuracy, 60% severity accuracy, 23.3% under-triage, 16.7% over-triage, and local latency of about 0.046 milliseconds p50 and 3.80 milliseconds p95. The corpus is synthetic and the build has no live 112 integration. Codex assisted implementation and review; the OpenAI SDK powers the optional structured refinement path. Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
 
-The local rules run immediately. A model timeout, malformed response, or unavailable provider falls back to that local grade; model output may escalate but cannot downgrade the local safety floor. The dispatcher remains responsible for confirmation, amendment, override, and any external dispatch.
+---
 
-## Prototype status
+**Evidence summary:** 30 held-out synthetic calls · critical recall **100% (9/9)** · type/severity **60% / 60%** · under/over-triage **23.3% / 16.7%** · location/threat **100% / 100%** · p50/p95 **~0.046ms / ~3.80ms**.
 
-| Capability | Status |
-|---|---|
-| Hybrid local + model triage | Implemented; model requires configured API key |
-| No-downgrade safety floor | Implemented and regression-tested |
-| Human decision timeline | Implemented; browser-local persistence |
-| Hume voice/prosody intake | Implemented; credentials and microphone required |
-| Scripted calls and benchmark | Synthetic demo/evaluation data |
-| Browser/IP location | Approximation; not carrier location |
-| Production authentication/database | Not implemented |
-| Government ERSS integration | Not implemented |
-| Production deployment validation | Not completed |
-
-## License and acknowledgements
-
-MIT licensed. This prototype uses or can be configured with [Next.js](https://nextjs.org/), [Hume](https://www.hume.ai/), [OpenAI](https://openai.com/), [GLM](https://www.bigmodel.cn/), [Deepgram](https://deepgram.com/), and [Leaflet](https://leafletjs.com/).
+MIT licensed.

@@ -10,7 +10,8 @@
     "evaluate:local": "node scripts/evaluate-triage.ts --mode local --split held_out",
     "evaluate:held-out": "node scripts/evaluate-triage.ts --mode hybrid --split held_out",
     "evaluate:fusion": "node scripts/evaluate-fusion.ts",
-    "check:layout": "node scripts/check-dashboard-layout.mjs"
+    "check:layout": "node scripts/check-dashboard-layout.mjs",
+    "check:raw-html": "node scripts/check-raw-html.mjs"
   },
   "dependencies": {
     "@humeai/voice-react": "^0.2.7",

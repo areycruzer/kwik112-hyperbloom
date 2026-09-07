@@ -1,0 +1,19 @@
+# Kwik 112
+
+> Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
+
+Kwik 112 is an independent browser-based demonstration. It is not an official 112, ERSS, government, or C-DAC service and has no live emergency-network integration.
+
+## Primary links
+
+- Landing: /
+- Place a test call: /dashboard?voice=1#voice-station
+- Dispatcher console: /dashboard
+- README: https://github.com/JAYATIAHUJA/pulse112-tactical-cad/blob/main/README.md
+- Raw benchmark: https://github.com/JAYATIAHUJA/pulse112-tactical-cad/blob/main/evaluation/results/local-held_out-latest.json
+- Benchmark report: https://github.com/JAYATIAHUJA/pulse112-tactical-cad/blob/main/evaluation/results/local-held_out-latest.md
+- Video captions: /kwik-112-round2.vtt
+
+## Verified held-out local results
+
+Corpus v1.0.0, held_out split, 30 synthetic calls, provider none: critical recall 100% (9/9; Wilson 95% lower bound 0.70), incident type accuracy 60%, severity accuracy 60%, under-triage 23.3%, over-triage 16.7%, location accuracy 100% (25/25), threat accuracy 100% (3/3), latency p50 ~0.046ms and p95 ~3.80ms.
