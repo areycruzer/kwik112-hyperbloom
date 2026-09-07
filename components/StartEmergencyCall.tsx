@@ -182,6 +182,7 @@ function CallStation({
   const lastLiveFingerprintRef = useRef('');
   const liveCallEndedRef = useRef(false);
   const handledVoiceErrorRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
   // Outstanding scripted-playback timers, cleared on unmount / close / restart so
   // a demo left mid-playback cannot fire into an unmounted component.
   const scriptTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -192,9 +193,12 @@ function CallStation({
     if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
   }, []);
 
-  // Belt-and-braces: clear any pending scripted timers when the station unmounts
-  // (the dialog is unmounted on close, so this covers close too).
-  useEffect(() => clearScriptTimers, [clearScriptTimers]);
+  // Cancel timers and invalidate any token/connect continuation on unmount.
+  useEffect(() => () => {
+    connectionAttemptRef.current += 1;
+    clearScriptTimers();
+    void disconnect();
+  }, [clearScriptTimers, disconnect]);
 
   /** Derive the transcript, prosody frames, and detected language from the live
    *  EVI socket. Hume tags each finalized user message with the language it heard
@@ -341,6 +345,7 @@ function CallStation({
   }, [status, sessionKind, lines, detectedLanguage, publishLiveCallEvent]);
 
   const closeStation = useCallback(() => {
+    connectionAttemptRef.current += 1;
     if (sessionKind === 'live') {
       publishLiveCallEvent('end', lines, 'measured', detectedLanguage);
       void disconnect();
@@ -367,6 +372,8 @@ function CallStation({
   const { dialogRef, onKeyDown } = useDialogFocus(true, closeStation);
 
   const startLiveCall = useCallback(async () => {
+    const attempt = connectionAttemptRef.current + 1;
+    connectionAttemptRef.current = attempt;
     setErrorText(null);
     clearScriptTimers();
     setScriptedLines([]);
@@ -383,19 +390,24 @@ function CallStation({
         auth: { type: 'accessToken', value: data.accessToken },
         configId: data.configId ?? undefined,
       });
+      if (attempt !== connectionAttemptRef.current) {
+        await disconnect();
+        return;
+      }
       startedAt.current = Date.now();
       setDuration(0);
       beginLiveCallEvent('measured', detectedLanguage);
       setPhase('live');
       logger.info('EVI session connected');
     } catch (error) {
+      if (attempt !== connectionAttemptRef.current) return;
       setErrorText(
         explainVoiceError(error instanceof Error ? error.message : undefined)
       );
       setSessionKind(null);
       setPhase('error');
     }
-  }, [connect, clearScriptTimers, beginLiveCallEvent, detectedLanguage]);
+  }, [connect, disconnect, clearScriptTimers, beginLiveCallEvent, detectedLanguage]);
 
   /**
    * Optimistic triage. Local rules grade the call and it appears on the board at
