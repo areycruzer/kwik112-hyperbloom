@@ -174,6 +174,19 @@ test('extracts held-out spoken location cue shapes without inventing an unknown 
   );
 });
 
+test('does not treat generic subjects as postposition-based locations', () => {
+  const transcripts = [
+    'Patient par oxygen mask laga hai.',
+    'Building mein aag lagi hai.',
+    'व्यक्ति पर हमला हुआ है।',
+    'मरीज में कोई हरकत नहीं है।',
+  ];
+
+  for (const transcript of transcripts) {
+    assert.equal(localTriage(transcript).extraction.location.address, undefined, transcript);
+  }
+});
+
 test('location extraction removes a leading caller pronoun', () => {
   const result = localTriage('Main Rajiv Chowk Metro ke paas hoon. Yahan accident hua hai.');
 

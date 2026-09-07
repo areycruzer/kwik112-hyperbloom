@@ -91,12 +91,12 @@ function extractSpokenLocation(transcript: string): string | undefined {
     /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
-    /(?:^|[.!?]\s*|\]\s*(?:uh[,\s]*)?)([^,.!?\n]+?)\s+(?:par|mein)\s+(?=\S)/iu,
+    /(?:^|[.!?]\s*|\]\s*(?:uh[,\s]*)?)((?=[^,.!?\n]*(?:\d|\b(?:road|avenue|gate|metro|park|market|school|terminal|colony|nagar|sector|gali|thana|mandir|cinema|circle)\b))[^,.!?\n]+?)\s+(?:par|mein)\s+(?=\S)/iu,
     /(?:^|[.!?]\s*)([^,.!?\n]+?)\s+ki\s+(?=(?:street\s*light|shop|building|park|lab)\b)/iu,
     /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
     /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,
     /(?:^|।\s*)([^।,.!?\n]+?)\s+की\s+(?=(?:दुकान|इमारत|बिल्डिंग|पार्क)(?:\s|$))/u,
-    /(?:^|।\s*)([^।,.!?\n]+?)\s+(?:पर|में)\s+(?=\S)/u,
+    /(?:^|।\s*)((?=[^।,.!?\n]*(?:\d|(?:रोड|एवेन्यू|गेट|मेट्रो|पार्क|बाजार|स्कूल|टर्मिनल|कॉलोनी|नगर|सेक्टर|गली|थाना|मंदिर|सिनेमा|चौक)(?:\s|$)))[^।,.!?\n]+?)\s+(?:पर|में)\s+(?=\S)/u,
   ];
 
   for (const pattern of patterns) {
