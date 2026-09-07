@@ -5,6 +5,7 @@ import {
   KWIK_LIVE_CALL_EVENT,
   buildLiveCallPayload,
 } from './live-call.ts';
+import * as liveCall from './live-call.ts';
 
 test('builds a versioned start payload with an explicit ungraded state', () => {
   const payload = buildLiveCallPayload({
@@ -105,4 +106,38 @@ test('applies the local medical floor to a tourist reporting heat stroke', () =>
   assert.equal(payload.grade?.incidentType, 'medical_emergency');
   assert.equal(payload.grade?.severity, 'high');
   assert.equal(payload.grade?.priorityCode, 'P2');
+});
+
+test('transcript fingerprint changes only when finalized turn content changes', () => {
+  const fingerprint = (
+    liveCall as typeof liveCall & {
+      liveCallTranscriptFingerprint: (
+        transcript: Parameters<typeof buildLiveCallPayload>[0]['transcript'],
+      ) => string;
+    }
+  ).liveCallTranscriptFingerprint;
+  const first = [
+    {
+      role: 'user' as const,
+      text: 'Fire near Gate 2.',
+      timestamp: '2026-09-07T10:00:01.000Z',
+    },
+  ];
+
+  assert.equal(typeof fingerprint, 'function');
+  assert.equal(
+    fingerprint(first),
+    fingerprint([{ ...first[0], timestamp: '2026-09-07T10:00:09.000Z' }]),
+  );
+  assert.notEqual(
+    fingerprint(first),
+    fingerprint([
+      ...first,
+      {
+        role: 'assistant',
+        text: 'What is the exact location?',
+        timestamp: '2026-09-07T10:00:02.000Z',
+      },
+    ]),
+  );
 });

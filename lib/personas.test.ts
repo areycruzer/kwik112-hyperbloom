@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { JUDGE_CALLER_PRESETS, judgeCallerPreset } from './personas.ts';
+import * as personas from './personas.ts';
 import { localTriage } from './triage-local.ts';
+
+const { JUDGE_CALLER_PRESETS, judgeCallerPreset } = personas;
 
 test('exposes exactly the three approved judge caller presets', () => {
   assert.deepEqual(
@@ -24,6 +26,46 @@ test('judge caller presets are directly playable by the scripted voice station',
         .every((line) => line.emotions && Object.keys(line.emotions).length > 0),
     );
   }
+});
+
+test('every recorded caller has concise visible context and speech audio metadata', () => {
+  assert.deepEqual(
+    JUDGE_CALLER_PRESETS.map(({ name, description, speechLanguage }) => ({
+      name,
+      description,
+      speechLanguage,
+    })),
+    [
+      {
+        name: 'Ramesh',
+        description: 'Road accident near Moolchand Metro',
+        speechLanguage: 'hi-IN',
+      },
+      {
+        name: 'John',
+        description: 'Tourist with heatstroke at India Gate',
+        speechLanguage: 'en-IN',
+      },
+      {
+        name: 'Sharma ji',
+        description: 'Unresponsive patient at a metro entrance',
+        speechLanguage: 'hi-IN',
+      },
+    ],
+  );
+});
+
+test('the legacy guided-demo launch selects Sharma ji without adding another option', () => {
+  const selectPreset = (
+    personas as typeof personas & {
+      selectJudgeCallerPreset: (id?: string) => (typeof JUDGE_CALLER_PRESETS)[number];
+    }
+  ).selectJudgeCallerPreset;
+
+  assert.equal(typeof selectPreset, 'function');
+  assert.equal(selectPreset('hinglish-five-minute').id, 'sharma-ji');
+  assert.equal(selectPreset('john').id, 'john');
+  assert.equal(selectPreset('unknown').id, 'ramesh');
 });
 
 test('presets preserve the approved caller-to-scenario mapping', () => {

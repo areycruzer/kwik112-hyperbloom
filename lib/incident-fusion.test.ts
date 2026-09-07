@@ -11,6 +11,7 @@ import {
   writeFusionDecisions,
 } from './incident-fusion.ts';
 import type { EmergencyCall } from './types.ts';
+import type { FusionDecisionMap } from './incident-fusion.ts';
 
 function call(id: string, overrides: Partial<EmergencyCall> = {}): EmergencyCall {
   return {
@@ -191,7 +192,7 @@ test('only an approved link blocks the related incident from separate dispatch',
   const [suggestion] = findFusionSuggestions([call('a'), call('b')]);
   assert.ok(suggestion);
 
-  let decisions = {};
+  let decisions: FusionDecisionMap = {};
   decisions = recordFusionDecision(decisions, suggestion!, 'kept_separate', '2026-09-05T10:05:00.000Z');
   assert.equal(linkedPrimaryFor('b', decisions), null);
 

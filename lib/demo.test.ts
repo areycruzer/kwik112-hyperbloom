@@ -32,7 +32,7 @@ test('created call advances through triage, approval, dispatch, and audit', () =
   assert.equal(
     deriveDemoStep({
       call,
-      records: [{ point: 'INTAKE', action: 'confirmed', at: '2026-09-05T10:01:00.000Z' }],
+      records: [{ point: 'INTAKE' }],
       intakeStarted: true,
     }),
     'human_approval',
@@ -41,8 +41,8 @@ test('created call advances through triage, approval, dispatch, and audit', () =
     deriveDemoStep({
       call: { ...call, status: 'dispatched' },
       records: [
-        { point: 'INTAKE', action: 'confirmed', at: '2026-09-05T10:01:00.000Z' },
-        { point: 'DISPATCH', action: 'confirmed', at: '2026-09-05T10:02:00.000Z' },
+        { point: 'INTAKE' },
+        { point: 'DISPATCH' },
       ],
       intakeStarted: true,
     }),
@@ -52,9 +52,9 @@ test('created call advances through triage, approval, dispatch, and audit', () =
     deriveDemoStep({
       call: { ...call, status: 'dispatched' },
       records: [
-        { point: 'INTAKE', action: 'confirmed', at: '2026-09-05T10:01:00.000Z' },
-        { point: 'DISPATCH', action: 'confirmed', at: '2026-09-05T10:02:00.000Z' },
-        { point: 'RESOLUTION', action: 'confirmed', at: '2026-09-05T10:03:00.000Z' },
+        { point: 'INTAKE' },
+        { point: 'DISPATCH' },
+        { point: 'RESOLUTION' },
       ],
       intakeStarted: true,
     }),
@@ -74,6 +74,15 @@ test('Hinglish fallback alternates caller and dispatcher with synthetic provenan
     longitude: 77.2177,
     city: 'New Delhi',
   });
+});
+
+test('scripted assistant asks one question at a time and never claims dispatch', () => {
+  const assistantLines = HINGLISH_DEMO_LINES.filter((line) => line.role === 'assistant');
+
+  for (const line of assistantLines) {
+    assert.ok((line.text.match(/\?/g) ?? []).length <= 1, line.text);
+    assert.doesNotMatch(line.text, /dispatch|ambulance (?:arrange|bhej|send)/i);
+  }
 });
 
 test('audit rows name transcript and triage provenance without implying measurement', () => {

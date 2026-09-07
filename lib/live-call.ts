@@ -86,3 +86,7 @@ export function buildLiveCallPayload(input: BuildLiveCallPayloadInput): KwikLive
     grade: gradeCallerTurns(input.transcript),
   };
 }
+
+export function liveCallTranscriptFingerprint(transcript: readonly KwikLiveCallTurn[]): string {
+  return JSON.stringify(transcript.map(({ role, text }) => [role, text]));
+}

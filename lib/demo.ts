@@ -32,7 +32,7 @@ export const HINGLISH_DEMO_LINES: readonly DemoLine[] = [
   },
   {
     role: 'assistant',
-    text: 'Main aapke saath hoon. Ambulance arrange ho rahi hai. Aapki exact location kya hai?',
+    text: 'Help is being arranged. Stay with me. Aapki exact location kya hai?',
   },
   {
     role: 'user',
@@ -50,7 +50,7 @@ export const HINGLISH_DEMO_LINES: readonly DemoLine[] = [
   },
   {
     role: 'assistant',
-    text: 'Emergency help dispatch ki ja rahi hai. Phone speaker par rakhiye aur nearby staff ko bulaiye.',
+    text: 'Help is being arranged. Stay with me. Main aapko agla safe step bataunga.',
   },
 ];
 

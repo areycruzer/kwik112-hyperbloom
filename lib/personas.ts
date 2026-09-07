@@ -8,6 +8,8 @@ export interface CallerPresetLine {
 export interface JudgeCallerPreset {
   id: 'ramesh' | 'john' | 'sharma-ji';
   name: 'Ramesh' | 'John' | 'Sharma ji';
+  description: string;
+  speechLanguage: 'hi-IN' | 'en-IN';
   phone: string;
   incidentType: IncidentType;
   lines: readonly CallerPresetLine[];
@@ -17,6 +19,8 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
   {
     id: 'ramesh',
     name: 'Ramesh',
+    description: 'Road accident near Moolchand Metro',
+    speechLanguage: 'hi-IN',
     phone: '+91 00000 00112',
     incidentType: 'accident',
     lines: [
@@ -52,6 +56,8 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
   {
     id: 'john',
     name: 'John',
+    description: 'Tourist with heatstroke at India Gate',
+    speechLanguage: 'en-IN',
     phone: '+91 00000 00212',
     incidentType: 'medical_emergency',
     lines: [
@@ -71,7 +77,7 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
       },
       {
         role: 'assistant',
-        text: 'Can you move together into shade safely, and is he still responding to you?',
+        text: 'Is he still responding to you?',
       },
       {
         role: 'user',
@@ -83,6 +89,8 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
   {
     id: 'sharma-ji',
     name: 'Sharma ji',
+    description: 'Unresponsive patient at a metro entrance',
+    speechLanguage: 'hi-IN',
     phone: '+91 00000 00312',
     incidentType: 'medical_emergency',
     lines: [
@@ -102,7 +110,7 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
       },
       {
         role: 'assistant',
-        text: 'क्या वह पूरी तरह बेहोश हैं और सामान्य रूप से सांस नहीं ले रही हैं?',
+        text: 'क्या वह सामान्य रूप से सांस ले रही हैं?',
       },
       {
         role: 'user',
@@ -111,7 +119,7 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
       },
       {
         role: 'assistant',
-        text: 'ध्वनि-विस्तारक चालू कीजिए और मेरे अगले निर्देश ध्यान से सुनिए।',
+        text: 'मदद की व्यवस्था की जा रही है। मेरे साथ बने रहिए।',
       },
     ],
   },
@@ -119,4 +127,9 @@ export const JUDGE_CALLER_PRESETS: readonly JudgeCallerPreset[] = [
 
 export function judgeCallerPreset(id: JudgeCallerPreset['id']): JudgeCallerPreset {
   return JUDGE_CALLER_PRESETS.find((preset) => preset.id === id)!;
+}
+
+export function selectJudgeCallerPreset(id?: string): JudgeCallerPreset {
+  const compatibleId = id === 'hinglish-five-minute' ? 'sharma-ji' : id;
+  return JUDGE_CALLER_PRESETS.find((preset) => preset.id === compatibleId) ?? JUDGE_CALLER_PRESETS[0];
 }
