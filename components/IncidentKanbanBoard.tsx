@@ -1,7 +1,7 @@
 /**
- * Pulse112 Mission Kanban Pipeline
+ * Kwik 112 Mission Kanban Pipeline
  *
- * A five-stage incident pipeline rebuilt on the Dispatch AI design system:
+ * A five-stage incident pipeline rebuilt on the Kwik 112 design system:
  * flat `--panel` surfaces, 1px rules, signal-coloured accents, and no glow or
  * blur. Each card carries the incident's `buildSymbol` triangle, its real
  * per-card AI confidence, its real measured distress (an em-dash when prosody

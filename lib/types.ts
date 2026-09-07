@@ -1,5 +1,5 @@
 /**
- * Pulse112 Type Definitions
+ * Kwik 112 Type Definitions
  * Central type definitions for the emergency dispatch system
  */
 

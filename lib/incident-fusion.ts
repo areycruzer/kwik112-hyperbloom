@@ -40,7 +40,7 @@ export interface FusionDecision {
 
 export type FusionDecisionMap = Record<string, FusionDecision>;
 
-export const FUSION_STORAGE_KEY = 'pulse112_incident_fusion_decisions';
+export const FUSION_STORAGE_KEY = 'kwik112_incident_fusion_decisions';
 
 interface FusionStorage {
   getItem(key: string): string | null;

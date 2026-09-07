@@ -49,7 +49,7 @@ for (const text of requiredLandingText) {
 for (const href of [
   "/dashboard",
   "/dashboard?startCall=1#voice-station",
-  "https://github.com/JAYATIAHUJA/pulse112-tactical-cad",
+  "https://github.com/areycruzer/kwik-112",
   "evaluation/results",
   "/llms.txt",
 ]) {

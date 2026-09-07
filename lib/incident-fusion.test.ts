@@ -221,7 +221,7 @@ test('persists only valid operator fusion decisions', () => {
   writeFusionDecisions(decisions, storage);
   assert.deepEqual(readFusionDecisions(storage), decisions);
 
-  values.set('pulse112_incident_fusion_decisions', JSON.stringify({
+  values.set('kwik112_incident_fusion_decisions', JSON.stringify({
     valid: decisions[suggestion.key],
     invalid: { action: 'auto_linked', primary_call_id: 7 },
     malformed_snapshot: {

@@ -85,7 +85,7 @@ export default function MiniLocationMap({
           size: 30,
         });
         const icon = L.default.divIcon({
-          className: 'pulse-map-marker',
+          className: 'kwik-map-marker',
           html: svg,
           iconSize: [30, 30],
           iconAnchor: [15, 15],

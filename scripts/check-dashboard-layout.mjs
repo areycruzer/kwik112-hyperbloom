@@ -37,7 +37,7 @@ const DASHBOARD_URL =
 
 const browserPath = findBrowserBinary();
 const debugPort = 9333;
-const profilePath = await mkdtemp(join(tmpdir(), 'pulse112-layout-'));
+const profilePath = await mkdtemp(join(tmpdir(), 'kwik112-layout-'));
 
 const browser = spawn(
   browserPath,

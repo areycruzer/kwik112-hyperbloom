@@ -2,7 +2,7 @@
  * @module useDialogFocus
  * @description Shared focus management for modal dialogs: move focus into the
  *              dialog on open, trap Tab inside it, and restore focus to the
- *              trigger on close. `IncidentTimeline` and the 112 Pulse voice
+ *              trigger on close. `IncidentTimeline` and the Kwik 112 voice
  *              station both need exactly this; extracting it here is what stops
  *              the two dialogs solving the same accessibility problem two
  *              different ways (or one of them not solving it at all).

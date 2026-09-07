@@ -92,7 +92,7 @@ Fresh triage outputs are written to `evaluation/results/local-held_out-latest.js
 | Failure mode | Missing keys, timeout, malformed output, or provider failure preserves the local grade |
 | Emotion data | Hume supplies prosody; OpenAI refinement is not represented as producing emotion scores |
 
-Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It is also distinct from the unrelated Devpost project named Pulse112.
+Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It is also distinct from unrelated third-party emergency-response projects published on Devpost.
 
 ### Codex and OpenAI contribution
 

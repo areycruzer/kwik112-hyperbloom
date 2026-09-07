@@ -43,7 +43,7 @@ export function distressOf(call: EmergencyCall): number | null {
 
 /**
  * Where this call's grade came from. Three prosody states are kept distinct:
- *   - measured  → a live Hume EVI reading: "112 Pulse voice".
+ *   - measured  → a live Hume EVI reading: "Kwik 112 voice".
  *   - simulated → a scripted demo curve: "Simulated demo". Never dressed up as a
  *                 live measurement, which is the whole point of the flag.
  *   - absent    → no prosody at all (distress_level null): falls through to the
@@ -53,7 +53,7 @@ export function distressOf(call: EmergencyCall): number | null {
  */
 export function triageSource(call: EmergencyCall): string {
   if (call.ai_triage?.emotion_analysis?.distress_level != null) {
-    return call.prosody_source === 'simulated' ? 'Simulated demo' : '112 Pulse voice';
+    return call.prosody_source === 'simulated' ? 'Simulated demo' : 'Kwik 112 voice';
   }
   if (call.ai_confidence != null || call.ai_triage?.confidence != null) return 'AI triage';
   return 'Manual intake';

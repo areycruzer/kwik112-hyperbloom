@@ -1,4 +1,4 @@
-# Dispatch AI — UI revamp and 112 Pulse feature layer
+# Kwik 112 — UI revamp and Kwik 112 feature layer
 
 Date: 2026-08-29
 Status: approved for planning
@@ -15,21 +15,21 @@ structurally flat: one screen with modals bolted on.
 
 ## 2. Product framing
 
-**Dispatch AI** is the core CAD platform: incident monitoring, dispatch,
+**Kwik 112** is the core CAD platform: incident monitoring, dispatch,
 pathfinding, call history, forecasting, alerting.
 
-**112 Pulse** is a feature layer on top of it: emotion-aware voice intake for
+**Kwik 112** is a feature layer on top of it: emotion-aware voice intake for
 India's 112 service. It opens a Hume EVI session, reads caller distress from
 prosody, and feeds that signal into triage and into the operator's view.
 
 This framing is load-bearing for the design. "Pulse" is the caller's emotional
 vital sign, so distress is presented as a first-class signal across the platform
-rather than a panel. Branding: `DISPATCH AI` is the product; `112 PULSE` badges
+rather than a panel. Branding: `KWIK 112` is the product; `KWIK 112` badges
 the intake module specifically.
 
 ### 2.1 Honesty consequence
 
-Only calls captured through 112 Pulse carry prosody. Mock and legacy calls show
+Only calls captured through Kwik 112 carry prosody. Mock and legacy calls show
 `—` for distress. That contrast is the demonstration of what the feature adds and
 must not be smoothed over by inventing values, which is what the current build
 does (a hardcoded 92/86/78/45 on every incident regardless of source).
@@ -38,7 +38,7 @@ does (a hardcoded 92/86/78/45 on every incident regardless of source).
 
 **Revised 2026-08-29 after inspecting the real product.** The first draft of this
 section inferred a "NATO/ICS doctrine" palette from a written description of NATO
-symbology. That was wrong. The values below are extracted from Dispatch AI's own
+symbology. That was wrong. The values below are extracted from Kwik 112's own
 Figma component library export (`ComponentsLibraryDispatch.svg`, 3054x3867) by
 counting every hex literal, and corroborated against their product screenshots.
 
@@ -86,7 +86,7 @@ Severity maps to three named levels, matching their labels exactly: **CRITICAL**
 **MILD**, **SAFE**. Our four-priority model (P1-P4) maps onto them as
 P1 → CRITICAL, P2 → MILD, P3/P4 → SAFE.
 
-Distress ramp (112 Pulse): `#47FF85` (calm) → `#FABC1F` → `#F40000` (peak).
+Distress ramp (Kwik 112): `#47FF85` (calm) → `#FABC1F` → `#F40000` (peak).
 
 ### 3.2 Typography
 
@@ -125,7 +125,7 @@ they cite in prose.
   incident name set beside the marker in `--ink` on a dark plate.
 - **Units are filled circles** in the service colour with a small glyph.
 - **Selection** adds a 1px `--accent` ring, not a scale transform.
-- **Distress ring (112 Pulse)** is retained as an arc around the triangle,
+- **Distress ring (Kwik 112)** is retained as an arc around the triangle,
   coloured from the distress ramp, and drawn only when prosody exists. Absent
   entirely when never measured, so absence stays visually distinct from calm.
 
@@ -139,7 +139,7 @@ module's `esc()`.
 the three-tier stack originally specified.
 
 ```
-TOP BAR    DISPATCH AI · environment telemetry · clock · LIVE · region
+TOP BAR    KWIK 112 · environment telemetry · clock · LIVE · region
 +------+-------------------+---------------------------+
 | icon | INCIDENT PANEL    |  MAP (satellite)          |
 | rail |  tabs: Emergencies|   labelled triangle       |
@@ -172,10 +172,10 @@ interactions, not a flourish.
 - Keyboard parity is required: every module exposes collapse, close and move
   actions as buttons, so the board is operable without a pointer.
 
-### 5.2 112 Pulse
+### 5.2 Kwik 112
 
-112 Pulse remains the emotion-aware voice intake and is not a rail module. It is
-the primary action in the top bar, badged `112 PULSE`, opening over the board.
+Kwik 112 remains the emotion-aware voice intake and is not a rail module. It is
+the primary action in the top bar, badged `KWIK 112`, opening over the board.
 
 ## 6. Modules
 
@@ -327,7 +327,7 @@ Rewritten:
 - `app/api/calls/create/route.ts` — local-only path
 - `components/EmergencyMap.tsx` — symbology, distress rings
 - `components/IncidentKanbanBoard.tsx`
-- `components/StartEmergencyCall.tsx` — 112 Pulse branding, optimistic flow
+- `components/StartEmergencyCall.tsx` — Kwik 112 branding, optimistic flow
 - `components/CallHistoryOverlay.tsx` → history module
 - `components/DataManagementDashboard.tsx` → forecast module
 - `components/MiniLocationMap.tsx`
@@ -367,7 +367,7 @@ The change is done when, against a production build driven in a browser:
 5. Alerts appear for a call with unresolved location and clear on acknowledgement.
 6. The incident timeline shows the open incident's own units and summary, and
    resets when a different incident is opened.
-7. Distress shows a value for a 112 Pulse call and `—` for a mock call.
+7. Distress shows a value for a Kwik 112 call and `—` for a mock call.
 8. `tsc --noEmit` and `next build` are clean.
 9. The XSS payload that previously executed still renders inert after the
    symbology rewrite.
