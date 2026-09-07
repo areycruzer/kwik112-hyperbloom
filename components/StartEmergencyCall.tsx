@@ -386,6 +386,7 @@ function CallStation({
       if (!res.ok || !data.accessToken) {
         throw new Error(data.error || 'Could not get a Hume access token.');
       }
+      if (attempt !== connectionAttemptRef.current) return;
       await connect({
         auth: { type: 'accessToken', value: data.accessToken },
         configId: data.configId ?? undefined,
