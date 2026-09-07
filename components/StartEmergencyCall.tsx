@@ -181,6 +181,7 @@ function CallStation({
   const liveCallIdRef = useRef<string | null>(null);
   const lastLiveFingerprintRef = useRef('');
   const liveCallEndedRef = useRef(false);
+  const handledVoiceErrorRef = useRef(false);
   // Outstanding scripted-playback timers, cleared on unmount / close / restart so
   // a demo left mid-playback cannot fire into an unmounted component.
   const scriptTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -283,7 +284,7 @@ function CallStation({
     language?: string,
   ) => {
     const callId = liveCallIdRef.current;
-    if (!callId || (state === 'end' && liveCallEndedRef.current)) return;
+    if (!callId || (liveCallEndedRef.current && state !== 'start')) return;
     if (state === 'end') liveCallEndedRef.current = true;
 
     window.dispatchEvent(new CustomEvent(KWIK_LIVE_CALL_EVENT, {
@@ -324,7 +325,12 @@ function CallStation({
   }, [phase, lines, scriptedLines, detectedLanguage, scriptedLanguage, publishLiveCallEvent]);
 
   useEffect(() => {
-    if (status.value === 'error') {
+    if (status.value !== 'error') {
+      handledVoiceErrorRef.current = false;
+      return;
+    }
+    if (!handledVoiceErrorRef.current) {
+      handledVoiceErrorRef.current = true;
       if (sessionKind === 'live') {
         publishLiveCallEvent('end', lines, 'measured', detectedLanguage);
       }
@@ -334,10 +340,31 @@ function CallStation({
     }
   }, [status, sessionKind, lines, detectedLanguage, publishLiveCallEvent]);
 
+  const closeStation = useCallback(() => {
+    if (sessionKind === 'live') {
+      publishLiveCallEvent('end', lines, 'measured', detectedLanguage);
+      void disconnect();
+    } else if (sessionKind === 'scripted') {
+      publishLiveCallEvent('end', scriptedLines, 'simulated', scriptedLanguage);
+    }
+    clearScriptTimers();
+    onClose();
+  }, [
+    sessionKind,
+    lines,
+    detectedLanguage,
+    scriptedLines,
+    scriptedLanguage,
+    disconnect,
+    clearScriptTimers,
+    onClose,
+    publishLiveCallEvent,
+  ]);
+
   // Initial focus into the dialog, a Tab trap, Escape-to-close, and focus
   // restored to the trigger on close — the same behaviour IncidentTimeline uses,
   // from the one shared hook so the two dialogs cannot diverge.
-  const { dialogRef, onKeyDown } = useDialogFocus(true, onClose);
+  const { dialogRef, onKeyDown } = useDialogFocus(true, closeStation);
 
   const startLiveCall = useCallback(async () => {
     setErrorText(null);
@@ -579,7 +606,7 @@ function CallStation({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeStation}
             aria-label="Close voice station"
             className="rounded-md p-1.5 text-ink-3 hover:bg-panel-raised hover:text-ink"
           >
@@ -615,14 +642,14 @@ function CallStation({
                 <p className="text-center text-2xs text-ink-4">Speak any language</p>
 
                 <div className="space-y-2 border-t border-rule pt-3">
-                  <span className="label block">Play a recorded caller</span>
+                  <span className="label block">Play a scripted caller</span>
                   <p className="text-xs leading-relaxed text-ink-4">
-                    No microphone or network voice session needed. Recorded callers use the same triage pipeline.
+                    No microphone or network voice session needed. Browser speech uses the same triage pipeline.
                   </p>
                   <select
                     value={scriptId}
                     onChange={(e) => setScriptId(selectJudgeCallerPreset(e.target.value).id)}
-                    aria-label="Recorded caller"
+                    aria-label="Scripted caller"
                     className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink-2 focus:border-accent focus:outline-none"
                   >
                     {JUDGE_CALLER_PRESETS.map((s) => (
@@ -636,7 +663,7 @@ function CallStation({
                     className="flex w-full items-center justify-center gap-2 rounded-md border border-rule-strong bg-panel-raised px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-ink-2 hover:text-ink"
                   >
                     <Play className="h-3.5 w-3.5" />
-                    Play recorded caller
+                    Play scripted caller
                   </button>
                 </div>
               </>
@@ -749,7 +776,7 @@ function CallStation({
                   {result.ai_summary}
                 </p>
                 <button
-                  onClick={onClose}
+                  onClick={closeStation}
                   className="w-full rounded-md bg-accent px-3 py-2 text-xs font-medium uppercase tracking-wide text-deep hover:bg-accent-bright"
                 >
                   View on dispatch board
@@ -838,7 +865,7 @@ function CallStation({
                 <div className="flex h-full items-center justify-center px-4 text-center text-xs text-ink-4">
                   {phase === 'live'
                     ? 'Connected. Speak into the microphone — the transcript appears here.'
-                    : 'Start a live call or play a recorded caller to see the transcript.'}
+                    : 'Start a live call or play a scripted caller to see the transcript.'}
                 </div>
               ) : (
                 displayLines.map((line, i) => (
