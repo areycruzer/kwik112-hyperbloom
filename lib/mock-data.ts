@@ -34,6 +34,44 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.94,
     persons_involved: 2,
     immediate_threats: ['active flames', 'trapped occupants', 'heavy smoke'],
+    dispatch_plan: {
+      priority_code: 'P1',
+      eta_risk: 'high',
+      operator_confirmation_required: true,
+      units: [
+        {
+          service: 'fire',
+          unit: 'Fire Engine',
+          reason: 'Fire response: apartment fire, active flames, trapped occupants',
+        },
+        {
+          service: 'rescue',
+          unit: 'Rescue Ladder',
+          reason: 'Rescue support for callers trapped above ground level',
+        },
+        {
+          service: 'ems',
+          unit: 'Advanced Life Support Ambulance',
+          reason: 'Medical standby for smoke exposure and trapped occupants',
+        },
+      ],
+    },
+    operator_questions: [
+      'Is anyone trapped inside or exposed to smoke?',
+      'Which floor is the fire on right now?',
+      'Are stairs or lifts blocked?',
+      'Are you currently in a safe place?',
+    ],
+    safety_audit: {
+      local_severity: 'critical',
+      model_severity: 'critical',
+      final_severity: 'critical',
+      local_score: 90,
+      model_score: 95,
+      final_score: 95,
+      downgrade_blocked: false,
+      reason: 'Final severity accepted because it did not fall below the local safety floor.',
+    },
     created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
     ai_recommendation: {
@@ -48,6 +86,33 @@ export const mockCalls: EmergencyCall[] = [
       approval_required: false,
       estimated_response_time: '3-4 minutes'
     }
+  },
+  {
+    id: 'delhi-1b',
+    caller_number: '+919810001112',
+    status: 'active',
+    call_status: 'in-progress',
+    incident_type: 'fire',
+    incident_subtype: 'apartment fire',
+    severity: 'high',
+    severity_score: 86,
+    caller_location: {
+      address: 'Sector 16 Market, Pocket C, Rohini, Delhi',
+      city: 'New Delhi',
+      state: 'Delhi',
+      latitude: 28.7204,
+      longitude: 77.1192,
+      confidence: 0.84,
+    },
+    top_emotion: 'fear',
+    emotion_intensity: 0.8,
+    caller_condition: 'distressed',
+    ai_summary: 'Rohini Sector 16 market ke paas apartment se heavy smoke aur flames dikh rahi hain; log balcony mein phanse hain.',
+    ai_confidence: 0.88,
+    persons_involved: 3,
+    immediate_threats: ['heavy smoke', 'people on balcony'],
+    created_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 30 * 1000).toISOString(),
   },
   {
     id: 'delhi-2',

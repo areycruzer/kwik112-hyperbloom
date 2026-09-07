@@ -5,18 +5,7 @@ import { Chip, type ChipTone } from '@/components/ui/panel';
 import { cn } from '@/lib/utils';
 import { haversineKm, type TacticalUnit } from '@/lib/units';
 import type { EmergencyCall } from '@/lib/types';
-
-/**
- * UnitRoster — the responder fleet as a floating-module table (Task 11).
- *
- * Each row carries the unit's `buildSymbol` circle, its id label above a bold
- * callsign, the service, a status pill, the current assignment, and the
- * distance to the selected incident. Distance is a haversine reading; with no
- * incident selected it shows an em-dash rather than a fabricated number.
- *
- * Selecting a row highlights that unit on the map (an accent ring). Rows are
- * real `<button>`s so the whole roster is operable from the keyboard.
- */
+import { unitRosterAccessibleLabel } from '@/lib/dashboard-presentation';
 
 interface UnitRosterProps {
   units: TacticalUnit[];
@@ -32,19 +21,17 @@ const STATUS_META: Record<TacticalUnit['status'], { tone: ChipTone; label: strin
   busy: { tone: 'mild', label: 'Busy' },
 };
 
-/** The incident location a distance is measured to, or null when unmeasurable. */
 function incidentPoint(call: EmergencyCall | null): { lat: number; lng: number } | null {
-  const loc = call?.caller_location;
-  if (!loc || typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') {
+  const location = call?.caller_location;
+  if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
     return null;
   }
-  return { lat: loc.latitude, lng: loc.longitude };
+  return { lat: location.latitude, lng: location.longitude };
 }
 
 function distanceLabel(unit: TacticalUnit, point: { lat: number; lng: number } | null): string {
   if (!point) return '—';
-  const km = haversineKm(unit.lat, unit.lng, point.lat, point.lng);
-  return `${km.toFixed(1)} km`;
+  return `${haversineKm(unit.lat, unit.lng, point.lat, point.lng).toFixed(1)} km`;
 }
 
 export function UnitRoster({
@@ -56,76 +43,49 @@ export function UnitRoster({
   const point = incidentPoint(selectedCall);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b border-rule">
-            <th className="label px-2 py-1.5 font-medium">Unit</th>
-            <th className="label px-2 py-1.5 font-medium">Status</th>
-            <th className="label px-2 py-1.5 font-medium">Assignment</th>
-            <th className="label px-2 py-1.5 text-right font-medium">Distance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {units.map((unit) => {
-            const status = STATUS_META[unit.status];
-            const selected = unit.id === selectedUnitId;
-            return (
-              <tr
-                key={unit.id}
-                className={cn(
-                  'border-b border-rule last:border-b-0',
-                  selected && 'bg-accent/10',
-                )}
-              >
-                <td className="px-2 py-2 align-middle">
-                  <button
-                    type="button"
-                    onClick={() => onSelectUnit(unit.id)}
-                    aria-pressed={selected}
-                    aria-label={`Select ${unit.callsign} (${unit.id}) on the map`}
-                    className="flex items-center gap-2 rounded-[4px] text-left"
-                  >
-                    <Symbol
-                      spec={{ kind: 'unit', glyph: unit.type, service: unit.type, size: 18 }}
-                      className="shrink-0"
-                    />
-                    <span className="leading-tight">
-                      <span className="label block">{unit.id}</span>
-                      <span
-                        className={cn(
-                          'block text-sm font-semibold',
-                          selected ? 'text-accent' : 'text-ink',
-                        )}
-                      >
-                        {unit.callsign}
-                      </span>
-                      <span className="block text-2xs capitalize text-ink-3">
-                        {unit.type} · <span className="tnum">{unit.speed}</span>
-                      </span>
-                    </span>
-                  </button>
-                </td>
-                <td className="px-2 py-2 align-middle">
-                  <Chip tone={status.tone} dot>
-                    {status.label}
-                  </Chip>
-                </td>
-                <td className="px-2 py-2 align-middle text-sm text-ink-2">
-                  {unit.assignedCallId ? (
-                    <span className="tnum">{unit.assignedCallId}</span>
-                  ) : (
-                    <span className="text-ink-4">Unassigned</span>
-                  )}
-                </td>
-                <td className="px-2 py-2 text-right align-middle">
-                  <span className="tnum text-sm text-ink">{distanceLabel(unit, point)}</span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <ul className="flex flex-col gap-1.5">
+      {units.map((unit) => {
+        const status = STATUS_META[unit.status];
+        const selected = unit.id === selectedUnitId;
+        const distance = distanceLabel(unit, point);
+        return (
+          <li key={unit.id}>
+            <button
+              type="button"
+              onClick={() => onSelectUnit(unit.id)}
+              aria-pressed={selected}
+              aria-label={unitRosterAccessibleLabel(unit, distance)}
+              className={cn(
+                'flex w-full items-center justify-between gap-3 rounded-[6px] border px-2.5 py-2 text-left transition-colors',
+                selected
+                  ? 'border-accent bg-accent/10'
+                  : 'border-rule bg-panel hover:border-rule-strong',
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Symbol
+                  spec={{ kind: 'unit', glyph: unit.type, service: unit.type, size: 18 }}
+                  className="shrink-0"
+                />
+                <span className="min-w-0 leading-tight">
+                  <span className={cn('block truncate text-sm font-semibold', selected ? 'text-accent' : 'text-ink')}>
+                    {unit.callsign}
+                  </span>
+                  <span className="mt-0.5 block truncate text-2xs text-ink-4">
+                    <span className="uppercase">{unit.type}</span> · {unit.id} · {unit.speed}
+                    {unit.assignedCallId ? ` · Assigned ${unit.assignedCallId}` : ''}
+                  </span>
+                </span>
+              </span>
+
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <Chip tone={status.tone} dot>{status.label}</Chip>
+                <span className="tnum text-2xs text-ink-3">{distance}</span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

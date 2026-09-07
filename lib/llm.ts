@@ -7,7 +7,7 @@
  */
 
 import OpenAI from 'openai';
-import { logger } from './logger';
+import { logger } from './logger.ts';
 
 export type LlmProvider = 'glm' | 'openai' | 'none';
 

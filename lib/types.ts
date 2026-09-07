@@ -86,6 +86,9 @@ export interface EmergencyCall {
   labels?: string[]; // Emergency category labels (e.g., ["MEDICAL_EMERGENCY", "HIGH_PRIORITY"])
   flags?: string[]; // Critical flags (e.g., ["LIFE_THREATENING", "WEAPONS_INVOLVED"])
   recommended_units?: string[]; // Units to dispatch (e.g., ["Fire Engine 7", "Ambulance 12"])
+  dispatch_plan?: DispatchPlan;
+  operator_questions?: string[];
+  safety_audit?: SafetyAudit;
   special_instructions?: string; // Special instructions for responders
   analysis?: any; // Full GPT analysis object
   
@@ -159,6 +162,28 @@ export interface AIExtraction {
   confidence_score: number;
   missing_critical_info: string[];
   recommended_questions: string[];
+}
+
+export interface DispatchPlan {
+  priority_code: PriorityCode;
+  units: Array<{
+    service: 'ems' | 'fire' | 'police' | 'rescue' | 'civic';
+    unit: string;
+    reason: string;
+  }>;
+  eta_risk: 'high' | 'medium' | 'low';
+  operator_confirmation_required: boolean;
+}
+
+export interface SafetyAudit {
+  local_severity: Severity;
+  model_severity: Severity;
+  final_severity: Severity;
+  local_score: number;
+  model_score: number;
+  final_score: number;
+  downgrade_blocked: boolean;
+  reason: string;
 }
 
 // ============================================================================
