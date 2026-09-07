@@ -14,6 +14,7 @@ export function nextLiveCallPayload(
   incoming: KwikLiveCallPayload,
 ): KwikLiveCallPayload | null {
   if (!current) return incoming;
+  if (current.state === 'end' && incoming.callId === current.callId) return current;
 
   const currentAt = Date.parse(current.at);
   const incomingAt = Date.parse(incoming.at);
