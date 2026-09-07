@@ -866,6 +866,7 @@ function LiveCallStrip({ payload }: { payload: KwikLiveCallPayload }) {
       <div className="col-span-2 mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-ink-3 sm:col-span-1 sm:mt-0 sm:justify-end">
         <span>Language: {presentation.language}</span>
         <span>Prosody: {presentation.prosody}</span>
+        {presentation.emotion ? <span>Caller emotion: {presentation.emotion}</span> : null}
         <span className="font-semibold text-ink">{presentation.grade}</span>
       </div>
     </section>

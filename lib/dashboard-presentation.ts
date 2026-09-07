@@ -7,6 +7,8 @@ export interface LiveCallPresentation {
   language: string;
   prosody: string;
   grade: string;
+  /** Top measured emotion on the caller's latest utterance, e.g. "Distress 86%". */
+  emotion: string | null;
 }
 
 export function nextLiveCallPayload(
@@ -37,6 +39,17 @@ export function presentLiveCall(
   payload: KwikLiveCallPayload,
   turnLimit = 3,
 ): LiveCallPresentation {
+  // Latest caller turn that carried prosody scores — the dispatcher's live
+  // emotional read of the person on the line.
+  let emotion: string | null = null;
+  for (let i = payload.transcript.length - 1; i >= 0; i--) {
+    const turn = payload.transcript[i];
+    if (turn.role !== 'user' || !turn.emotions) continue;
+    const [top] = Object.entries(turn.emotions).sort((a, b) => b[1] - a[1]);
+    if (top) emotion = `${top[0]} ${Math.round(top[1] * 100)}%`;
+    break;
+  }
+
   return {
     turns: payload.transcript.slice(-turnLimit).map((turn) => ({
       speaker: turn.role === 'user' ? 'Caller' : 'Dispatcher',
@@ -47,6 +60,7 @@ export function presentLiveCall(
     grade: payload.grade
       ? `Current grade: ${payload.grade.severity.toUpperCase()} (rules)`
       : 'Waiting for caller',
+    emotion,
   };
 }
 

@@ -154,7 +154,11 @@ function CallStation({
   onCallCreated?: (callId: string) => void;
   initialScriptId?: string;
 }) {
-  const { connect, disconnect, status, messages, chatMetadata, isMuted, mute, unmute, micFft } =
+  // micFft intentionally NOT destructured: the Hume SDK's live audio analyser
+  // can enter a render-phase update loop in suspended/throttled WebViews when
+  // the component subscribes to it, which freezes the whole station. The mic
+  // level meter is cosmetic; live transcription and prosody do not need it.
+  const { connect, disconnect, status, messages, chatMetadata, isMuted, mute, unmute } =
     useVoice();
 
   const [phase, setPhase] = useState<
@@ -194,25 +198,42 @@ function CallStation({
   }, []);
 
   // Cancel timers and invalidate any token/connect continuation on unmount.
+  // `disconnect` is read through a ref so this cleanup runs exactly once on
+  // true unmount: depending on the SDK function directly re-runs the cleanup
+  // whenever the VoiceProvider re-renders (its context identity changes during
+  // connection status transitions), which cancels the in-flight EVI connect.
+  const disconnectRef = useRef(disconnect);
+  disconnectRef.current = disconnect;
+  const clearScriptTimersRef = useRef(clearScriptTimers);
+  clearScriptTimersRef.current = clearScriptTimers;
   useEffect(() => () => {
     connectionAttemptRef.current += 1;
-    clearScriptTimers();
-    void disconnect();
-  }, [clearScriptTimers, disconnect]);
+    clearScriptTimersRef.current();
+    void disconnectRef.current();
+  }, []);
 
   /** Derive the transcript, prosody frames, and detected language from the live
    *  EVI socket. Hume tags each finalized user message with the language it heard
    *  ("Detected language of the message text"); the call's language is the value
    *  seen most often across those messages. */
-  const { lines, frames, detectedLanguage } = useMemo(() => {
+  const { lines, frames, detectedLanguage, interimText } = useMemo(() => {
     const out: TranscriptLine[] = [];
     const emotionFrames: Record<string, number>[] = [];
-    const languageCounts: Record<string, number> = {};
+    const languageCounts: Record<string, string | number> = {};
+    // EVI streams provisional transcripts (interim: true) while the caller is
+    // still speaking; the finalized user_message supersedes them. Shown as the
+    // live "ghost" line, but never graded — only finalized turns feed triage.
+    let liveInterim = '';
 
     for (const message of messages) {
       if (message.type === 'user_message') {
         // Interim transcripts get refined; only keep finalized ones.
-        if ((message as any).interim) continue;
+        if ((message as any).interim) {
+          const partial = message.message?.content ?? '';
+          if (partial.trim()) liveInterim = partial;
+          continue;
+        }
+        liveInterim = '';
         const scores = (message as any).models?.prosody?.scores as
           | Record<string, number>
           | undefined;
@@ -220,7 +241,7 @@ function CallStation({
         const lang = (message as any).language;
         if (typeof lang === 'string' && lang.trim()) {
           const key = lang.trim();
-          languageCounts[key] = (languageCounts[key] ?? 0) + 1;
+          languageCounts[key] = ((languageCounts[key] as number) ?? 0) + 1;
         }
         out.push({
           role: 'user',
@@ -229,6 +250,7 @@ function CallStation({
           emotions: scores,
         });
       } else if (message.type === 'assistant_message') {
+        liveInterim = '';
         out.push({
           role: 'assistant',
           text: message.message?.content ?? '',
@@ -242,8 +264,8 @@ function CallStation({
     let language: string | undefined;
     let bestCount = 0;
     for (const [lang, count] of Object.entries(languageCounts)) {
-      if (count > bestCount) {
-        bestCount = count;
+      if ((count as number) > bestCount) {
+        bestCount = count as number;
         language = lang;
       }
     }
@@ -252,6 +274,7 @@ function CallStation({
       lines: out.filter((l) => l.text.trim()),
       frames: emotionFrames,
       detectedLanguage: language,
+      interimText: liveInterim,
     };
   }, [messages]);
 
@@ -279,7 +302,8 @@ function CallStation({
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
-  }, [displayLines.length]);
+    // interimText too, so the panel follows the live ghost line mid-sentence.
+  }, [displayLines.length, interimText]);
 
   const publishLiveCallEvent = useCallback((
     state: KwikLiveCallState,
@@ -588,7 +612,7 @@ function CallStation({
   };
 
   const mmss = `${String(Math.floor(duration / 60)).padStart(2, '0')}:${String(duration % 60).padStart(2, '0')}`;
-  const micLevel = micFft.length ? Math.min(1, micFft.reduce((a, b) => a + b, 0) / micFft.length / 40) : 0;
+  const micLevel = 0;
   const didChange = (field: string) => changed.includes(field);
 
   return (
@@ -874,24 +898,57 @@ function CallStation({
               ref={transcriptRef}
               className="max-h-[280px] min-h-[200px] flex-1 space-y-2 overflow-y-auto rounded-md border border-rule bg-panel p-3 text-sm"
             >
-              {displayLines.length === 0 ? (
+              {displayLines.length === 0 && !(phase === 'live' && interimText.trim()) ? (
                 <div className="flex h-full items-center justify-center px-4 text-center text-xs text-ink-4">
                   {phase === 'live'
                     ? 'Connected. Speak into the microphone — the transcript appears here.'
                     : 'Start a live call or play a scripted caller to see the transcript.'}
                 </div>
               ) : (
-                displayLines.map((line, i) => (
-                  <div
-                    key={i}
-                    className={cn('flex gap-2', line.role === 'user' ? 'text-mild' : 'text-accent')}
-                  >
-                    <span className="shrink-0 text-2xs font-bold uppercase">
-                      [{line.role === 'user' ? 'caller' : 'ai'}]
-                    </span>
-                    <p className="leading-relaxed">{line.text}</p>
-                  </div>
-                ))
+                <>
+                  {displayLines.map((line, i) => (
+                    <div
+                      key={i}
+                      className={cn('flex gap-2', line.role === 'user' ? 'text-mild' : 'text-accent')}
+                    >
+                      <span className="shrink-0 text-2xs font-bold uppercase">
+                        [{line.role === 'user' ? 'caller' : 'ai'}]
+                      </span>
+                      <div className="min-w-0">
+                        <p className="leading-relaxed">{line.text}</p>
+                        {/* Prosody measured by Hume on this exact utterance —
+                            top three only, labelled, never summarized away. */}
+                        {line.role === 'user' && line.emotions ? (
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {Object.entries(line.emotions)
+                              .sort((a, b) => b[1] - a[1])
+                              .slice(0, 3)
+                              .map(([emotion, intensity]) => (
+                                <span
+                                  key={emotion}
+                                  title="Measured by Hume EVI prosody on this utterance"
+                                  className="rounded border border-rule bg-deep px-1 py-px text-2xs text-ink-3"
+                                >
+                                  {emotion} {Math.round(intensity * 100)}%
+                                </span>
+                              ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  {/* Live ghost line: provisional transcript while the caller is
+                      still mid-sentence. Replaced by the finalized turn above. */}
+                  {phase === 'live' && interimText.trim() ? (
+                    <div className="flex gap-2 text-ink-3">
+                      <span className="shrink-0 text-2xs font-bold uppercase">[caller]</span>
+                      <p className="leading-relaxed italic">
+                        {interimText}
+                        <span className="animate-pulse">▍</span>
+                      </p>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           </div>

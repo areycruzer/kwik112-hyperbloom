@@ -14,7 +14,7 @@
     "check:raw-html": "node scripts/check-raw-html.mjs"
   },
   "dependencies": {
-    "@humeai/voice-react": "^0.2.7",
+    "@humeai/voice-react": "0.3.0-beta.6",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.545.0",

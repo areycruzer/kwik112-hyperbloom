@@ -108,7 +108,38 @@ test('live call presentation exposes recent turns and deterministic provenance',
     language: 'HI',
     prosody: 'Measured',
     grade: 'Current grade: CRITICAL (rules)',
+    emotion: null,
   });
+});
+
+test('live call presentation surfaces the latest measured caller emotion', () => {
+  const payload: KwikLiveCallPayload = {
+    version: 1,
+    state: 'update',
+    callId: 'live-112',
+    at: '2026-09-07T10:00:03.000Z',
+    transcript: [
+      {
+        role: 'user',
+        text: 'meri patni behosh hai',
+        timestamp: '2026-09-07T10:00:00.000Z',
+        emotions: { Distress: 0.7, Fear: 0.6 },
+      },
+      { role: 'assistant', text: 'Location batayein?', timestamp: '2026-09-07T10:00:01.000Z' },
+      {
+        role: 'user',
+        text: 'saans nahi aa rahi',
+        timestamp: '2026-09-07T10:00:02.000Z',
+        emotions: { Distress: 0.86, Panic: 0.81, Calmness: 0.02 },
+      },
+    ],
+    detectedLanguage: 'hi',
+    prosodySource: 'measured',
+    grade: null,
+  };
+
+  // The LAST caller turn with prosody wins, top emotion first.
+  assert.equal(presentLiveCall(payload).emotion, 'Distress 86%');
 });
 
 test('live call presentation identifies a caller that has not produced a grade', () => {
@@ -128,6 +159,7 @@ test('live call presentation identifies a caller that has not produced a grade',
     language: 'Detecting',
     prosody: 'Absent',
     grade: 'Waiting for caller',
+    emotion: null,
   });
 });
 
