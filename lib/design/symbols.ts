@@ -233,7 +233,10 @@ const GLYPHS: Record<string, Glyph> = {
       'M11 17.4h2v2h-2Z' +
       'M12 4.6c-2.4 0-4.3 1.9-4.3 4.3h2c0-1.3 1-2.3 2.3-2.3s2.3 1 2.3 2.3' +
       'c0 .8-.4 1.3-1.2 1.9-1 .8-1.8 1.6-1.8 3.2v.7h2v-.7c0-.8.4-1.2 1.2-1.8' +
-      '1-.8 1.8-1.7 1.8-3.3 0-2.4-1.9-4.3-4.3-4.3Z',
+      // Leading space is load-bearing: without it this line's "1" fuses with
+      // the previous line's "-1.8" into "-1.81" and the browser rejects the
+      // whole path. `every glyph path is well formed` pins this.
+      ' 1-.8 1.8-1.7 1.8-3.3 0-2.4-1.9-4.3-4.3-4.3Z',
     box: [7.7, 4.6, 8.6, 14.8],
   },
 

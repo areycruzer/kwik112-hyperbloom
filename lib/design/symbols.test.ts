@@ -228,3 +228,68 @@ test('a label names the symbol without drawing a plate unless asked', () => {
   assert.match(plated, /<text/);
   assert.match(plated, />CATS-309</);
 });
+
+/**
+ * SVG path parameter counts, by command. A browser rejects an entire `d`
+ * attribute whose command carries the wrong number of parameters, and renders
+ * nothing at all - silently, apart from a console warning nobody reads.
+ */
+const PATH_ARITY: Record<string, number> = {
+  m: 2, l: 2, t: 2, h: 1, v: 1, c: 6, s: 4, q: 4, a: 7, z: 0,
+};
+
+/**
+ * @description Assert an SVG path parses the way a browser parses it: split on
+ *              commands, count the numbers each one carries, and require a whole
+ *              number of parameter groups.
+ *
+ *              This exists because these paths are assembled from concatenated
+ *              source lines, and dropping the separator between two of them
+ *              fuses the numbers across the join - "...1.2-1.8" + "1-.8..."
+ *              silently becomes "-1.81", one number where there were two. The
+ *              path stays a plausible-looking string, so only the parameter
+ *              count gives it away.
+ */
+function assertPathParses(d: string, label: string): void {
+  const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
+  assert.ok(commands && commands.length > 0, `${label}: no path commands found`);
+
+  for (const chunk of commands!) {
+    const letter = chunk[0];
+    const arity = PATH_ARITY[letter.toLowerCase()];
+    assert.ok(arity !== undefined, `${label}: unknown path command "${letter}"`);
+
+    const numbers = chunk.slice(1).match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
+    if (arity === 0) {
+      assert.equal(numbers.length, 0, `${label}: "${letter}" takes no parameters`);
+      continue;
+    }
+    assert.ok(numbers.length > 0, `${label}: "${letter}" has no parameters`);
+    assert.equal(
+      numbers.length % arity,
+      0,
+      `${label}: "${letter}" carries ${numbers.length} numbers, not a multiple of ${arity} ` +
+        `(a browser would reject the whole path). Chunk: ${chunk.trim()}`,
+    );
+  }
+}
+
+test('every glyph path is well formed, so no symbol silently fails to draw', () => {
+  const specs: Array<Parameters<typeof buildSymbol>[0]> = [
+    ...(['medical', 'fire', 'water', 'traffic', 'crime', 'utility', 'unknown'] as const).map(
+      (glyph) => ({ kind: 'incident' as const, glyph, severity: 'critical' as const }),
+    ),
+    ...(['police', 'fire', 'ems'] as const).map((service) => ({
+      kind: 'unit' as const,
+      glyph: service,
+      service,
+    })),
+  ];
+
+  for (const spec of specs) {
+    const svg = buildSymbol(spec);
+    const paths = [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(paths.length > 0, `${spec.kind}/${spec.glyph}: rendered no paths`);
+    paths.forEach((d, i) => assertPathParses(d, `${spec.kind}/${spec.glyph} path ${i}`));
+  }
+});
