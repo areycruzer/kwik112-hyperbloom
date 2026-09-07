@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { shouldAutoLaunchVoiceStation, VOICE_STATION_HREF } from './voice-launch.ts';
+import * as voiceLaunch from './voice-launch.ts';
+
+const { shouldAutoLaunchVoiceStation, VOICE_STATION_HREF } = voiceLaunch;
 
 test('landing voice-station URL carries an explicit launch intent', () => {
   const url = new URL(VOICE_STATION_HREF, 'https://example.test');
@@ -14,4 +16,39 @@ test('voice station opens from either the launch query or canonical hash', () =>
   assert.equal(shouldAutoLaunchVoiceStation('', '#voice-station'), true);
   assert.equal(shouldAutoLaunchVoiceStation('?startCall=0', '#monitoring'), false);
   assert.equal(shouldAutoLaunchVoiceStation('?unrelated=1', ''), false);
+});
+
+test('live calls receive a short bootstrap and a complete emergency pre-intake prompt', () => {
+  const buildConnectSettings = (
+    voiceLaunch as typeof voiceLaunch & {
+      emergencyVoiceConnectSettings?: () => { type?: string; systemPrompt: string };
+    }
+  ).emergencyVoiceConnectSettings;
+  const buildSessionSettings = (
+    voiceLaunch as typeof voiceLaunch & {
+      emergencyVoiceSessionSettings?: () => { type?: string; systemPrompt: string };
+    }
+  ).emergencyVoiceSessionSettings;
+
+  assert.equal(typeof buildConnectSettings, 'function');
+  assert.equal(typeof buildSessionSettings, 'function');
+
+  const connectSettings = buildConnectSettings!();
+  const sessionSettings = buildSessionSettings!();
+  const bootstrap = connectSettings.systemPrompt;
+  const prompt = sessionSettings.systemPrompt;
+
+  assert.equal(connectSettings.type, 'session_settings');
+  assert.equal(sessionSettings.type, 'session_settings');
+  assert.ok(bootstrap.length <= 1000, 'connection bootstrap must stay within Hume’s limit');
+  assert.match(bootstrap, /human emergency call taker/i);
+  assert.match(prompt, /listen/i);
+  assert.match(prompt, /one question at a time/i);
+  assert.match(prompt, /exact location/i);
+  assert.match(prompt, /conscious|consciousness/i);
+  assert.match(prompt, /breathing/i);
+  assert.match(prompt, /severe bleeding/i);
+  assert.match(prompt, /first aid/i);
+  assert.match(prompt, /Hindi|Hinglish/i);
+  assert.match(prompt, /never claim.*dispatch/is);
 });
