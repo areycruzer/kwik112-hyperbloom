@@ -48,6 +48,7 @@ import {
 } from '@/lib/dashboard-presentation';
 import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
 import { selectPreArrivalGuidance } from '@/lib/first-aid';
+import { shouldAutoLaunchVoiceStation } from '@/lib/voice-launch';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
@@ -126,6 +127,7 @@ export default function DashboardPage() {
   const [demoActive, setDemoActive] = useState(false);
   const [demoIntakeStarted, setDemoIntakeStarted] = useState(false);
   const [demoLaunchSignal, setDemoLaunchSignal] = useState(0);
+  const consumedLaunchLocation = useRef<string | null>(null);
   const [demoCallId, setDemoCallId] = useState<string | null>(null);
   // Bumped when an alert is acknowledged so the alert memo (and therefore the
   // rail badge) recomputes against the freshly-persisted acknowledgement set.
@@ -160,6 +162,26 @@ export default function DashboardPage() {
     syncLayout();
     window.addEventListener('resize', syncLayout);
     return () => window.removeEventListener('resize', syncLayout);
+  }, []);
+
+  useEffect(() => {
+    const launchFromLocation = () => {
+      const locationKey = `${window.location.search}${window.location.hash}`;
+      if (consumedLaunchLocation.current === locationKey) return;
+      consumedLaunchLocation.current = locationKey;
+
+      if (shouldAutoLaunchVoiceStation(window.location.search, window.location.hash)) {
+        setDemoLaunchSignal((value) => value + 1);
+      }
+    };
+
+    launchFromLocation();
+    window.addEventListener('popstate', launchFromLocation);
+    window.addEventListener('hashchange', launchFromLocation);
+    return () => {
+      window.removeEventListener('popstate', launchFromLocation);
+      window.removeEventListener('hashchange', launchFromLocation);
+    };
   }, []);
 
   // Reading the selection through a ref keeps `loadCalls` stable, so the poll

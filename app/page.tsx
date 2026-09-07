@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, AudioLines, CheckCircle2, ExternalLink, FileCheck2, Gauge, Github, Headphones, ShieldCheck, UserCheck } from "lucide-react";
+import { VOICE_STATION_HREF } from "@/lib/voice-launch";
 
 const identity = "Kwik 112 puts an AI voice call-taker inside India's 112 emergency calls and gives the human dispatcher an instant, auditable decision console.";
 
@@ -14,9 +15,9 @@ const flow = [
 ];
 
 const rubric = [
-  ["Working Build", "Place a scripted or live voice call and watch an incident enter the console.", "/dashboard#voice-station"],
+  ["Working Build", "Place a scripted or live voice call and watch an incident enter the console.", VOICE_STATION_HREF],
   ["End-to-End Thinking", "Follow intake, rules grade, refinement, human dispatch, and resolution.", "/dashboard"],
-  ["Innovation", "Inspect measured or simulated prosody alongside multilingual voice intake.", "/dashboard#voice-station"],
+  ["Innovation", "Inspect measured or simulated prosody alongside multilingual voice intake.", VOICE_STATION_HREF],
   ["Impact", "See conservative pre-arrival guidance and a safety-first severity floor.", "/dashboard"],
   ["Technical Depth", "Reproduce the held-out triage benchmark and fusion gate locally.", "https://github.com/JAYATIAHUJA/pulse112-tactical-cad/tree/main/evaluation/results"],
   ["Presentation", "Use the guided walkthrough built into the operational console.", "/dashboard"],
@@ -65,7 +66,7 @@ export default function Home() {
             <p className="mt-5 max-w-[720px] text-lg leading-8 text-white sm:text-xl">{identity}</p>
             <p className="mt-4 max-w-[650px] text-sm leading-6 text-white/75 sm:text-base">The caller needs no app or screen. The AI listens on the call; a human remains in command of dispatch.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link id="place-a-call" href="/dashboard#voice-station" className="inline-flex h-11 items-center gap-2 rounded-[6px] bg-[#f40000] px-5 text-sm font-bold text-white hover:bg-[#d90000]"><Headphones className="h-4 w-4" aria-hidden /> Place a test call</Link>
+              <Link id="place-a-call" href={VOICE_STATION_HREF} className="inline-flex h-11 items-center gap-2 rounded-[6px] bg-[#f40000] px-5 text-sm font-bold text-white hover:bg-[#d90000]"><Headphones className="h-4 w-4" aria-hidden /> Place a test call</Link>
               <Link href="/dashboard" className="inline-flex h-11 items-center gap-2 rounded-[6px] border border-white/40 bg-black/35 px-5 text-sm font-semibold text-white hover:bg-black/55">View dispatch console <ArrowRight className="h-4 w-4" aria-hidden /></Link>
             </div>
           </div>
@@ -98,7 +99,7 @@ export default function Home() {
 
       <section className="bg-[#f4f5f2] py-16 md:py-20"><div className="mx-auto max-w-[980px] px-5 md:px-8"><UserCheck className="h-7 w-7 text-[#c71920]" aria-hidden /><h2 className="mt-4 text-2xl font-bold">What Kwik 112 is, and is not</h2><div className="mt-8 grid border-l border-t border-[#c6cbc6] md:grid-cols-2"><div className="border-b border-r border-[#c6cbc6] p-6"><h3 className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-4 w-4 text-[#087b91]" aria-hidden /> It is</h3><p className="mt-3 text-sm leading-6 text-[#555e59]">An independent browser-based build that demonstrates multilingual AI intake, deterministic triage, model refinement, and human dispatch accountability.</p></div><div className="border-b border-r border-[#c6cbc6] p-6"><h3 className="flex items-center gap-2 font-bold"><ShieldCheck className="h-4 w-4 text-[#c71920]" aria-hidden /> It is not</h3><p className="mt-3 text-sm leading-6 text-[#555e59]">An official 112, ERSS, government, or C-DAC service. It does not connect to emergency infrastructure or make dispatch decisions without a human.</p></div></div></div></section>
 
-      <footer className="border-t border-[#363c39] bg-[#171a19] text-white"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between md:px-8"><div><p className="font-bold">Kwik 112</p><p className="mt-1 text-xs text-[#9faaa4]">Independent AI-assisted emergency dispatch demonstration.</p></div><nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-3 text-sm text-[#d4dad6]"><Link href="/dashboard#voice-station" className="hover:text-white">Place a test call</Link><Link href="/dashboard" className="hover:text-white">Live console</Link><a href="https://github.com/JAYATIAHUJA/pulse112-tactical-cad" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white"><Github className="h-4 w-4" aria-hidden /> GitHub</a><a href="https://github.com/JAYATIAHUJA/pulse112-tactical-cad/tree/main/evaluation/results" target="_blank" rel="noreferrer" className="hover:text-white">Benchmark results</a></nav></div></footer>
+      <footer className="border-t border-[#363c39] bg-[#171a19] text-white"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between md:px-8"><div><p className="font-bold">Kwik 112</p><p className="mt-1 text-xs text-[#9faaa4]">Independent AI-assisted emergency dispatch demonstration.</p></div><nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-3 text-sm text-[#d4dad6]"><Link href={VOICE_STATION_HREF} className="hover:text-white">Place a test call</Link><Link href="/dashboard" className="hover:text-white">Live console</Link><a href="https://github.com/JAYATIAHUJA/pulse112-tactical-cad" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white"><Github className="h-4 w-4" aria-hidden /> GitHub</a><a href="https://github.com/JAYATIAHUJA/pulse112-tactical-cad/tree/main/evaluation/results" target="_blank" rel="noreferrer" className="hover:text-white">Benchmark results</a></nav></div></footer>
     </main>
   );
 }
