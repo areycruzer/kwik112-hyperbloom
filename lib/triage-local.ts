@@ -253,3 +253,18 @@ export function localTriage(transcript: string): TriageResult {
   const clean = transcript.trim();
   return applyEscalations(keywordTriage(clean), clean);
 }
+
+/**
+ * @description Highest severity score the emotion boost may reach without
+ *              leaving the band the deterministic rules chose. Bands: critical
+ *              80-100, high 60-79, medium 40-59, low 0-39. Prosody is the least
+ *              reliable signal in this pipeline on Indian-language speech, so it
+ *              can sharpen priority inside a band but never, by itself, cross
+ *              into the next one.
+ */
+export function severityBandCeiling(score: number): number {
+  if (score >= 80) return 100;
+  if (score >= 60) return 79;
+  if (score >= 40) return 59;
+  return 39;
+}
