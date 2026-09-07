@@ -17,15 +17,19 @@ import { escapeHtml } from '@/lib/utils';
 import { buildSymbol, glyphForIncidentType } from '@/lib/design/symbols';
 import { priorityCode, distressOf } from '@/lib/incident';
 import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
+import { assessDispatch } from '@/lib/dispatch-assurance';
 import { Navigation, Shield } from 'lucide-react';
 
 interface EmergencyMapProps {
   calls: EmergencyCall[];
+  units?: TacticalUnit[];
   selectedCallId: string | null;
   onMarkerClick: (callId: string) => void;
   onDispatchUnit?: (unitId: string, callId: string) => void;
   /** Roster-selected unit: drawn with a 1px accent ring, like a selected incident. */
   selectedUnitId?: string | null;
+  /** Changes whenever a sibling panel resizes the map container. */
+  layoutRevision?: string | number | boolean;
 }
 
 // Esri World_Imagery: bright satellite imagery, keyless, attribution required.
@@ -43,9 +47,11 @@ function cssToken(name: string, fallback: string): string {
 
 export default function EmergencyMap({
   calls,
+  units = TACTICAL_UNITS,
   selectedCallId,
   onMarkerClick,
   selectedUnitId = null,
+  layoutRevision,
 }: EmergencyMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -60,9 +66,15 @@ export default function EmergencyMap({
   // bail out, and never re-run — every marker silently vanishes.
   const [mapReady, setMapReady] = useState(false);
 
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const frame = requestAnimationFrame(() => mapRef.current?.invalidateSize({ pan: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [layoutRevision, mapReady]);
+
   // First Responder Fleet — the shared roster, so the map markers and the
   // roster module can never disagree. Lifted to lib/units.ts (Task 11).
-  const tacticalUnits: TacticalUnit[] = TACTICAL_UNITS;
+  const tacticalUnits = units;
 
   // Initialize the map with the satellite basemap.
   useEffect(() => {
@@ -296,7 +308,9 @@ export default function EmergencyMap({
     const targetLng = selectedCall.caller_location.longitude;
     if (!targetLat || !targetLng) return;
 
-    const closestUnit = tacticalUnits[0];
+    const assurance = assessDispatch(selectedCall, tacticalUnits);
+    const routeUnitId = selectedUnitId ?? assurance.assignments[0]?.unit_id;
+    const closestUnit = tacticalUnits.find((unit) => unit.id === routeUnitId);
     if (!closestUnit) return;
 
     const waypoints: [number, number][] = [
@@ -314,7 +328,7 @@ export default function EmergencyMap({
 
     routePolylineRef.current = polyline;
     mapRef.current.setView([targetLat, targetLng], 14, { animate: true });
-  }, [selectedCallId, calls, tacticalUnits, mapReady]);
+  }, [selectedCallId, selectedUnitId, calls, tacticalUnits, mapReady]);
 
   const toggleUnits = useCallback(() => setShowUnits((v) => !v), []);
 

@@ -41,7 +41,7 @@ export function ModuleRail({
   return (
     <nav
       aria-label="Console modules"
-      className="flex h-full w-[72px] shrink-0 flex-col items-stretch gap-1 border-r border-rule-strong bg-deep py-2 select-none"
+      className="fixed inset-x-0 bottom-0 z-[800] flex h-14 w-full shrink-0 flex-row items-stretch border-t border-rule-strong bg-deep select-none sm:static sm:h-full sm:w-[72px] sm:flex-col sm:gap-1 sm:border-r sm:border-t-0 sm:py-2"
     >
       {RAIL_ITEMS.map(({ id, label, Icon }) => {
         const isActive = active === id;
@@ -60,9 +60,9 @@ export function ModuleRail({
             aria-current={isActive ? 'true' : undefined}
             onClick={() => onSelect(id)}
             className={cn(
-              'relative flex flex-col items-center gap-1 border-l-2 px-1 py-2.5 transition-colors',
+              'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border-b-2 px-1 py-1.5 transition-colors sm:flex-none sm:justify-start sm:gap-1 sm:border-b-0 sm:border-l-2 sm:py-2.5',
               isActive
-                ? 'border-accent bg-panel text-ink'
+                ? 'border-b-accent bg-panel text-ink sm:border-b-transparent sm:border-l-accent'
                 : 'border-transparent text-ink-3 hover:bg-panel hover:text-ink-2',
             )}
           >
@@ -77,7 +77,7 @@ export function ModuleRail({
                 </span>
               )}
             </span>
-            <span className="text-2xs font-medium tracking-wide">{label}</span>
+            <span className="max-w-full truncate text-2xs font-medium tracking-wide">{label}</span>
           </button>
         );
       })}

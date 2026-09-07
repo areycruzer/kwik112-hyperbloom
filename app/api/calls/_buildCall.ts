@@ -11,12 +11,16 @@
  */
 
 import { EmergencyCall, Location } from '@/lib/types';
+import { HINGLISH_DEMO_LOCATION } from '@/lib/demo';
 import {
   EmotionFrame,
+  buildOperatorQuestions,
+  buildSafetyAudit,
   distressLevel,
   localTriage,
   priorityFromSeverity,
   rankEmotions,
+  recommendDispatchPlan,
   recommendUnits,
   scoreOf,
   severityFromScore,
@@ -110,6 +114,7 @@ function normalizeTranscript(input: unknown): Array<{
  *              a coordinate nobody reported.
  */
 const KNOWN_PLACES: Array<[RegExp, { latitude: number; longitude: number; city: string }]> = [
+  [/\bsample metro gate 1\b/i, HINGLISH_DEMO_LOCATION],
   [/\bgreater noida\b/i, { latitude: 28.4744, longitude: 77.503, city: 'Greater Noida' }],
   [/\bnoida\b/i, { latitude: 28.5355, longitude: 77.391, city: 'Noida' }],
   [/\brohini\b/i, { latitude: 28.7196, longitude: 77.1186, city: 'New Delhi' }],
@@ -269,6 +274,7 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     triage.extraction.location?.confidence ?? 0,
     callerText || fullText
   );
+  const operatorQuestions = buildOperatorQuestions(triage);
 
   const callId =
     providedId ||
@@ -325,7 +331,10 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     labels: triage.labels,
     flags: triage.flags,
     recommended_units: recommendUnits(triage.extraction.incident_type, severity),
-    special_instructions: triage.extraction.recommended_questions.join(' '),
+    dispatch_plan: recommendDispatchPlan(triage),
+    operator_questions: operatorQuestions,
+    safety_audit: triage.safetyAudit ?? buildSafetyAudit(triage, triage, triage),
+    special_instructions: operatorQuestions.join(' '),
 
     transcript: segments,
     priority_code: priorityFromSeverity(severity),

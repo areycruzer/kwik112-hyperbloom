@@ -19,6 +19,7 @@ export interface TacticalUnit {
   status: 'available' | 'en-route' | 'on-scene' | 'busy';
   speed: string;
   assignedCallId?: string;
+  capabilities?: Array<'police' | 'fire' | 'ems' | 'rescue' | 'als'>;
 }
 
 /**
@@ -27,11 +28,13 @@ export interface TacticalUnit {
  * statuses — so the roster and the map markers stay in lockstep.
  */
 export const TACTICAL_UNITS: TacticalUnit[] = [
-  { id: 'PD-101', callsign: 'Cruiser 101', type: 'police', lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
-  { id: 'FD-204', callsign: 'Engine 204', type: 'fire', lat: 28.6920, lng: 77.0850, status: 'en-route', speed: '48 km/h' },
-  { id: 'EMS-302', callsign: 'Medic 302', type: 'ems', lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
-  { id: 'PD-108', callsign: 'Interceptor 108', type: 'police', lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
-  { id: 'EMS-309', callsign: 'Air Rescue 1', type: 'ems', lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
+  { id: 'PD-101', callsign: 'Cruiser 101', type: 'police', capabilities: ['police'], lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
+  { id: 'FD-204', callsign: 'Engine 204', type: 'fire', capabilities: ['fire'], lat: 28.6920, lng: 77.0850, status: 'en-route', speed: '48 km/h' },
+  { id: 'FD-211', callsign: 'Engine 211', type: 'fire', capabilities: ['fire'], lat: 28.7162, lng: 77.1125, status: 'available', speed: '0 km/h' },
+  { id: 'FD-206', callsign: 'Ladder 206', type: 'fire', capabilities: ['fire', 'rescue'], lat: 28.7241, lng: 77.1262, status: 'available', speed: '0 km/h' },
+  { id: 'EMS-302', callsign: 'Medic 302', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
+  { id: 'PD-108', callsign: 'Interceptor 108', type: 'police', capabilities: ['police'], lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
+  { id: 'EMS-309', callsign: 'Air Rescue 1', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
 ];
 
 const EARTH_RADIUS_KM = 6371;

@@ -51,6 +51,22 @@ test('recordDecision does not mutate its input', () => {
   assert.equal(next.records.length, 1);
 });
 
+test('recorded decisions preserve the exact proposal snapshot used by the operator', () => {
+  const proposal = {
+    heading: 'Dispatch Medic 302',
+    body: 'Projected inside the configured response target.',
+    items: ['Medic 302 · ETA 4 min · ON TARGET'],
+  };
+  const next = recordDecision(emptyTimeline('c1'), {
+    point: 'DISPATCH',
+    action: 'confirmed',
+    at: '2026-09-05T00:00:00Z',
+    proposal,
+  });
+
+  assert.deepEqual(next.records[0]?.proposal, proposal);
+});
+
 // --- FINDING 1: the "note required on override" invariant ---
 
 test('recording an override without a note throws', () => {
@@ -238,6 +254,28 @@ test('persistence: per-call value that is not an array yields an empty timeline'
       t = readTimeline('c1');
     });
     assert.deepEqual(t!.records, []);
+  } finally {
+    removeFakeWindow();
+  }
+});
+
+test('persistence: malformed proposal snapshots are discarded without losing the decision', () => {
+  installFakeWindow({
+    [TIMELINE_STORAGE_KEY]: JSON.stringify({
+      c1: [
+        {
+          point: 'DISPATCH',
+          action: 'confirmed',
+          at: 'x',
+          proposal: { heading: 42, body: null, items: 'not-an-array' },
+        },
+      ],
+    }),
+  });
+  try {
+    const read = readTimeline('c1');
+    assert.equal(read.records.length, 1);
+    assert.equal(read.records[0]?.proposal, undefined);
   } finally {
     removeFakeWindow();
   }
