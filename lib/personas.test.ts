@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { JUDGE_CALLER_PRESETS, judgeCallerPreset } from './personas.ts';
+import { localTriage } from './triage-local.ts';
 
 test('exposes exactly the three approved judge caller presets', () => {
   assert.deepEqual(
@@ -46,4 +47,26 @@ test('presets preserve the approved caller-to-scenario mapping', () => {
   assert.match(sharmaText, /नब्ज|सांस|बेहोश/);
   assert.match(sharmaText, /नमूना मेट्रो गेट 1/);
   assert.doesNotMatch(sharmaText, /[A-Za-z]/);
+});
+
+test('every full caller transcript retains its scenario, severity floor, and useful location', () => {
+  const severityRank = { low: 0, medium: 1, high: 2, critical: 3 } as const;
+  const expectations = {
+    ramesh: { type: 'accident', severity: 'high', location: /Moolchand Metro|Gate 2/i },
+    john: { type: 'medical_emergency', severity: 'high', location: /India Gate/i },
+    'sharma-ji': { type: 'medical_emergency', severity: 'critical', location: /नमूना मेट्रो गेट 1/ },
+  } as const;
+
+  for (const preset of JUDGE_CALLER_PRESETS) {
+    const callerTranscript = preset.lines
+      .filter((line) => line.role === 'user')
+      .map((line) => line.text)
+      .join(' ');
+    const result = localTriage(callerTranscript).extraction;
+    const expected = expectations[preset.id];
+
+    assert.equal(result.incident_type, expected.type, preset.name);
+    assert.ok(severityRank[result.severity] >= severityRank[expected.severity], preset.name);
+    assert.match(result.location.address ?? '', expected.location, preset.name);
+  }
 });

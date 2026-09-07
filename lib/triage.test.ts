@@ -179,6 +179,17 @@ test('Hindi fire reports are locally critical fire incidents', () => {
   assert.match(result.extraction.location.address ?? '', /डेमो बाजार/);
 });
 
+test('Hindi fire matching accepts fire phrases without matching jaldi', () => {
+  for (const phrase of ['आग लगी है', 'धुआं भर गया है', 'दुकान जल रही है']) {
+    const result = localTriage(`${phrase}, जगह डेमो बाजार है।`);
+    assert.equal(result.extraction.incident_type, 'fire', phrase);
+    assert.equal(result.extraction.severity, 'critical', phrase);
+  }
+
+  const urgentMedical = localTriage('मरीज बेहोश है, कृपया जल्दी सहायता भेजिए।');
+  assert.equal(urgentMedical.extraction.incident_type, 'medical_emergency');
+});
+
 test('Hinglish critical reports keep type and spoken landmark terms', () => {
   const result = localTriage('Mere father ki pulse nahi hai. Hum Kashmere Gate metro gate 3 par hain.');
   assert.equal(result.extraction.incident_type, 'medical_emergency');
