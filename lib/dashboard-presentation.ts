@@ -13,8 +13,23 @@ export function nextLiveCallPayload(
   current: KwikLiveCallPayload | null,
   incoming: KwikLiveCallPayload,
 ): KwikLiveCallPayload | null {
-  if (incoming.state !== 'end') return incoming;
-  return !current || current.callId === incoming.callId ? null : current;
+  if (!current) return incoming.state === 'end' ? null : incoming;
+
+  const currentAt = Date.parse(current.at);
+  const incomingAt = Date.parse(incoming.at);
+  const currentIsValid = Number.isFinite(currentAt);
+  const incomingIsValid = Number.isFinite(incomingAt);
+
+  if (!incomingIsValid) return current;
+
+  if (incoming.callId !== current.callId) {
+    if (incoming.state !== 'start') return current;
+    if (currentIsValid && incomingAt <= currentAt) return current;
+    return incoming;
+  }
+
+  if (currentIsValid && incomingAt < currentAt) return current;
+  return incoming.state === 'end' ? null : incoming;
 }
 
 export function presentLiveCall(

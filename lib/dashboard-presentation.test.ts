@@ -131,24 +131,79 @@ test('live call presentation identifies a caller that has not produced a grade',
   });
 });
 
-test('a late end event cannot clear a newer live call', () => {
-  const current = {
+function livePayload(
+  state: KwikLiveCallPayload['state'],
+  callId: string,
+  at: string,
+): KwikLiveCallPayload {
+  const base = {
     version: 1,
-    state: 'start',
-    callId: 'new-call',
-    at: '2026-09-07T10:00:02.000Z',
+    state,
+    callId,
+    at,
     transcript: [],
     detectedLanguage: null,
     prosodySource: 'absent',
     grade: null,
-  } satisfies KwikLiveCallPayload;
-  const staleEnd = {
-    ...current,
-    state: 'end',
-    callId: 'old-call',
-  } satisfies KwikLiveCallPayload;
-  const matchingEnd = { ...staleEnd, callId: 'new-call' } satisfies KwikLiveCallPayload;
+  } as const;
+  return base as KwikLiveCallPayload;
+}
+
+test('valid events progress one live call and a matching same-time end clears it', () => {
+  const start = livePayload('start', 'call-a', '2026-09-07T10:00:00.000Z');
+  const update = livePayload('update', 'call-a', '2026-09-07T10:00:01.000Z');
+  const end = livePayload('end', 'call-a', '2026-09-07T10:00:01.000Z');
+
+  assert.equal(nextLiveCallPayload(null, start), start);
+  assert.equal(nextLiveCallPayload(start, update), update);
+  assert.equal(nextLiveCallPayload(update, end), null);
+});
+
+test('stale starts and updates cannot roll back the current call', () => {
+  const current = livePayload('update', 'call-a', '2026-09-07T10:00:02.000Z');
+  const staleStart = livePayload('start', 'call-a', '2026-09-07T10:00:00.000Z');
+  const staleUpdate = livePayload('update', 'call-a', '2026-09-07T10:00:01.000Z');
+
+  assert.equal(nextLiveCallPayload(current, staleStart), current);
+  assert.equal(nextLiveCallPayload(current, staleUpdate), current);
+});
+
+test('an older same-call end cannot clear the active call', () => {
+  const current = livePayload('update', 'call-a', '2026-09-07T10:00:02.000Z');
+  const staleEnd = livePayload('end', 'call-a', '2026-09-07T10:00:01.000Z');
 
   assert.equal(nextLiveCallPayload(current, staleEnd), current);
-  assert.equal(nextLiveCallPayload(current, matchingEnd), null);
+});
+
+test('interleaved sessions only switch on a newer start event', () => {
+  const current = livePayload('update', 'call-a', '2026-09-07T10:00:02.000Z');
+  const otherUpdate = livePayload('update', 'call-b', '2026-09-07T10:00:03.000Z');
+  const otherEnd = livePayload('end', 'call-b', '2026-09-07T10:00:04.000Z');
+  const staleOtherStart = livePayload('start', 'call-b', '2026-09-07T10:00:01.000Z');
+  const newerOtherStart = livePayload('start', 'call-b', '2026-09-07T10:00:05.000Z');
+
+  assert.equal(nextLiveCallPayload(current, otherUpdate), current);
+  assert.equal(nextLiveCallPayload(current, otherEnd), current);
+  assert.equal(nextLiveCallPayload(current, staleOtherStart), current);
+  assert.equal(nextLiveCallPayload(current, newerOtherStart), newerOtherStart);
+});
+
+test('invalid timestamps cannot displace a valid current session', () => {
+  const current = livePayload('update', 'call-a', '2026-09-07T10:00:02.000Z');
+
+  for (const state of ['start', 'update', 'end'] as const) {
+    const incoming = livePayload(state, state === 'start' ? 'call-b' : 'call-a', 'not-a-date');
+    assert.equal(nextLiveCallPayload(current, incoming), current);
+  }
+});
+
+test('a valid event recovers deterministically from an invalid current timestamp', () => {
+  const current = livePayload('update', 'call-a', 'not-a-date');
+  const sameCallUpdate = livePayload('update', 'call-a', '2026-09-07T10:00:03.000Z');
+  const newerStart = livePayload('start', 'call-b', '2026-09-07T10:00:04.000Z');
+  const unknownUpdate = livePayload('update', 'call-b', 'also-not-a-date');
+
+  assert.equal(nextLiveCallPayload(current, sameCallUpdate), sameCallUpdate);
+  assert.equal(nextLiveCallPayload(current, newerStart), newerStart);
+  assert.equal(nextLiveCallPayload(current, unknownUpdate), current);
 });
