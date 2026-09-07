@@ -16,4 +16,4 @@ Kwik 112 is an independent browser-based demonstration. It is not an official 11
 
 ## Verified held-out local results
 
-Corpus v1.0.0, held_out split, 30 synthetic calls, provider none: critical recall 100% (9/9; Wilson 95% lower bound 0.70), incident type accuracy 60%, severity accuracy 60%, under-triage 23.3%, over-triage 16.7%, location accuracy 100% (25/25), threat accuracy 100% (3/3), latency p50 ~0.046ms and p95 ~3.80ms.
+Corpus v1.0.0, held_out split, 30 synthetic calls, provider none: critical recall 100% (9/9; Wilson 95% lower bound 0.70), incident type accuracy 60%, severity accuracy 60%, under-triage 23.3%, over-triage 16.7%, location accuracy 100% (25/25), threat accuracy 100% (3/3), latency p50 ~0.048ms and p95 ~3.79ms.

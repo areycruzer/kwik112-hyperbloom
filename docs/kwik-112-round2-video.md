@@ -37,7 +37,7 @@ override notes, units, and resolution remain auditable.
 
 Held-out local benchmark: critical recall 100%, 9 of 9;
 type and severity 60%; under-triage 23.3%; over-triage 16.7%;
-p50 about 0.046ms and p95 about 3.80ms.
+p50 about 0.048ms and p95 about 3.79ms.
 
 Synthetic corpus, no live 112 integration. Codex assisted implementation
 and review; the OpenAI SDK supports optional structured refinement.
