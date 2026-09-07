@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dispatch AI — Emergency Command Platform",
+  title: "Kwik 112 — AI voice call-taker and dispatch console for 112 emergencies",
   description:
-    "AI-assisted emergency dispatch: incident monitoring, unit dispatch, pathfinding, and 112 Pulse emotion-aware voice intake.",
+    "Kwik 112 is a multilingual AI voice call-taker and auditable decision console that assists human emergency dispatchers.",
 };
 
 export default function RootLayout({

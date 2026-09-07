@@ -392,6 +392,11 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-ground text-ink">
+      <noscript>
+        <div className="border-b border-mild bg-deep p-4 text-sm text-ink">
+          <strong>Kwik 112 dispatch console:</strong> JavaScript is required for the live voice call, incident map, deterministic triage updates, and human dispatch controls. Kwik 112 is an independent demonstration and is not an official 112 service.
+        </div>
+      </noscript>
       {/* ---- COMMAND BAR ---------------------------------------------------- */}
       <header className="flex h-14 shrink-0 select-none items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4">
         <div className="flex items-center gap-4">
@@ -480,7 +485,7 @@ export default function DashboardPage() {
           </div>
 
           {/* 112 PULSE — the emotion-aware voice-intake action. */}
-          <div className="flex items-center gap-2">
+          <div id="voice-station" className="flex items-center gap-2">
             <span className="hidden xl:inline-flex"><Chip tone="accent">112 Pulse</Chip></span>
             <StartEmergencyCall
               launchSignal={demoLaunchSignal}
