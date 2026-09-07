@@ -133,6 +133,8 @@ export default function EmergencyMap({
       incidentMarkersRef.current.clear();
       unitMarkersRef.current.clear();
       routePolylineRef.current = null;
+      routeCasingRef.current = null;
+      routeCacheRef.current.clear();
       setMapReady(false);
     };
   }, []);
@@ -288,17 +290,32 @@ export default function EmergencyMap({
     });
   }, [tacticalUnits, showUnits, mapReady, selectedUnitId]);
 
-  // Responder vector to the selected incident. Colour is pulled from the design
-  // token so nothing hardcodes a hex here.
+  // Responder vector to the selected incident. The geometry follows actual
+  // roads: OSRM (the OpenStreetMap routing engine, public demo server, no key)
+  // returns the driving route, drawn Google-Maps style as a cased polyline.
+  // The straight dashed line is the instant fallback while the road route
+  // loads — and stays if the router is unreachable, so the map never depends
+  // on a third-party service to show a dispatch vector.
+  const routeCacheRef = useRef<Map<string, [number, number][]>>(new Map());
+  const routeCasingRef = useRef<any>(null);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
+    const map = mapRef.current;
 
-    if (routePolylineRef.current) {
-      routePolylineRef.current.remove();
-      routePolylineRef.current = null;
-    }
+    const clearRoute = () => {
+      if (routePolylineRef.current) {
+        routePolylineRef.current.remove();
+        routePolylineRef.current = null;
+      }
+      if (routeCasingRef.current) {
+        routeCasingRef.current.remove();
+        routeCasingRef.current = null;
+      }
+    };
 
+    clearRoute();
     if (!selectedCallId) return;
 
     const selectedCall = calls.find((c) => c.id === selectedCallId);
@@ -313,21 +330,78 @@ export default function EmergencyMap({
     const closestUnit = tacticalUnits.find((unit) => unit.id === routeUnitId);
     if (!closestUnit) return;
 
-    const waypoints: [number, number][] = [
-      [closestUnit.lat, closestUnit.lng],
-      [(closestUnit.lat + targetLat) / 2 + 0.003, (closestUnit.lng + targetLng) / 2 - 0.002],
-      [targetLat, targetLng],
-    ];
+    const accent = cssToken('--accent', '#69D2FF');
+    const casingColor = cssToken('--deep', '#0A1526');
 
-    const polyline = L.polyline(waypoints, {
-      color: cssToken('--accent', '#69D2FF'),
-      weight: 3,
-      opacity: 0.85,
-      dashArray: '6, 8',
-    }).addTo(mapRef.current);
+    // 1. Straight-line estimate first — zero-latency feedback.
+    const estimate = L.polyline(
+      [
+        [closestUnit.lat, closestUnit.lng],
+        [targetLat, targetLng],
+      ],
+      { color: accent, weight: 3, opacity: 0.85, dashArray: '6, 8' },
+    )
+      .addTo(map)
+      .bindTooltip('Straight-line estimate — road route loading…');
+    routePolylineRef.current = estimate;
+    map.setView([targetLat, targetLng], 14, { animate: true });
 
-    routePolylineRef.current = polyline;
-    mapRef.current.setView([targetLat, targetLng], 14, { animate: true });
+    // 2. Upgrade to the road-following driving route when OSRM answers.
+    let cancelled = false;
+    const drawRoadRoute = (latlngs: [number, number][]) => {
+      if (cancelled) return;
+      clearRoute();
+      routeCasingRef.current = L.polyline(latlngs, {
+        color: casingColor,
+        weight: 7,
+        opacity: 0.85,
+      }).addTo(map);
+      routePolylineRef.current = L.polyline(latlngs, {
+        color: accent,
+        weight: 3.5,
+        opacity: 0.95,
+      })
+        .addTo(map)
+        .bindTooltip('Estimated road route (OSRM driving profile)');
+    };
+
+    const cacheKey = `${closestUnit.id}:${selectedCall.id}:${targetLat.toFixed(5)},${targetLng.toFixed(5)}`;
+    const cached = routeCacheRef.current.get(cacheKey);
+    if (cached) {
+      drawRoadRoute(cached);
+      return () => {
+        cancelled = true;
+        clearRoute();
+      };
+    }
+
+    const controller = new AbortController();
+    fetch(
+      `https://router.project-osrm.org/route/v1/driving/` +
+        `${closestUnit.lng},${closestUnit.lat};${targetLng},${targetLat}` +
+        `?overview=full&geometries=geojson`,
+      { signal: controller.signal },
+    )
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const coordinates = data?.routes?.[0]?.geometry?.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+        // GeoJSON is [lng, lat]; Leaflet wants [lat, lng].
+        const latlngs = coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]] as [number, number],
+        );
+        routeCacheRef.current.set(cacheKey, latlngs);
+        drawRoadRoute(latlngs);
+      })
+      .catch(() => {
+        // Router unreachable or aborted — the dashed estimate stays on the map.
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearRoute();
+    };
   }, [selectedCallId, selectedUnitId, calls, tacticalUnits, mapReady]);
 
   const toggleUnits = useCallback(() => setShowUnits((v) => !v), []);
