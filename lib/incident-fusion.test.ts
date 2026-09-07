@@ -84,6 +84,41 @@ test('requires corroborating shared text even when type, time, and coordinates m
   assert.deepEqual(suggestions, []);
 });
 
+test('fusion requires type AND distance AND time AND a shared caller detail', () => {
+  const base = call('base');
+  const valid = call('valid', { created_at: '2026-09-05T10:03:00.000Z' });
+  assert.equal(findFusionSuggestions([base, valid]).length, 1);
+
+  const mismatches: EmergencyCall[] = [
+    call('type', { incident_type: 'crime' }),
+    call('distance', { caller_location: { address: 'Sector 16, Rohini, Delhi', latitude: 28.8, longitude: 77.2 } }),
+    call('time', { created_at: '2026-09-05T10:11:00.000Z' }),
+    call('detail', {
+      ai_summary: 'Warehouse blaze at an unrelated place.',
+      immediate_threats: [],
+      incident_subtype: 'structure fire',
+      caller_location: { address: 'Warehouse Zulu', latitude: 28.7196, longitude: 77.1186 },
+    }),
+  ];
+
+  for (const mismatch of mismatches) {
+    assert.deepEqual(findFusionSuggestions([base, mismatch]), [], mismatch.id);
+  }
+});
+
+test('fusion evidence copy names every satisfied gate for operator review', () => {
+  const suggestion = findFusionSuggestions([
+    call('a'),
+    call('b', { created_at: '2026-09-05T10:04:00.000Z' }),
+  ])[0]!;
+  const reasons = suggestion.evidence[0]?.reasons.join(' ') ?? '';
+
+  assert.match(reasons, /same incident type/i);
+  assert.match(reasons, /m apart/i);
+  assert.match(reasons, /min apart/i);
+  assert.match(reasons, /shared terms/i);
+});
+
 test('does not treat a generic accident subtype as corroborating evidence', () => {
   const suggestions = findFusionSuggestions([
     call('a', {
