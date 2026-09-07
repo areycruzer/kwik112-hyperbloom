@@ -152,6 +152,28 @@ test('extracts direct Indian location cues and ke paas spelling variants', () =>
   }
 });
 
+test('extracts held-out spoken location cue shapes without inventing an unknown area', () => {
+  const cases = [
+    ['A fight is still active outside Mock Cinema door 3.', 'Mock Cinema door 3'],
+    ['नमूना मेट्रो गेट 3 पर व्यक्ति की सांस और नब्ज नहीं है।', 'नमूना मेट्रो गेट 3'],
+    ['डेमो बाजार की दुकान में आग है।', 'डेमो बाजार'],
+    ['Sample Nagar ke 9 Demo Road par building mein aag hai.', 'Sample Nagar ke 9 Demo Road'],
+    ['Practice Terminal gate 8 par aadmi faint hua.', 'Practice Terminal gate 8'],
+    ['Demo Park mein loud music complaint hai.', 'Demo Park'],
+    ['Training Colony ki streetlight repair chahiye.', 'Training Colony'],
+    ['Mock School lab se smoke aa raha hai, address 2 Test Avenue hai.', '2 Test Avenue'],
+  ] as const;
+
+  for (const [transcript, expectedLocation] of cases) {
+    assert.equal(localTriage(transcript).extraction.location.address, expectedLocation, transcript);
+  }
+
+  assert.equal(
+    localTriage('Ek public tap leak kar raha hai lekin mujhe area ka naam nahi pata.').extraction.location.address,
+    undefined,
+  );
+});
+
 test('location extraction removes a leading caller pronoun', () => {
   const result = localTriage('Main Rajiv Chowk Metro ke paas hoon. Yahan accident hua hai.');
 

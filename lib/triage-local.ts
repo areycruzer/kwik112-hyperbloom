@@ -80,17 +80,23 @@ function cleanSpokenLocation(value: string): string | undefined {
 
 function extractSpokenLocation(transcript: string): string | undefined {
   const patterns = [
+    /\baddress\s+([^,.!?\n]+?)(?=\s+(?:hai|hain|is)\b|[,\.!?\n]|$)/iu,
     /\b(?:main|hum|ham)\s+([^.!?\n]+?)\s+ke\s+(?:saamne|samne|bahar|baahar|peeche)\s+(?:hoon|hun|hain|hai)\b/iu,
     /(?:मैं|हम)\s+([^।.!?\n]+?)\s+के\s+(?:सामने|बाहर|पीछे)\s+(?:हूँ|हूं|हैं|है)/u,
     /\b(?:accident|crash|fire|aag|incident)\s+([^,.!?\n]+?)\s+(?:ke|k)\s+(?:paas|pass)\b/iu,
     /(?:^|[,;]\s*)([^,.!?\n]+?)\s+(?:ke|k)\s+(?:paas|pass)\b/iu,
     /\b(?:opposite|opp\.?)\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
+    /\boutside\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /(?:^|[.!?]\s*)((?:gate|pillar|sector|gali)\s+[^.!?\n]+?)(?=\s+(?:par|mein|me|(?:ke|k)\s+(?:paas|pass))\b|[.!?\n]|$)/iu,
     /\bat\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\bnear\s+([^.!?\n]+?)(?:[.!?\n]|$)/iu,
     /\b(?:hum|ham)\s+([^.!?\n]+?)\s+par\s+(?:hain|hai)\b/iu,
+    /(?:^|[.!?]\s*|\]\s*(?:uh[,\s]*)?)([^,.!?\n]+?)\s+(?:par|mein)\s+(?=\S)/iu,
+    /(?:^|[.!?]\s*)([^,.!?\n]+?)\s+ki\s+(?=(?:street\s*light|shop|building|park|lab)\b)/iu,
     /(?:जगह|स्थान)\s+([^।.!?\n]+?)(?:[।.!?\n]|$)/u,
     /हम\s+([^।.!?\n]+?)\s+पर\s+हैं/u,
+    /(?:^|।\s*)([^।,.!?\n]+?)\s+की\s+(?=(?:दुकान|इमारत|बिल्डिंग|पार्क)(?:\s|$))/u,
+    /(?:^|।\s*)([^।,.!?\n]+?)\s+(?:पर|में)\s+(?=\S)/u,
   ];
 
   for (const pattern of patterns) {
