@@ -84,6 +84,25 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Scrollbars are hidden console-wide. This is a full-bleed operations surface
+   with a scrolling region in almost every panel - the incident queue, the unit
+   roster, each Kanban column, and the board's own column row - and the native
+   bars read as chrome laid over the design rather than part of it.
+
+   Hiding, not disabling: every region still scrolls by wheel, trackpad, touch,
+   arrow keys, Page Up/Down and Home/End, and keyboard focus still scrolls a
+   focused control into view. The cost is that a scrollable region no longer
+   advertises itself, which is why the panels that scroll are the ones a
+   dispatcher already knows are lists. */
+* {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy Edge */
+}
+*::-webkit-scrollbar {          /* Chromium, WebKit */
+  width: 0;
+  height: 0;
+}
+
 /* Every figure that sits in a column or updates in place. */
 .tnum, table { font-variant-numeric: tabular-nums; }
 
@@ -137,6 +156,23 @@ html, body {
 .leaflet-container .kwik-map-popup a.leaflet-popup-close-button:focus {
   color: var(--ink);
 }
+
+/* Marker names show on hover, not permanently, so the map is not buried under
+   its own labels. Leaflet paints tooltips as a white box with a black border by
+   default; scope through `.leaflet-container` to out-specify that without
+   !important, and hide the callout tip, which cannot be recoloured cleanly. */
+.leaflet-container .kwik-map-tooltip {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.leaflet-container .kwik-map-tooltip::before { display: none; }
 
 /* Zoom control lives under .leaflet-container (not the popup), where Leaflet's
    `.leaflet-bar a` (0,2,0) paints it white-on-white. Scope through the container

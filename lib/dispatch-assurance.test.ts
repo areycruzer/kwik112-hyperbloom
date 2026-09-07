@@ -30,9 +30,9 @@ function call(overrides: Partial<EmergencyCall> = {}): EmergencyCall {
 }
 
 const fleet: TacticalUnit[] = [
-  { id: 'EMS-FAR', callsign: 'Medic Far', type: 'ems', capabilities: ['ems', 'als'], lat: 28.80, lng: 77.20, status: 'available', speed: '0 km/h' },
-  { id: 'EMS-BUSY', callsign: 'Medic Busy', type: 'ems', capabilities: ['ems', 'als'], lat: 28.72, lng: 77.12, status: 'busy', speed: '0 km/h' },
-  { id: 'EMS-NEAR', callsign: 'Medic Near', type: 'ems', capabilities: ['ems', 'als'], lat: 28.721, lng: 77.119, status: 'available', speed: '0 km/h' },
+  { id: 'EMS-FAR', callsign: 'Medic Far', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.80, lng: 77.20, status: 'available', speed: '0 km/h' },
+  { id: 'EMS-BUSY', callsign: 'Medic Busy', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.72, lng: 77.12, status: 'busy', speed: '0 km/h' },
+  { id: 'EMS-NEAR', callsign: 'Medic Near', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.721, lng: 77.119, status: 'available', speed: '0 km/h' },
 ];
 
 test('assigns the nearest available matching unit and evaluates the P1 target', () => {
@@ -161,10 +161,10 @@ test('does not recommend a unit already assigned to another incident', () => {
 
 test('matches rescue and ALS requirements to capable units, not merely service type', () => {
   const capabilityFleet = [
-    { id: 'FIRE-NEAR', callsign: 'Engine Near', type: 'fire', capabilities: ['fire'], lat: 28.720, lng: 77.119, status: 'available', speed: '0 km/h' },
-    { id: 'RESCUE-FAR', callsign: 'Ladder Far', type: 'fire', capabilities: ['fire', 'rescue'], lat: 28.730, lng: 77.130, status: 'available', speed: '0 km/h' },
-    { id: 'BLS-NEAR', callsign: 'BLS Near', type: 'ems', capabilities: ['ems'], lat: 28.720, lng: 77.119, status: 'available', speed: '0 km/h' },
-    { id: 'ALS-FAR', callsign: 'ALS Far', type: 'ems', capabilities: ['ems', 'als'], lat: 28.730, lng: 77.130, status: 'available', speed: '0 km/h' },
+    { id: 'FIRE-NEAR', callsign: 'Engine Near', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire'], lat: 28.720, lng: 77.119, status: 'available', speed: '0 km/h' },
+    { id: 'RESCUE-FAR', callsign: 'Ladder Far', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire', 'rescue'], lat: 28.730, lng: 77.130, status: 'available', speed: '0 km/h' },
+    { id: 'BLS-NEAR', callsign: 'BLS Near', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems'], lat: 28.720, lng: 77.119, status: 'available', speed: '0 km/h' },
+    { id: 'ALS-FAR', callsign: 'ALS Far', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.730, lng: 77.130, status: 'available', speed: '0 km/h' },
   ] as unknown as TacticalUnit[];
   const result = assessDispatch(
     call({
@@ -205,6 +205,6 @@ test('allocates constrained rescue capability before flexible fire coverage', ()
   );
 
   assert.equal(result.status, 'on_target');
-  assert.equal(result.assignments.find((item) => item.requested_service === 'rescue')?.unit_id, 'FD-206');
-  assert.equal(result.assignments.find((item) => item.requested_service === 'fire')?.unit_id, 'FD-211');
+  assert.equal(result.assignments.find((item) => item.requested_service === 'rescue')?.unit_id, 'DFS-206');
+  assert.equal(result.assignments.find((item) => item.requested_service === 'fire')?.unit_id, 'DFS-211');
 });

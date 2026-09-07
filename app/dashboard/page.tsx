@@ -291,9 +291,16 @@ export default function DashboardPage() {
     });
   }, [fusionDecisions]);
 
+  /**
+   * Open an incident from the board: switch the main area to the map AND put
+   * the emergency panel on that incident's detail. Without the third line this
+   * selected the call and moved to the map while the panel still showed the
+   * queue, so the incident the operator just clicked was nowhere on screen.
+   */
   const handleSelectCallAndNavigateToMap = useCallback((callId: string) => {
     setSelectedCallId(callId);
     setMainView('map');
+    setPanelView('detail');
   }, []);
 
   // Stable identities keep the Leaflet marker effect from re-running (and
@@ -451,6 +458,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Response units lives in the command bar, where an operator looks
+              for it. It is only offered for the Monitoring map, which is the
+              only view that owns a roster panel. */}
           {activeModule === 'monitoring' && mainView === 'map' && (
             <button
               type="button"
@@ -504,7 +514,6 @@ export default function DashboardPage() {
 
           {/* KWIK 112 — the emotion-aware voice-intake action. */}
           <div id="voice-station" className="flex items-center gap-2">
-            <span className="hidden xl:inline-flex"><Chip tone="accent">Kwik 112</Chip></span>
             <StartEmergencyCall
               launchSignal={voiceLaunchSignal}
               initialScriptId="hinglish-five-minute"
@@ -641,6 +650,9 @@ export default function DashboardPage() {
                   onMarkerClick={handleMarkerClick}
                   onDispatchUnit={handleDispatchUnit}
                   selectedUnitId={selectedUnitId}
+                  // One control, one meaning: Response units puts the fleet on
+                  // the map and opens the roster beside it, together.
+                  showUnits={unitPanelOpen}
                   layoutRevision={unitPanelOpen}
                 />
                 {!unitPanelOpen && (
@@ -652,6 +664,8 @@ export default function DashboardPage() {
                     >
                       Incidents
                     </button>
+                    {/* Small screens only: the command-bar toggle is hidden
+                        below `sm`, so this is the roster's way in there. */}
                     <button
                       type="button"
                       aria-expanded={unitPanelOpen}

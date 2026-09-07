@@ -124,9 +124,19 @@ const UNIT_STATUS_LABEL: Record<TacticalUnit['status'], string> = {
   busy: 'Busy',
 };
 
+/**
+ * The roster row read aloud. It carries the same three operational figures the
+ * row shows — distance, current speed and projected ETA — because choosing a
+ * unit on distance alone picks the wrong one whenever a further unit is already
+ * rolling, and a screen-reader operator makes the same call as a sighted one.
+ */
 export function unitRosterAccessibleLabel(
-  unit: Pick<TacticalUnit, 'id' | 'callsign' | 'type' | 'speed' | 'status'>,
+  unit: Pick<TacticalUnit, 'id' | 'callsign' | 'agency' | 'speed' | 'status'>,
   distance: string,
+  eta?: string,
 ): string {
-  return `${unit.callsign}, ${unit.type.toUpperCase()} unit ${unit.id}, ${UNIT_STATUS_LABEL[unit.status]}, ${distance} away, speed ${unit.speed}`;
+  // The owning agency, not the internal service token: "Delhi Fire Service"
+  // is what the row shows and what an operator would say out loud.
+  const base = `${unit.callsign}, ${unit.agency} unit ${unit.id}, ${UNIT_STATUS_LABEL[unit.status]}, ${distance} away, speed ${unit.speed}`;
+  return eta ? `${base}, ETA ${eta}` : base;
 }
