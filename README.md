@@ -10,17 +10,17 @@
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
 | Local latency | **p50 ~0.046ms / p95 ~3.80ms** |
 
-**Judge this build in 120 seconds:** [place a test call](/dashboard?voice=1#voice-station) · [open the console](/dashboard) · [reproduce the benchmark](#reproduce-the-evidence) · [inspect raw results](evaluation/results/local-held_out-latest.json)
+**Judge this local build in 120 seconds:** [place a test call (local)](http://localhost:3000/dashboard?startCall=1#voice-station) · [open the console (local)](http://localhost:3000/dashboard) · [reproduce the benchmark](#reproduce-the-evidence) · [inspect raw results](evaluation/results/local-held_out-latest.json)
 
 ## Working Build
 
-**One scripted caller can traverse voice intake, instant local grading, asynchronous refinement, and the dispatcher board without provider credentials.** Open `/dashboard?voice=1#voice-station`, choose Ramesh, John, or Sharma ji, and play the scripted caller. A live Hume EVI session is optional.
+**One scripted caller can traverse voice intake, instant local grading, asynchronous refinement, and the dispatcher board without provider credentials.** Start the app locally, open [the local call station](http://localhost:3000/dashboard?startCall=1#voice-station), choose Ramesh, John, or Sharma ji, and play the scripted caller. A live Hume EVI session is optional.
 
 The station streams transcript turns, detected language, and MEASURED or SIMULATED prosody provenance. The board shows a rules grade while the call is active; call completion creates an incident immediately and then refines it in place when a model is configured.
 
 ## End-to-End Thinking
 
-**Every dispatch passes through three named human checkpoints: INTAKE, DISPATCH, and RESOLUTION.** The operator sees transcript source, triage source, prosody provenance, unit reservation, override notes, and the final audit receipt in the [dispatch console](/dashboard).
+**Every dispatch passes through three named human checkpoints: INTAKE, DISPATCH, and RESOLUTION.** The operator sees transcript source, triage source, prosody provenance, unit reservation, override notes, and the final audit receipt in the [local dispatch console](http://localhost:3000/dashboard).
 
 ```text
 112 voice or scripted call
@@ -96,7 +96,7 @@ Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It
 
 ### Codex and OpenAI contribution
 
-The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits. The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. Model responses use a constrained JSON schema, provenance validation, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
+The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits. The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. The provider is asked for a JSON-object response, which then passes application-side shape and provenance validation, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
 
 The operator checkpoints align with the human-oversight principle in [EU AI Act Article 14](https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng). Risk documentation follows the general posture of the [NIST Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence); neither reference is presented as certification or regulatory compliance.
 
@@ -106,9 +106,31 @@ The operator checkpoints align with the human-oversight principle in [EU AI Act 
 
 ### 120-second transcript
 
-**0:00–0:58 — the call.** Every Indian already knows how to use it: dial 112. A Hinglish caller reports a roadside crash. Kwik 112 asks for the exact location, checks immediate danger, and keeps each question short. The live console receives transcript, language, and provenance while deterministic rules grade the call. When intake ends, the incident appears immediately. Model refinement may escalate severity but cannot downgrade the rules grade. A human confirms intake, selects units, and makes the dispatch decision.
+Every Indian already knows how to use it: dial 112.
+The caller needs no app or screen.
 
-**0:58–1:55 — the evidence.** The audit timeline preserves the transcript source, prosody provenance, triage engine, override notes, units, and resolution. The held-out local benchmark reports critical recall of 100%, 9 of 9, with 60% type accuracy, 60% severity accuracy, 23.3% under-triage, 16.7% over-triage, and local latency of about 0.046 milliseconds p50 and 3.80 milliseconds p95. The corpus is synthetic and the build has no live 112 integration. Codex assisted implementation and review; the OpenAI SDK powers the optional structured refinement path. Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
+Kwik 112 asks one short question at a time:
+location, immediate danger, what happened, and how many people.
+
+Transcript, language, SIMULATED prosody provenance,
+and the current rules grade reach the console during the call.
+
+The local grade is immediate. Optional structured refinement
+may escalate severity, but cannot downgrade the deterministic floor.
+
+A human confirms intake, reads conservative guidance,
+selects units, and makes every dispatch decision.
+
+Transcript source, prosody provenance, triage engine,
+override notes, units, and resolution remain auditable.
+
+Held-out local benchmark: critical recall 100%, 9 of 9;
+type and severity 60%; under-triage 23.3%; over-triage 16.7%;
+p50 about 0.046ms and p95 about 3.80ms.
+
+Synthetic corpus, no live 112 integration. Codex assisted implementation
+and review; the OpenAI SDK supports optional structured refinement.
+Human dispatch stays in command.
 
 ---
 

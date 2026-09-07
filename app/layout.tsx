@@ -22,8 +22,6 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/screenshots/EmergencyCall.png",
-        width: 1920,
-        height: 1080,
         alt: "Kwik 112 voice call station and dispatch console",
       },
     ],

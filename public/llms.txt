@@ -7,7 +7,7 @@ Kwik 112 is an independent browser-based demonstration. It is not an official 11
 ## Primary links
 
 - Landing: /
-- Place a test call: /dashboard?voice=1#voice-station
+- Place a test call: /dashboard?startCall=1#voice-station
 - Dispatcher console: /dashboard
 - README: https://github.com/JAYATIAHUJA/pulse112-tactical-cad/blob/main/README.md
 - Raw benchmark: https://github.com/JAYATIAHUJA/pulse112-tactical-cad/blob/main/evaluation/results/local-held_out-latest.json
