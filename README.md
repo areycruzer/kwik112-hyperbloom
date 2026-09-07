@@ -4,7 +4,7 @@
 
 > Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
 
-| Held-out local benchmark | Result |
+| Held-out local benchmark (development regression suite) | Result |
 | --- | ---: |
 | Critical recall | **100% (9/9)**; Wilson 95% lower bound 0.70 |
 | Incident type / severity accuracy | **60% / 60%** |
@@ -105,7 +105,7 @@ The operator checkpoints align with the human-oversight principle in [EU AI Act 
 
 ## Presentation
 
-**The video runs under 120 seconds and puts the caller experience in minute one:** [watch it here](https://youtu.be/JdzAXL08_24), with [the timestamped transcript as a page on this site](https://pulse112-dispatch-ai.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
+**The video puts the caller experience in minute one:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the timestamped transcript as a page on this site](https://pulse112-dispatch-ai.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
 
 ### 120-second transcript
 

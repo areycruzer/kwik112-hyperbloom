@@ -11,7 +11,6 @@ export const metadata: Metadata = {
   title: "Kwik 112 — AI voice call-taker and dispatch console for 112 emergencies",
   description:
     "Kwik 112 is a multilingual AI voice call-taker and auditable decision console that assists human emergency dispatchers.",
-  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     title: "Kwik 112 — AI voice call-taker and dispatch console",

@@ -11,7 +11,7 @@ Independent browser-based demonstration. Not an official 112, ERSS, Government o
 - Dispatcher console: /dashboard
 - Held-out benchmark rendered from committed results: /benchmark
 - Demo video transcript (VideoObject): /transcript
-- Demo video (2 minutes): https://youtu.be/JdzAXL08_24
+- Demo video: https://youtu.be/JdzAXL08_24 (trim to the 120s cap pending)
 
 ## Verified held-out results (corpus v1.0.0, held_out split, 30 synthetic calls)
 

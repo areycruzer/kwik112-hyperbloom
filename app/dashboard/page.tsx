@@ -48,7 +48,7 @@ import {
 } from '@/lib/dashboard-presentation';
 import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
 import { selectPreArrivalGuidance } from '@/lib/first-aid';
-import { shouldAutoLaunchVoiceStation } from '@/lib/voice-launch';
+import { shouldAutoLaunchVoiceStation, VOICE_STATION_HREF } from '@/lib/voice-launch';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
@@ -68,6 +68,7 @@ import {
   type FusionDecisionAction,
   type FusionSuggestion,
 } from '@/lib/incident-fusion';
+import { readTimeline, requiredDecisionPoints } from '@/lib/timeline';
 import { useFusionDecisions } from '@/lib/useFusionDecisions';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
@@ -258,6 +259,13 @@ export default function DashboardPage() {
    * @description Persist only the changed call. Writing the whole merged list
    *              back would push the mock seed into storage, where the next poll
    *              would merge it with `mockCalls` again and double the queue.
+   *
+   *              Checkpoint guard: moving a call into a dispatch-stage or
+   *              resolution-stage status requires the corresponding human
+   *              decision records. The Kanban drag and every other direct
+   *              status write route through this handler, so the
+   *              three-checkpoint promise cannot be bypassed by dragging a
+   *              card across the board.
    */
   const handleUpdateCallStatus = useCallback((callId: string, newStatus: CallStatus) => {
     if (isSeparateDispatchTransitionBlocked(callId, newStatus, fusionDecisions)) {
@@ -266,6 +274,26 @@ export default function DashboardPage() {
       setMainView('map');
       return;
     }
+
+    const requiredPoints = requiredDecisionPoints(newStatus);
+    if (requiredPoints.length) {
+      const timeline = readTimeline(callId);
+      const recorded = new Set(
+        timeline.records.map((r) => ('point' in r ? r.point : null)).filter(Boolean),
+      );
+      const missing = requiredPoints.filter((point) => !recorded.has(point));
+      if (missing.length) {
+        console.warn(
+          `Blocked status change to "${newStatus}": missing human checkpoint decision(s) ` +
+            `${missing.join(', ')} for call ${callId}. Record them in the incident timeline.`,
+        );
+        setSelectedCallId(callId);
+        setPanelView('detail');
+        setWorkflowOpen(true);
+        return;
+      }
+    }
+
     setCalls((prev) => {
       const target = prev.find((c) => c.id === callId);
       if (!target) return prev;
@@ -418,10 +446,46 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-ground text-ink">
       <noscript>
-        <div className="border-b border-mild bg-deep p-4 text-sm text-ink">
-          <strong>Kwik 112 dispatch console:</strong> JavaScript is required for the live voice call, incident map, deterministic triage updates, and human dispatch controls. Kwik 112 is an independent demonstration and is not an official 112 service.
+        <div className="space-y-3 border-b border-mild bg-deep p-5 text-sm leading-6 text-ink">
+          <p>
+            <strong>Kwik 112 dispatch console (synthetic PSAP simulation).</strong> JavaScript is
+            required for the voice call station, incident map, and dispatch controls. This is an
+            independent demonstration — not an official 112 service — and every incident on the
+            board is synthetic.
+          </p>
+          <p>
+            <strong>What this console does:</strong> a caller places a 112 call (Hindi, Hinglish,
+            or English); deterministic rules grade severity in microseconds — a floor the optional
+            model refinement may raise but never lower; a human dispatcher records INTAKE,
+            DISPATCH, and RESOLUTION decisions, and every override requires a written note. A
+            sample graded card reads: <em>cardiac arrest, CRITICAL (P1), location &quot;Sector 16
+            Market, Rohini, Delhi&quot;, triage source: local rules, prosody: absent</em>.
+          </p>
+          <p>
+            Evidence without JavaScript: <a href="/for-judges" className="underline">judge guide</a> ·{' '}
+            <a href="/benchmark" className="underline">held-out benchmark</a> ·{' '}
+            <a href="/transcript" className="underline">video transcript</a>.
+          </p>
         </div>
       </noscript>
+      {/* ---- CITIZEN-FIRST BAND --------------------------------------------
+          The official Top-250 link opens /dashboard directly, and reviewers
+          are told to test the citizen experience first. This band puts the
+          caller's path above the operator chrome; the console below is the
+          dispatcher's half of the same journey. */}
+      <Link
+        href={VOICE_STATION_HREF}
+        className="group flex w-full shrink-0 items-center justify-center gap-3 border-b border-critical/40 bg-critical/15 px-4 py-2.5 text-center hover:bg-critical/25"
+      >
+        <Phone className="h-4 w-4 shrink-0 text-critical" aria-hidden />
+        <span className="text-xs font-bold uppercase tracking-wide text-ink sm:text-sm">
+          Place a 112 call — start here
+        </span>
+        <span className="hidden text-2xs text-ink-3 sm:inline">
+          the citizen journey: speak in Hindi, Hinglish, or English · the console below shows what the dispatcher receives
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-critical transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </Link>
       {/* ---- COMMAND BAR ---------------------------------------------------- */}
       <header className="flex h-14 shrink-0 select-none items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4">
         <div className="flex items-center gap-4">
@@ -431,7 +495,7 @@ export default function DashboardPage() {
             </span>
             <div className="leading-tight">
               <div className="text-md font-semibold tracking-wide text-ink">KWIK 112</div>
-              <div className="hidden text-2xs text-ink-3 lg:block">Delhi Command Desk · National 112 Control</div>
+              <div className="hidden text-2xs text-ink-3 lg:block">Synthetic PSAP simulation · independent demo</div>
             </div>
           </div>
 
@@ -837,7 +901,7 @@ function LiveCallStrip({ payload }: { payload: KwikLiveCallPayload }) {
     >
       <div className="flex items-center gap-2 self-start sm:self-center">
         <span className="h-2 w-2 shrink-0 rounded-full bg-critical-bright" aria-hidden />
-        <h2 className="whitespace-nowrap text-xs font-bold text-ink">LIVE 112 CALL</h2>
+        <h2 className="whitespace-nowrap text-xs font-bold text-ink">ACTIVE 112 CALL</h2>
       </div>
       <div className="min-w-0 overflow-hidden">
         {presentation.turns.length ? (

@@ -138,3 +138,23 @@ export function writeTimeline(state: TimelineState): void {
     /* storage unavailable; the in-memory state still drives this session */
   }
 }
+
+/**
+ * @description Which human checkpoint decisions a given call status implies.
+ *              Dispatch-stage statuses (dispatched, en-route, on_scene,
+ *              mitigating) require INTAKE and DISPATCH to be recorded;
+ *              resolution-stage statuses additionally require RESOLUTION.
+ *              Queue-organization statuses (incoming, triage, pending, …)
+ *              imply no checkpoint and stay freely reorderable. Used by the
+ *              dashboard's status-change guard so a Kanban drag can never
+ *              bypass the three-checkpoint workflow.
+ */
+export function requiredDecisionPoints(status: string): DecisionPoint[] {
+  if (['resolved', 'completed', 'closed'].includes(status)) {
+    return ['INTAKE', 'DISPATCH', 'RESOLUTION'];
+  }
+  if (['dispatched', 'en-route', 'on_scene', 'mitigating'].includes(status)) {
+    return ['INTAKE', 'DISPATCH'];
+  }
+  return [];
+}
