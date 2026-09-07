@@ -3,15 +3,26 @@
  *
  * A five-stage incident pipeline rebuilt on the Kwik 112 design system:
  * flat `--panel` surfaces, 1px rules, signal-coloured accents, and no glow or
- * blur. Each card carries the incident's `buildSymbol` triangle, its real
- * per-card AI confidence, its real measured distress (an em-dash when prosody
- * was never captured), and the full unclamped `ai_summary`.
+ * blur.
+ *
+ * A card carries five facts and nothing else: priority, what happened (symbol
+ * and subtype), when it came in, where it is, and how confident the triage was.
+ * It used to also print the full AI summary paragraph and a distress meter,
+ * which turned a five-column board into a wall of prose. The reading happens in
+ * the incident panel; the board is for moving work between stages.
+ *
+ * The card itself is the "open this incident" control: clicking anywhere on it
+ * switches to the map and opens the incident in the emergency panel. A separate
+ * "Open in map" button used to sit in the actions row, which meant the obvious
+ * gesture - clicking the card - did nothing at all.
  *
  * Two hard-won behaviours are preserved verbatim:
  *   - `stageOf` maps a call to EXACTLY ONE stage, so no incident can render in
  *     two columns at once.
- *   - The `advanceStage` button stays: drag alone is not keyboard reachable and
- *     the board must be operable without a mouse.
+ *   - The stage-move buttons stay in the DOM: drag alone is not keyboard
+ *     reachable and the board must be operable without a mouse. They are merely
+ *     hidden until the card is hovered or one of them is focused - see the
+ *     card's actions row for how that is done without leaving the tab order.
  */
 
 'use client';
@@ -20,11 +31,10 @@ import { useState } from 'react';
 import { CallStatus, EmergencyCall } from '@/lib/types';
 import { Chip, type ChipTone } from '@/components/ui/panel';
 import { Symbol } from '@/components/ui/symbol';
-import { DistressMeter } from '@/components/DistressMeter';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { getTimeElapsed } from '@/lib/mock-data';
 import { severityTone, priorityCode, distressOf } from '@/lib/incident';
-import { MapPin, Navigation, Shield, MoveRight, MoveLeft, Filter, Layers } from 'lucide-react';
+import { MapPin, Shield, MoveRight, MoveLeft, Filter, Layers } from 'lucide-react';
 
 interface IncidentKanbanBoardProps {
   calls: EmergencyCall[];
@@ -93,7 +103,12 @@ const STATUS_FOR_STAGE: Record<string, CallStatus> = {
 
 const PRIORITY_FILTERS = ['all', 'critical', 'high', 'medium', 'low'] as const;
 
-/** Real per-card confidence, as a whole-percent string, or null when ungraded. */
+/**
+ * Real per-card confidence as a whole-percent string, or null when ungraded.
+ * The figure is the stored one - 0.89 shows as 89%, never nudged to a
+ * rounder-looking 90% - because a dispatcher weighing whether to trust an AI
+ * grade is entitled to the number the model actually produced.
+ */
 function confidenceOf(call: EmergencyCall): string | null {
   const value = call.ai_confidence ?? call.ai_triage?.confidence;
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : null;
@@ -272,9 +287,13 @@ export default function IncidentKanbanBoard({
                         key={call.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, call.id)}
-                        className="group flex cursor-grab flex-col gap-2 rounded-[6px] border border-rule bg-panel-raised p-3 transition-colors hover:border-accent active:cursor-grabbing"
+                        onClick={() => onSelectCallAndNavigateToMap(call.id)}
+                        className="group flex cursor-pointer flex-col gap-2 rounded-[6px] border border-rule bg-panel-raised p-3 transition-colors hover:border-accent active:cursor-grabbing"
                       >
-                        {/* Header: priority, symbol, subtype, elapsed */}
+                        {/* Priority and symbol lead on the left, elapsed time
+                            closes on the right - the two things scanned down a
+                            column, pinned to opposite edges so they line up
+                            across the whole stack. */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex min-w-0 items-start gap-2">
                             <Chip tone={severityTone(call.severity)}>{priorityCode(call)}</Chip>
@@ -289,24 +308,32 @@ export default function IncidentKanbanBoard({
                               className="mt-0.5 shrink-0"
                             />
                             {/* The subtype is the single most important field on
-                                the card. It wraps to at most two lines instead of
+                                the card, and it doubles as the card's accessible
+                                control: the surrounding div's onClick serves a
+                                pointer, this serves a keyboard and a screen
+                                reader. Making the div itself role="button" would
+                                nest the action buttons below inside a button,
+                                which is invalid and unreadable to assistive tech.
+
+                                It wraps to at most two lines instead of
                                 truncating to a few characters; a very long subtype
                                 is clamped so one card cannot grow unbounded. */}
-                            <span className="line-clamp-2 break-words text-sm font-semibold capitalize leading-snug text-ink">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectCallAndNavigateToMap(call.id);
+                              }}
+                              title="Open this incident on the situational map"
+                              className="line-clamp-2 break-words text-left text-sm font-semibold capitalize leading-snug text-ink transition-colors hover:text-accent"
+                            >
                               {subtype}
-                            </span>
+                            </button>
                           </div>
                           <span className="tnum shrink-0 text-2xs text-ink-3">
                             {getTimeElapsed(call.created_at)}
                           </span>
                         </div>
-
-                        {/* Full AI summary — deliberately unclamped for trained dispatchers. */}
-                        <p className="text-sm leading-relaxed text-ink-2">
-                          {call.ai_summary ||
-                            call.chief_complaint ||
-                            'Emergency call in progress; details pending.'}
-                        </p>
 
                         {address && (
                           <div className="flex items-start gap-1.5 text-xs text-ink-3">
@@ -315,63 +342,73 @@ export default function IncidentKanbanBoard({
                           </div>
                         )}
 
-                        {/* Measured distress + real confidence */}
-                        <div className="flex items-center justify-between gap-2 border-t border-rule pt-2">
-                          <DistressMeter level={distressOf(call)} compact />
-                          <span className="tnum text-2xs uppercase tracking-wide text-ink-4">
-                            {confidence ? `Conf ${confidence}` : 'Conf —'}
-                          </span>
+                        <div className="tnum text-2xs text-ink-4">
+                          Confidence <span className="text-ink-3">{confidence ?? '\u2014'}</span>
                         </div>
 
-                        {/* Actions — an icon-led primary plus icon-only
-                            secondaries, all on one line. "Open in map" never
-                            wraps; the icon buttons keep their footprint and each
-                            carries an aria-label and title so the board stays
-                            keyboard- and screen-reader-operable. */}
+                        {/* Actions. Opening the incident is no longer one of
+                            them - the card is that control - so what is left is
+                            the decision timeline, plus the stage arrows, which
+                            stay hidden because a five-column board showed ten of
+                            them at once and they read as clutter, not controls.
+
+                            The arrows hide by collapsing their container to zero
+                            width, NOT with `hidden` or `display:none`: a
+                            zero-width overflow-hidden button is still focusable,
+                            so `group-focus-within` expands the container the
+                            moment a keyboard user tabs to it. Dragging is
+                            mouse-only, so dropping these from the tab order would
+                            leave the pipeline unusable without a mouse.
+
+                            Every button here stops propagation: they sit inside
+                            the card, and without it each would also fire the
+                            card's own "open on the map" click. */}
                         <div className="flex items-center gap-1.5 border-t border-rule pt-2">
                           <button
                             type="button"
-                            onClick={() => onSelectCallAndNavigateToMap(call.id)}
-                            title="Open this incident on the situational map"
-                            className="flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 transition-colors hover:border-accent hover:text-accent"
-                          >
-                            <Navigation className="h-3 w-3 shrink-0" aria-hidden />
-                            <span>Open in map</span>
-                          </button>
-
-                          {stageOf(call) !== 'triage' && (
-                            <button
-                              type="button"
-                              onClick={() => regressStage(call)}
-                              className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-mild hover:text-mild"
-                              title="Move back to the previous pipeline stage"
-                              aria-label={`Move ${subtype} back to the previous stage`}
-                            >
-                              <MoveLeft className="h-3 w-3" aria-hidden />
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => onOpenWorkflow(call)}
-                            className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-mild transition-colors hover:border-accent hover:text-accent"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenWorkflow(call);
+                            }}
                             title="Review the AI decision timeline"
                             aria-label={`Review the decision timeline for ${subtype}`}
+                            className="flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-ink-2 transition-colors hover:border-accent hover:text-accent"
                           >
-                            <Shield className="h-3 w-3" aria-hidden />
+                            <Shield className="h-3 w-3 shrink-0" aria-hidden />
+                            <span>AI timeline</span>
                           </button>
 
-                          {stageOf(call) !== 'resolved' && (
-                            <button
-                              type="button"
-                              onClick={() => advanceStage(call)}
-                              className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-safe hover:text-safe"
-                              title="Advance to the next pipeline stage"
-                              aria-label={`Advance ${subtype} to the next stage`}
-                            >
-                              <MoveRight className="h-3 w-3" aria-hidden />
-                            </button>
-                          )}
+                          <div className="flex w-0 shrink-0 items-center gap-1.5 overflow-hidden opacity-0 transition-all duration-150 group-hover:w-auto group-hover:opacity-100 group-focus-within:w-auto group-focus-within:opacity-100">
+                            {stageOf(call) !== 'triage' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  regressStage(call);
+                                }}
+                                className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-mild hover:text-mild"
+                                title="Move back to the previous pipeline stage"
+                                aria-label={`Move ${subtype} back to the previous stage`}
+                              >
+                                <MoveLeft className="h-3 w-3" aria-hidden />
+                              </button>
+                            )}
+
+                            {stageOf(call) !== 'resolved' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  advanceStage(call);
+                                }}
+                                className="flex shrink-0 items-center justify-center rounded-[4px] border border-rule-strong bg-panel px-2 py-1.5 text-ink-2 transition-colors hover:border-safe hover:text-safe"
+                                title="Advance to the next pipeline stage"
+                                aria-label={`Advance ${subtype} to the next stage`}
+                              >
+                                <MoveRight className="h-3 w-3" aria-hidden />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
