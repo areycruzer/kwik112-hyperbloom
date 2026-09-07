@@ -1,19 +1,49 @@
 # Kwik 112
 
-> Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
+> Kwik 112 is middleware for India's 112 emergency line: when a caller dials, ring-time becomes triage time. A multilingual AI call-taker answers instantly (Hindi, Hinglish, English), transcribes the call live, reads vocal distress, and grades it with a deterministic safety floor the AI may escalate but never lower. Every call lands on a human dispatcher's console as a pre-graded card; a human makes every dispatch decision and every decision is audit-logged. Grading is measured on a versioned, held-out, multilingual benchmark (100% critical recall, 9/9) reproducible with one command.
 
-Kwik 112 is an independent browser-based demonstration. It is not an official 112, ERSS, government, or C-DAC service and has no live emergency-network integration.
+Independent browser-based demonstration. Not an official 112, ERSS, Government of India, or C-DAC service. No live emergency-network integration. All incident data is synthetic. The AI never dispatches; a human does.
 
-## Primary links
+## Evaluate this build (no login, no credentials, no setup)
 
-- Landing: /
-- Place a test call: /dashboard?startCall=1#voice-station
+- For judges — three one-click paths: /for-judges
+- Place a test 112 call: /dashboard?startCall=1#voice-station
 - Dispatcher console: /dashboard
-- README: https://github.com/areycruzer/kwik-112/blob/main/README.md
-- Raw benchmark: https://github.com/areycruzer/kwik-112/blob/main/evaluation/results/local-held_out-latest.json
-- Benchmark report: https://github.com/areycruzer/kwik-112/blob/main/evaluation/results/local-held_out-latest.md
+- Held-out benchmark rendered from committed results: /benchmark
+- Demo video transcript (VideoObject): /transcript
+- Demo video (2 minutes): https://youtu.be/JdzAXL08_24
+
+## Verified held-out results (corpus v1.0.0, held_out split, 30 synthetic calls)
+
+- Critical recall: 100% (9/9; Wilson 95% lower bound 0.70)
+- Incident type accuracy: 60% (18/30)
+- Severity accuracy: 60% (18/30)
+- Under-triage: 23.3% (7/30) · Over-triage: 16.7% (5/30)
+- Location accuracy: 100% (25/25) · Threat detection: 100% (3/3)
+- Local latency: p50 ~0.048ms · p95 ~3.79ms
+- Reproduce: `npm install && npm run evaluate:local`
+
+## Architecture facts an evaluator can verify
+
+- Deterministic multilingual rules grade first, in-browser, in microseconds; high-risk phrases (cardiac arrest, not breathing, fire, weapons, entrapment) can never grade low.
+- Optional LLM refinement (GLM primary; OpenAI-compatible fallback via OPENAI_API_KEY) may only escalate severity — enforced in code with regression tests, not just prompted.
+- Caller transcripts are treated as untrusted data; prompt-injection cases are part of the committed test suite.
+- Emotion (prosody) can sharpen priority inside a severity band but can never cross a band boundary (severityBandCeiling).
+- Human checkpoints INTAKE → DISPATCH → RESOLUTION; overrides require a written note; audit trail is session-local.
+- Provenance labels everywhere: local-rules / model / fallback; emotion MEASURED / SIMULATED / absent.
+
+## Problem evidence (sourced)
+
+- ~0.28% of Telangana's ~16 lakh daily 112 calls are genuine (The Hindu, Jul 2026)
+- MHA answer standard: 15 seconds; reported national response ~18 minutes (MHA NERS; DGP statement Aug 2026)
+- Delhi: >65% blank 112 calls on a measured Sunday (The Hindu, 2019); CAG audit of Dial 112 Punjab (Report 7/2025, tabled Mar 2026)
+- Supreme Court, 26 May 2026: all helplines to merge into 112 (LiveLaw, 2026 SC 556)
+- Dispatchers recognize 72.5% of out-of-hospital cardiac arrests on calls (Blomberg, Resuscitation 2019, n=108,607); dispatcher-coached CPR survival OR 1.45 (Rea, Circulation 2001)
+
+## Repository
+
+- Source (MIT): https://github.com/areycruzer/kwik-112
+- README with reproduce commands: https://github.com/areycruzer/kwik-112/blob/main/README.md
+- Raw machine-readable results: https://github.com/areycruzer/kwik-112/blob/main/evaluation/results/local-held_out-latest.json
+- Codex/OpenAI contribution log: https://github.com/areycruzer/kwik-112/blob/main/CODEX_LOG.md
 - Video captions: /kwik-112-round2.vtt
-
-## Verified held-out local results
-
-Corpus v1.0.0, held_out split, 30 synthetic calls, provider none: critical recall 100% (9/9; Wilson 95% lower bound 0.70), incident type accuracy 60%, severity accuracy 60%, under-triage 23.3%, over-triage 16.7%, location accuracy 100% (25/25), threat accuracy 100% (3/3), latency p50 ~0.048ms and p95 ~3.79ms.

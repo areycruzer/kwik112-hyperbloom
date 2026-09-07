@@ -13,6 +13,7 @@ import {
   localTriage as localTriageBase,
   priorityFromSeverity,
   scoreOf,
+  severityBandCeiling,
   severityFromScore,
 } from './triage-local.ts';
 import type { TriageResult } from './triage-local.ts';
@@ -22,6 +23,7 @@ export {
   keywordTriage,
   priorityFromSeverity,
   scoreOf,
+  severityBandCeiling,
   severityFromScore,
 };
 export type { TriageResult } from './triage-local.ts';

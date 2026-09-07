@@ -42,6 +42,19 @@ const jsonLd = {
   description: "An independent multilingual AI voice call-taker emulator and auditable decision console for human emergency dispatchers.",
 };
 
+const problem = [
+  ["28 in 10,000", "of Telangana's ~16 lakh daily 112 calls are genuine emergencies — the rest is noise drowning the real ones.", "https://www.thehindu.com/news/national/telangana/only-028-of-nearly-16-lakh-daily-emergency-calls-in-telangana-are-genuine-police-to-deploy-ai-tools-in-emergency-response-system/article71142213.ece"],
+  ["15 seconds", "is the government's own answer standard for a 112 call — against a reported national response time of roughly 18 minutes.", "https://eena.org/news/distress-call-on-112-should-be-answered-in-15-seconds/"],
+  ["2 of 3", "calls to Delhi 112 were blank on a measured Sunday; Punjab's auditor called its Dial 112 a near-collapse.", "https://www.thehindu.com/news/cities/Delhi/helpline-112-gets-over-65-blank-calls/article29560970.ece"],
+  ["May 2026", "the Supreme Court ordered every helpline merged into 112 — the system is being rebuilt right now.", "https://www.livelaw.in/top-stories/trauma-care-part-of-right-to-life-supreme-court-directs-to-integrate-emergency-helplines-into-112-implement-pm-rahat-good-samaritan-scheme-536001"],
+];
+
+const personas = [
+  ["Ramesh", "Hinglish bystander", "Roadside accident near Moolchand Metro — mixed Hindi and English, panicked but locatable."],
+  ["Sharma ji", "Hindi-only caller", "Wife unresponsive, not breathing, at a metro gate — pure Hindi, every second counts."],
+  ["John", "English tourist", "Heatstroke at India Gate — English, disoriented, unsure of the address."],
+];
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f5f2] text-[#151817]">
@@ -75,10 +88,46 @@ export default function Home() {
 
       <section className="border-b border-[#ccd1cc] bg-white py-16 md:py-20">
         <div className="mx-auto max-w-[1280px] px-5 md:px-8">
+          <p className="text-xs font-semibold uppercase text-[#c71920]">The moment it matters</p>
+          <h2 className="mt-2 max-w-[820px] text-2xl font-bold md:text-3xl">&ldquo;Why are they not picking up? It&rsquo;s busy &mdash; and he&rsquo;s bleeding.&rdquo;</h2>
+          <p className="mt-4 max-w-[760px] text-sm leading-6 text-[#555e59]">Everyone has lived some version of this call. The line rings because a human dispatcher can only take one conversation at a time &mdash; and in that queue, seconds decide outcomes. This is a measured, documented problem, not a hypothesis:</p>
+          <div className="mt-9 grid gap-px overflow-hidden border border-[#cfd4cf] bg-[#cfd4cf] sm:grid-cols-2 lg:grid-cols-4">
+            {problem.map(([stat, copy, href]) => (
+              <a key={stat} href={href} target="_blank" rel="noreferrer" className="group bg-white p-6 transition-colors hover:bg-[#eef4f5]">
+                <p className="text-2xl font-bold text-[#087b91]">{stat}</p>
+                <p className="mt-2 text-xs leading-5 text-[#555e59]">{copy}</p>
+                <p className="mt-3 text-2xs font-semibold uppercase text-[#98a29d] group-hover:text-[#087b91]">Source ↗</p>
+              </a>
+            ))}
+          </div>
+          <p className="mt-5 max-w-[760px] text-sm leading-6 text-[#555e59]">Kwik 112 is built for the seconds the queue steals: <strong className="text-[#151817]">the AI answers instantly, in the caller&rsquo;s own language, grades the call with a no-downgrade safety floor, and hands a human dispatcher a pre-graded card &mdash; the human makes every dispatch decision.</strong></p>
+        </div>
+      </section>
+
+      <section className="border-b border-[#ccd1cc] bg-white py-16 md:py-20">
+        <div className="mx-auto max-w-[1280px] px-5 md:px-8">
           <p className="text-xs font-semibold uppercase text-[#c71920]">Operational flow</p><h2 className="mt-2 text-2xl font-bold md:text-3xl">How a 112 call flows</h2>
           <ol className="mt-10 grid border-l border-t border-[#cfd4cf] sm:grid-cols-2 lg:grid-cols-3">
             {flow.map(([number, title, copy]) => <li key={number} className="min-h-44 border-b border-r border-[#cfd4cf] p-6"><span className="font-mono text-xs font-bold text-[#c71920]">{number}</span><h3 className="mt-6 text-lg font-bold">{title}</h3><p className="mt-2 text-sm leading-6 text-[#555e59]">{copy}</p></li>)}
           </ol>
+        </div>
+      </section>
+
+      <section className="border-b border-[#ccd1cc] bg-white py-16 md:py-20">
+        <div className="mx-auto max-w-[1280px] px-5 md:px-8">
+          <p className="text-xs font-semibold uppercase text-[#c71920]">One click, three callers</p>
+          <h2 className="mt-2 text-2xl font-bold md:text-3xl">Hear the intake yourself</h2>
+          <p className="mt-4 max-w-[720px] text-sm leading-6 text-[#555e59]">The voice station ships three scripted callers covering the languages of a real 112 shift. Each plays through the same pipeline as a live call &mdash; transcript, emotion telemetry, instant grade &mdash; with prosody honestly labelled SIMULATED.</p>
+          <div className="mt-8 grid gap-px overflow-hidden border border-[#cfd4cf] bg-[#cfd4cf] md:grid-cols-3">
+            {personas.map(([name, tagline, copy]) => (
+              <div key={name} className="bg-white p-6">
+                <p className="text-base font-bold">{name}</p>
+                <p className="mt-0.5 text-xs font-semibold uppercase text-[#087b91]">{tagline}</p>
+                <p className="mt-3 text-sm leading-6 text-[#555e59]">{copy}</p>
+              </div>
+            ))}
+          </div>
+          <Link href={VOICE_STATION_HREF} className="mt-7 inline-flex h-10 items-center gap-2 rounded-[6px] bg-[#f40000] px-4 text-sm font-bold text-white hover:bg-[#d90000]"><Headphones className="h-4 w-4" aria-hidden /> Place a test call now</Link>
         </div>
       </section>
 
@@ -99,7 +148,7 @@ export default function Home() {
 
       <section className="bg-[#f4f5f2] py-16 md:py-20"><div className="mx-auto max-w-[980px] px-5 md:px-8"><UserCheck className="h-7 w-7 text-[#c71920]" aria-hidden /><h2 className="mt-4 text-2xl font-bold">What Kwik 112 is, and is not</h2><div className="mt-8 grid border-l border-t border-[#c6cbc6] md:grid-cols-2"><div className="border-b border-r border-[#c6cbc6] p-6"><h3 className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-4 w-4 text-[#087b91]" aria-hidden /> It is</h3><p className="mt-3 text-sm leading-6 text-[#555e59]">An independent browser-based build that demonstrates multilingual AI intake, deterministic triage, model refinement, and human dispatch accountability.</p></div><div className="border-b border-r border-[#c6cbc6] p-6"><h3 className="flex items-center gap-2 font-bold"><ShieldCheck className="h-4 w-4 text-[#c71920]" aria-hidden /> It is not</h3><p className="mt-3 text-sm leading-6 text-[#555e59]">An official 112, ERSS, government, or C-DAC service. It does not connect to emergency infrastructure or make dispatch decisions without a human.</p></div></div></div></section>
 
-      <footer className="border-t border-[#363c39] bg-[#171a19] text-white"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between md:px-8"><div><p className="font-bold">Kwik 112</p><p className="mt-1 text-xs text-[#9faaa4]">Independent AI-assisted emergency dispatch demonstration.</p></div><nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-3 text-sm text-[#d4dad6]"><Link href={VOICE_STATION_HREF} className="hover:text-white">Place a test call</Link><Link href="/dashboard" className="hover:text-white">Live console</Link><a href="https://github.com/areycruzer/kwik-112" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white"><Github className="h-4 w-4" aria-hidden /> GitHub</a><a href="https://github.com/areycruzer/kwik-112/tree/main/evaluation/results" target="_blank" rel="noreferrer" className="hover:text-white">Benchmark results</a><a href="/llms.txt" className="hover:text-white">llms.txt</a></nav></div></footer>
+      <footer className="border-t border-[#363c39] bg-[#171a19] text-white"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between md:px-8"><div><p className="font-bold">Kwik 112</p><p className="mt-1 text-xs text-[#9faaa4]">Independent AI-assisted emergency dispatch demonstration.</p></div><nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-3 text-sm text-[#d4dad6]"><Link href={VOICE_STATION_HREF} className="hover:text-white">Place a test call</Link><Link href="/dashboard" className="hover:text-white">Live console</Link><Link href="/for-judges" className="hover:text-white">For judges</Link><Link href="/benchmark" className="hover:text-white">Benchmark</Link><Link href="/transcript" className="hover:text-white">Video transcript</Link><a href="https://github.com/areycruzer/kwik-112" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white"><Github className="h-4 w-4" aria-hidden /> GitHub</a><a href="https://youtu.be/JdzAXL08_24" target="_blank" rel="noreferrer" className="hover:text-white">Demo video</a><a href="/llms.txt" className="hover:text-white">llms.txt</a></nav></div></footer>
     </main>
   );
 }

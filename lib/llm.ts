@@ -49,7 +49,12 @@ export function resolveLlm(): LlmConfig {
   if (openaiKey) {
     return {
       provider: 'openai',
-      client: new OpenAI({ apiKey: openaiKey }),
+      client: new OpenAI({
+        apiKey: openaiKey,
+        // OPENAI_BASE_URL makes the same code path work with any
+        // OpenAI-compatible gateway (Azure-style proxies, local vLLM, etc).
+        baseURL: process.env.OPENAI_BASE_URL || undefined,
+      }),
       model: process.env.OPENAI_MODEL || OPENAI_DEFAULT_MODEL,
       disableThinking: false,
     };
