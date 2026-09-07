@@ -3,10 +3,10 @@
     "benchmark_version": "1.0.0",
     "split": "held_out",
     "mode": "local",
-    "evaluated_at": "2026-09-07T09:58:39.969Z",
+    "evaluated_at": "2026-09-07T10:06:56.671Z",
     "provider": "none",
     "model": null,
-    "commit": "89700a7",
+    "commit": "36ccf3f",
     "node_version": "v22.18.0",
     "case_count": 30,
     "model_attempted": false
@@ -26,8 +26,8 @@
     "location_accuracy": 1,
     "threat_cases": 3,
     "threat_accuracy": 1,
-    "latency_p50_ms": 0.03839999999999577,
-    "latency_p95_ms": 3.012800000000027,
+    "latency_p50_ms": 0.04570000000001073,
+    "latency_p95_ms": 3.8016000000000076,
     "fallback_count": 0,
     "method_counts": {
       "keyword": 30
@@ -79,7 +79,7 @@
           "smoke"
         ],
         "method": "keyword",
-        "latency_ms": 5.0356000000000165,
+        "latency_ms": 5.4990999999999985,
         "fell_back": false
       },
       "type_match": true,
@@ -120,7 +120,7 @@
           "no pulse"
         ],
         "method": "keyword",
-        "latency_ms": 1.6683999999999912,
+        "latency_ms": 1.825400000000002,
         "fell_back": false
       },
       "type_match": true,
@@ -157,7 +157,7 @@
           "Armed"
         ],
         "method": "keyword",
-        "latency_ms": 0.19139999999998736,
+        "latency_ms": 0.19940000000002556,
         "fell_back": false
       },
       "type_match": true,
@@ -194,7 +194,7 @@
           "trapped"
         ],
         "method": "keyword",
-        "latency_ms": 0.06749999999999545,
+        "latency_ms": 0.0759999999999934,
         "fell_back": false
       },
       "type_match": false,
@@ -227,7 +227,7 @@
         "severity": "low",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.4824000000000126,
+        "latency_ms": 0.7760000000000105,
         "fell_back": false
       },
       "type_match": true,
@@ -264,7 +264,7 @@
           "smoke"
         ],
         "method": "keyword",
-        "latency_ms": 0.10069999999998913,
+        "latency_ms": 0.11060000000000514,
         "fell_back": false
       },
       "type_match": true,
@@ -301,7 +301,7 @@
           "collapsed"
         ],
         "method": "keyword",
-        "latency_ms": 0.04189999999999827,
+        "latency_ms": 0.04570000000001073,
         "fell_back": false
       },
       "type_match": true,
@@ -337,7 +337,7 @@
         "location_text": "Mock Cinema door 3",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.03839999999999577,
+        "latency_ms": 0.042899999999974625,
         "fell_back": false
       },
       "type_match": false,
@@ -370,7 +370,7 @@
         "severity": "low",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.3475999999999999,
+        "latency_ms": 0.4808999999999912,
         "fell_back": false
       },
       "type_match": false,
@@ -407,7 +407,7 @@
         "location_text": "Practice Square; no immediate danger",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.0549000000000035,
+        "latency_ms": 0.061199999999985266,
         "fell_back": false
       },
       "type_match": true,
@@ -442,7 +442,7 @@
           "fire"
         ],
         "method": "keyword",
-        "latency_ms": 0.039700000000010505,
+        "latency_ms": 0.043000000000006366,
         "fell_back": false
       },
       "type_match": true,
@@ -476,7 +476,7 @@
         "location_text": "Prototype Museum lobby",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.03289999999998372,
+        "latency_ms": 0.5386000000000308,
         "fell_back": false
       },
       "type_match": false,
@@ -513,7 +513,7 @@
         "location_text": "Test Park entrance",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.028300000000001546,
+        "latency_ms": 0.057999999999992724,
         "fell_back": false
       },
       "type_match": false,
@@ -549,7 +549,7 @@
         "location_text": "Model Junction, driver is awake",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.02559999999999718,
+        "latency_ms": 0.03129999999998745,
         "fell_back": false
       },
       "type_match": false,
@@ -593,7 +593,7 @@
           "नब्ज नहीं"
         ],
         "method": "keyword",
-        "latency_ms": 3.012800000000027,
+        "latency_ms": 3.8016000000000076,
         "fell_back": false
       },
       "type_match": true,
@@ -630,7 +630,7 @@
           "आग"
         ],
         "method": "keyword",
-        "latency_ms": 0.05160000000000764,
+        "latency_ms": 0.06110000000001037,
         "fell_back": false
       },
       "type_match": true,
@@ -661,7 +661,7 @@
         "severity": "low",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.026999999999986812,
+        "latency_ms": 0.03100000000000591,
         "fell_back": false
       },
       "type_match": false,
@@ -698,7 +698,7 @@
           "चाकू"
         ],
         "method": "keyword",
-        "latency_ms": 0.031899999999978945,
+        "latency_ms": 0.037399999999990996,
         "fell_back": false
       },
       "type_match": true,
@@ -731,7 +731,7 @@
         "location_text": "स्पष्ट नहीं है",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.026499999999998636,
+        "latency_ms": 0.0292999999999779,
         "fell_back": false
       },
       "type_match": false,
@@ -768,7 +768,7 @@
         "location_text": "टेस्ट कॉलोनी के पार्क",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.025100000000009004,
+        "latency_ms": 0.04400000000003956,
         "fell_back": false
       },
       "type_match": false,
@@ -812,7 +812,7 @@
           "pulse nahi"
         ],
         "method": "keyword",
-        "latency_ms": 0.5450999999999908,
+        "latency_ms": 0.07190000000002783,
         "fell_back": false
       },
       "type_match": true,
@@ -850,7 +850,7 @@
           "aag"
         ],
         "method": "keyword",
-        "latency_ms": 0.046799999999990405,
+        "latency_ms": 0.050700000000006185,
         "fell_back": false
       },
       "type_match": true,
@@ -887,7 +887,7 @@
           "armed"
         ],
         "method": "keyword",
-        "latency_ms": 0.03450000000000841,
+        "latency_ms": 0.03829999999999245,
         "fell_back": false
       },
       "type_match": true,
@@ -922,7 +922,7 @@
           "crash"
         ],
         "method": "keyword",
-        "latency_ms": 0.037900000000007594,
+        "latency_ms": 0.043000000000006366,
         "fell_back": false
       },
       "type_match": true,
@@ -953,7 +953,7 @@
         "severity": "low",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.0403999999999769,
+        "latency_ms": 0.04610000000002401,
         "fell_back": false
       },
       "type_match": false,
@@ -989,7 +989,7 @@
         "location_text": "[station announcement] uh Practice Terminal gate 8",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.03309999999999036,
+        "latency_ms": 0.03719999999998436,
         "fell_back": false
       },
       "type_match": false,
@@ -1027,7 +1027,7 @@
           "smoke"
         ],
         "method": "keyword",
-        "latency_ms": 0.018699999999995498,
+        "latency_ms": 0.020999999999958163,
         "fell_back": false
       },
       "type_match": true,
@@ -1063,7 +1063,7 @@
         "location_text": "Demo Park",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.03180000000000405,
+        "latency_ms": 0.03489999999999327,
         "fell_back": false
       },
       "type_match": true,
@@ -1095,7 +1095,7 @@
         "location_text": "Example Circle",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.02189999999998804,
+        "latency_ms": 0.024600000000020827,
         "fell_back": false
       },
       "type_match": false,
@@ -1132,7 +1132,7 @@
         "location_text": "Training Colony",
         "threat_text": [],
         "method": "keyword",
-        "latency_ms": 0.025400000000018963,
+        "latency_ms": 0.028500000000008185,
         "fell_back": false
       },
       "type_match": true,

@@ -7,10 +7,10 @@
 | Benchmark version | 1.0.0 |
 | Split | held_out |
 | Mode | local |
-| Evaluated at | 2026-09-07T09:58:39.969Z |
+| Evaluated at | 2026-09-07T10:06:56.671Z |
 | Provider | none |
 | Model |  |
-| Commit | 89700a7 |
+| Commit | 36ccf3f |
 | Node version | v22.18.0 |
 | Case count | 30 |
 | Model attempted | false |
@@ -29,8 +29,8 @@
 | Over-triage | 5 (0.167) |
 | Location accuracy | 1.000 (25 cases) |
 | Threat accuracy | 1.000 (3 cases) |
-| Latency p50 (ms) | 0.038 |
-| Latency p95 (ms) | 3.013 |
+| Latency p50 (ms) | 0.046 |
+| Latency p95 (ms) | 3.802 |
 | Fallback count | 0 |
 
 ## Language slices
