@@ -1,14 +1,14 @@
-# Dispatch AI UI Revamp Implementation Plan
+# Kwik 112 UI Revamp Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the dispatch console's visual system and information architecture with the real Dispatch AI design language — neutral grey surfaces, vivid signal colour, a satellite basemap, labelled triangle markers, and floating draggable modules — reframe the product as Dispatch AI with 112 Pulse as its emotion-aware voice intake layer, and stop triage blocking on the model.
+**Goal:** Replace the dispatch console's visual system and information architecture with the real Kwik 112 design language — neutral grey surfaces, vivid signal colour, a satellite basemap, labelled triangle markers, and floating draggable modules — reframe the product as Kwik 112 with Kwik 112 as its emotion-aware voice intake layer, and stop triage blocking on the model.
 
 **Architecture:** A design-token layer plus four self-contained pure modules (symbology, alerts, timeline, distress) that carry unit tests, consumed by React components that are verified in a browser. Triage splits into an instant local-rules `create` and an enriching `refine`, merged client-side.
 
 **Tech Stack:** Next.js 15.5.4 (App Router, Turbopack), React 19, TypeScript 5, Tailwind v4, Leaflet 1.9, Hume EVI (`@humeai/voice-react` 0.2.7), GLM via the OpenAI-compatible client, `node --test` for unit tests.
 
-**Source spec:** `docs/superpowers/specs/2026-08-29-dispatch-ai-ui-revamp-design.md`
+**Source spec:** `docs/superpowers/specs/2026-08-29-kwik-112-ui-revamp-design.md`
 
 ## Global Constraints
 
@@ -22,7 +22,7 @@
 - **No `box-shadow` glow and no `backdrop-filter` anywhere in `app/` or `components/`.**
 - `font-variant-numeric: tabular-nums` on every figure in a column or updating in place.
 - Every interactive element has a visible focus state: 2px `--accent` outline, 2px offset.
-- Branding: product is `DISPATCH AI`; `112 PULSE` badges the voice intake only.
+- Branding: product is `KWIK 112`; `KWIK 112` badges the voice intake only.
 - Distress renders `—` when a call carries no prosody. Never invent a value.
 - The triage source badge always names the engine that graded the call.
 - All text interpolated into an SVG or HTML string passes through `escapeHtml` from `lib/utils.ts`.
@@ -90,7 +90,7 @@ Replace the whole of `app/globals.css` with:
 
 @import "tailwindcss";
 
-/* Dispatch AI design system.
+/* Kwik 112 design system.
    Neutral grey surfaces with vivid saturated signal colour, extracted from the
    product's own Figma component library. Flat surfaces, 1px rules, no glow,
    no blur. */
@@ -220,9 +220,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dispatch AI — Emergency Command Platform",
+  title: "Kwik 112 — Emergency Command Platform",
   description:
-    "AI-assisted emergency dispatch: incident monitoring, unit dispatch, pathfinding, and 112 Pulse emotion-aware voice intake.",
+    "AI-assisted emergency dispatch: incident monitoring, unit dispatch, pathfinding, and Kwik 112 emotion-aware voice intake.",
 };
 
 export default function RootLayout({
@@ -257,7 +257,7 @@ Expected: a string beginning `"Inter"`.
 
 ```bash
 git add tsconfig.json package.json app/globals.css app/layout.tsx
-git commit -m "feat: add Dispatch AI design tokens and node test harness"
+git commit -m "feat: add Kwik 112 design tokens and node test harness"
 ```
 
 ---
@@ -400,7 +400,7 @@ export interface SymbolSpec {
   glyph: IncidentGlyph | UnitService;
   severity?: 'critical' | 'high' | 'medium' | 'low';
   service?: UnitService;
-  /** 0-100 from 112 Pulse prosody. `null`/`undefined` means never measured. */
+  /** 0-100 from Kwik 112 prosody. `null`/`undefined` means never measured. */
   distress?: number | null;
   label?: string;
   size?: number;
@@ -1071,7 +1071,7 @@ Expected: no output.
 
 ```bash
 git add components/ui/panel.tsx components/ui/symbol.tsx components/DistressMeter.tsx
-git commit -m "feat: add Dispatch AI UI primitives and distress meter"
+git commit -m "feat: add Kwik 112 UI primitives and distress meter"
 ```
 
 ---
@@ -1200,7 +1200,7 @@ Each task in this phase ends with a browser verification. Build, start the previ
   - The dashboard renders a four-column body, per spec §5:
 
 ```
-TOP BAR    DISPATCH AI · environment telemetry · clock · LIVE · region
+TOP BAR    KWIK 112 · environment telemetry · clock · LIVE · region
 +------+-------------------+---------------------------+
 | icon | INCIDENT PANEL    |  MAP (satellite)          |
 | rail |  tabs: Emergencies|   labelled triangle       |
@@ -1212,7 +1212,7 @@ TOP BAR    DISPATCH AI · environment telemetry · clock · LIVE · region
 ```
 
 Requirements:
-- Top bar shows `DISPATCH AI` in `--ink` at 16px semibold, the region/station name in `--ink-3`, environment telemetry, a live clock with `tabular-nums`, a `LIVE` indicator in `--accent-bright`, and the `112 PULSE` action button.
+- Top bar shows `KWIK 112` in `--ink` at 16px semibold, the region/station name in `--ink-3`, environment telemetry, a live clock with `tabular-nums`, a `LIVE` indicator in `--accent-bright`, and the `KWIK 112` action button.
 - Icon rail is 72px wide, icon-only with a 10px label, active item marked by a 2px left border in `--accent`. Alerts shows its unacknowledged count.
 - Incident panel carries `Emergencies` / `Alerts` tabs, a search field, a filter dropdown, a three-cell stat row (Total / Critical / Resolved) — each a `.label` over a 20px `tabular-nums` figure — then the incident list.
 - Map is full-bleed satellite imagery filling the remaining width (Task 9). The floating module board (Task 11b) sits over the map's right side.
@@ -1221,7 +1221,7 @@ Requirements:
 
 - [ ] **Step 1: Implement `ModuleRail`**
 - [ ] **Step 2: Rewrite the dashboard shell around it**
-- [ ] **Step 3: Verify** — `npm run build`, open `/dashboard`. Expect: icon rail visible with four modules, top bar reading `DISPATCH AI`, the incident panel showing `Emergencies` / `Alerts` tabs and a stat row with real counts, and a full-bleed satellite map to its right. Switching tabs and rail modules changes the panel.
+- [ ] **Step 3: Verify** — `npm run build`, open `/dashboard`. Expect: icon rail visible with four modules, top bar reading `KWIK 112`, the incident panel showing `Emergencies` / `Alerts` tabs and a stat row with real counts, and a full-bleed satellite map to its right. Switching tabs and rail modules changes the panel.
 - [ ] **Step 4: Verify the doubling regression has not returned**
 
 In the browser console:
@@ -1483,13 +1483,13 @@ Requirements — this task is as much about removing claims as adding UI:
 
 ---
 
-### Task 17: 112 Pulse voice station and optimistic client flow
+### Task 17: Kwik 112 voice station and optimistic client flow
 
 **Files:**
 - Rewrite: `components/StartEmergencyCall.tsx`
 
 Requirements:
-- Rebranded `112 PULSE` — the badge belongs here and nowhere else.
+- Rebranded `KWIK 112` — the badge belongs here and nowhere else.
 - Retain the working EVI flow: token fetch, `connect({ auth: { type: 'accessToken', value }, configId })`, prosody from `models.prosody.scores`, interim-transcript filtering, `explainVoiceError`, and the scripted fallback.
 - **New optimistic sequence** on call end:
 
@@ -1623,7 +1623,7 @@ Expected: no output.
 
 - [ ] **Step 6: Timeline isolation** — confirming a point on incident A leaves incident B undecided.
 
-- [ ] **Step 7: Distress honesty** — a 112 Pulse call shows a value; a mock call shows `—`.
+- [ ] **Step 7: Distress honesty** — a Kwik 112 call shows a value; a mock call shows `—`.
 
 - [ ] **Step 8: Build health**
 

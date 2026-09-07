@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 /**
  * ModuleRail — the 72px icon rail that switches the console's primary module.
  *
- * Modelled on the Dispatch AI product's left rail: icon-only actions with a
+ * Modelled on the Kwik 112 console's left rail: icon-only actions with a
  * 10px label, the active module marked by a 2px left border in --accent. The
  * Alerts item surfaces the count of unacknowledged operational alerts.
  *

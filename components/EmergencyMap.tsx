@@ -181,7 +181,7 @@ export default function EmergencyMap({
       });
 
       const icon = L.divIcon({
-        className: 'pulse-map-marker',
+        className: 'kwik-map-marker',
         html: svg,
         iconSize: [34, 34],
         iconAnchor: [17, 17],
@@ -219,7 +219,7 @@ export default function EmergencyMap({
         </div>
       `;
 
-      marker.bindPopup(popupHtml, { className: 'pulse-map-popup' });
+      marker.bindPopup(popupHtml, { className: 'kwik-map-popup' });
 
       if (isSelected) {
         marker.openPopup();
@@ -256,7 +256,7 @@ export default function EmergencyMap({
       });
 
       const icon = L.divIcon({
-        className: 'pulse-map-marker',
+        className: 'kwik-map-marker',
         html: svg,
         iconSize: [30, 30],
         iconAnchor: [15, 15],
@@ -285,7 +285,7 @@ export default function EmergencyMap({
           </div>
         </div>
       `,
-        { className: 'pulse-map-popup' },
+        { className: 'kwik-map-popup' },
       );
     });
   }, [tacticalUnits, showUnits, mapReady, selectedUnitId]);

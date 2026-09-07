@@ -18,7 +18,7 @@ export interface SymbolSpec {
   glyph: IncidentGlyph | UnitService;
   severity?: 'critical' | 'high' | 'medium' | 'low';
   service?: UnitService;
-  /** 0-100 from 112 Pulse prosody. `null`/`undefined` means never measured. */
+  /** 0-100 from Kwik 112 prosody. `null`/`undefined` means never measured. */
   distress?: number | null;
   label?: string;
   size?: number;

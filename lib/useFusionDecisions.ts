@@ -11,7 +11,7 @@ import {
   type FusionSuggestion,
 } from './incident-fusion';
 
-const FUSION_UPDATED_EVENT = 'pulse112-fusion-updated';
+const FUSION_UPDATED_EVENT = 'kwik112-fusion-updated';
 
 export function useFusionDecisions() {
   const [decisions, setDecisions] = useState<FusionDecisionMap>({});

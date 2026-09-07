@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { Meter } from '@/components/ui/panel';
 
 /**
- * DistressMeter — the 112 Pulse prosody reading for a caller or unit.
+ * DistressMeter — the Kwik 112 prosody reading for a caller or unit.
  *
  * The critical distinction, mirrored from `buildSymbol`: a `level` of `null` or
  * `undefined` means prosody was NEVER measured — a coverage gap — and renders as

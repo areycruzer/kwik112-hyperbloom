@@ -1,8 +1,8 @@
 /**
- * Dispatch AI — Tactical CAD console.
+ * Kwik 112 — Tactical CAD console.
  *
  * Four-column shell: command bar across the top, then an icon module rail, the
- * incident panel (queue + detail), and a full-bleed satellite map. "112 Pulse"
+ * incident panel (queue + detail), and a full-bleed satellite map. "Kwik 112"
  * badges only the emotion-aware voice-intake action in the command bar.
  */
 
@@ -427,7 +427,7 @@ export default function DashboardPage() {
               <Radio className="h-4 w-4" aria-hidden />
             </span>
             <div className="leading-tight">
-              <div className="text-md font-semibold tracking-wide text-ink">DISPATCH AI</div>
+              <div className="text-md font-semibold tracking-wide text-ink">KWIK 112</div>
               <div className="hidden text-2xs text-ink-3 lg:block">Delhi Command Desk · National 112 Control</div>
             </div>
           </div>
@@ -506,9 +506,9 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* 112 PULSE — the emotion-aware voice-intake action. */}
+          {/* KWIK 112 — the emotion-aware voice-intake action. */}
           <div id="voice-station" className="flex items-center gap-2">
-            <span className="hidden xl:inline-flex"><Chip tone="accent">112 Pulse</Chip></span>
+            <span className="hidden xl:inline-flex"><Chip tone="accent">Kwik 112</Chip></span>
             <StartEmergencyCall
               launchSignal={demoLaunchSignal}
               initialScriptId="hinglish-five-minute"

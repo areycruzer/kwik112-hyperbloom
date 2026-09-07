@@ -81,7 +81,7 @@ function normalizeSegments(transcript: unknown): StoredSegment[] {
 /** A caller/agent label for a transcript segment. */
 function speakerLabel(segment: StoredSegment): string {
   const role = segment.role ?? segment.speaker;
-  return role === 'assistant' ? '112 Pulse agent' : 'Caller';
+  return role === 'assistant' ? 'Kwik 112 agent' : 'Caller';
 }
 
 const ACTION_TONE: Record<string, ChipTone> = {
@@ -320,7 +320,7 @@ export default function CallDetailPage({ params }: PageProps) {
             ) : (
               <p className="text-sm text-ink-3">
                 No transcript stored. A full turn-by-turn transcript is captured only for calls
-                taken through the live 112 Pulse voice station.
+                taken through the live Kwik 112 voice station.
               </p>
             )}
           </Panel>
@@ -369,7 +369,7 @@ export default function CallDetailPage({ params }: PageProps) {
             ) : (
               <p className="border-t border-rule pt-3 text-xs text-ink-4">
                 No prosody captured. Emotion values appear for calls taken through the live 112
-                Pulse voice station; a seeded or keyword-graded call shows an em-dash.
+                Kwik 112 voice station; a seeded or keyword-graded call shows an em-dash.
               </p>
             )}
           </Panel>
