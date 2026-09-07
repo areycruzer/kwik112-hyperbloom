@@ -371,3 +371,20 @@ test('safety audit records when the model is blocked from downgrading local crit
   assert.equal(audit.downgrade_blocked, true);
   assert.match(audit.reason, /downgrade/i);
 });
+
+test('severity band ceiling caps the emotion boost inside its band', async () => {
+  const { severityBandCeiling } = await import('./triage-local.ts');
+  // A rules-grade of 60 (high) with a maximal measured distress may rise inside
+  // the high band but may not reach critical (80).
+  assert.equal(severityBandCeiling(60), 79);
+  assert.equal(severityBandCeiling(79), 79);
+  // A rules-grade of 45 (medium) can never leave medium via prosody alone.
+  assert.equal(severityBandCeiling(45), 59);
+  // Critical stays uncapped; low is fenced at 39.
+  assert.equal(severityBandCeiling(85), 100);
+  assert.equal(severityBandCeiling(10), 39);
+  // A panic-distressed caller whose rules grade is high must land at most 79.
+  const base = 62;
+  const boosted = Math.round(base + 96 * 0.2);
+  assert.equal(Math.min(severityBandCeiling(base), boosted), 79);
+});
