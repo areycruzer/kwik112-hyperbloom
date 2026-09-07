@@ -96,7 +96,10 @@ export async function requestJson(
       ],
     };
 
-    // Not part of the OpenAI schema, so it goes through as an extra field.
+    // Not part of the OpenAI schema, but the SDK passes unknown top-level
+    // fields through to the wire (verified against openai v6). GLM 4.5 reasons
+    // by default, which burns the token budget on hidden reasoning and can push
+    // a completion past the caller's timeout.
     if (cfg.disableThinking) body.thinking = { type: 'disabled' };
 
     const completion = (await cfg.client.chat.completions.create(body as any, {
