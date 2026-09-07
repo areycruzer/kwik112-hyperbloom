@@ -23,6 +23,7 @@ import {
   recommendDispatchPlan,
   recommendUnits,
   scoreOf,
+  severityBandCeiling,
   severityFromScore,
   triageTranscript,
 } from '@/lib/triage';
@@ -261,10 +262,17 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
   const triage = mode === 'model' ? await triageTranscript(triageInput) : localTriage(triageInput);
   const baseScore = scoreOf(triage);
 
-  // Emotion evidence can nudge severity up, never down. With no prosody the
-  // boost is a no-op, so severity is unaffected by the null case.
+  // Emotion evidence can nudge severity up, never down, and never across a
+  // severity-band boundary. Prosody on Indian-language speech is the least
+  // reliable signal in this pipeline (published cross-lingual collapse), so it
+  // may sharpen priority inside the band the deterministic rules chose, but it
+  // may not, by itself, turn a high into a critical. With no prosody the boost
+  // is a no-op, so severity is unaffected by the null case.
   const distressBoost = distress ?? 0;
-  const severityScore = Math.min(100, Math.round(Math.max(baseScore, baseScore + distressBoost * 0.2)));
+  const severityScore = Math.min(
+    severityBandCeiling(baseScore),
+    Math.round(Math.max(baseScore, baseScore + distressBoost * 0.2)),
+  );
   const severity = severityFromScore(severityScore);
   const top = ranked[0];
 
