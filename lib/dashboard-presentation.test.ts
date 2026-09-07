@@ -149,14 +149,32 @@ function livePayload(
   return base as KwikLiveCallPayload;
 }
 
-test('valid events progress one live call and a matching same-time end clears it', () => {
+test('valid events progress one live call and preserve the accepted end tombstone', () => {
   const start = livePayload('start', 'call-a', '2026-09-07T10:00:00.000Z');
   const update = livePayload('update', 'call-a', '2026-09-07T10:00:01.000Z');
   const end = livePayload('end', 'call-a', '2026-09-07T10:00:01.000Z');
 
   assert.equal(nextLiveCallPayload(null, start), start);
   assert.equal(nextLiveCallPayload(start, update), update);
-  assert.equal(nextLiveCallPayload(update, end), null);
+  assert.equal(nextLiveCallPayload(update, end), end);
+});
+
+test('an end tombstone rejects late same-call and different-call non-start events', () => {
+  const end = livePayload('end', 'call-a', '2026-09-07T10:00:03.000Z');
+  const lateUpdate = livePayload('update', 'call-a', '2026-09-07T10:00:02.000Z');
+  const lateStart = livePayload('start', 'call-a', '2026-09-07T10:00:01.000Z');
+  const otherUpdate = livePayload('update', 'call-b', '2026-09-07T10:00:04.000Z');
+
+  assert.equal(nextLiveCallPayload(end, lateUpdate), end);
+  assert.equal(nextLiveCallPayload(end, lateStart), end);
+  assert.equal(nextLiveCallPayload(end, otherUpdate), end);
+});
+
+test('a newer valid new-call start replaces an end tombstone', () => {
+  const end = livePayload('end', 'call-a', '2026-09-07T10:00:03.000Z');
+  const nextStart = livePayload('start', 'call-b', '2026-09-07T10:00:04.000Z');
+
+  assert.equal(nextLiveCallPayload(end, nextStart), nextStart);
 });
 
 test('stale starts and updates cannot roll back the current call', () => {

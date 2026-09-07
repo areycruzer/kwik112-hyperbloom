@@ -13,7 +13,7 @@ export function nextLiveCallPayload(
   current: KwikLiveCallPayload | null,
   incoming: KwikLiveCallPayload,
 ): KwikLiveCallPayload | null {
-  if (!current) return incoming.state === 'end' ? null : incoming;
+  if (!current) return incoming;
 
   const currentAt = Date.parse(current.at);
   const incomingAt = Date.parse(incoming.at);
@@ -29,7 +29,7 @@ export function nextLiveCallPayload(
   }
 
   if (currentIsValid && incomingAt < currentAt) return current;
-  return incoming.state === 'end' ? null : incoming;
+  return incoming;
 }
 
 export function presentLiveCall(

@@ -496,7 +496,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {liveCall && <LiveCallStrip payload={liveCall} />}
+      {liveCall && liveCall.state !== 'end' && <LiveCallStrip payload={liveCall} />}
 
       {/* ---- BODY: RAIL · INCIDENT PANEL · MAIN ---------------------------- */}
       <div className="relative flex min-h-0 flex-1 pb-14 sm:pb-0">
