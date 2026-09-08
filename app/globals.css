@@ -157,6 +157,14 @@ html, body {
   color: var(--ink);
 }
 
+/* Map symbols get a soft drop shadow. The shadow, not a heavy outline, is
+   what separates a marker from busy satellite imagery — it grounds the mark on
+   the terrain while the off-white rim keeps its edge crisp. Scoped to the map
+   marker class so the same symbols stay flat inside panels and lists. */
+.kwik-map-marker svg {
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.55));
+}
+
 /* Marker names show on hover, not permanently, so the map is not buried under
    its own labels. Leaflet paints tooltips as a white box with a black border by
    default; scope through `.leaflet-container` to out-specify that without

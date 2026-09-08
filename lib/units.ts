@@ -152,3 +152,65 @@ export function etaLabel(
   const minutes = etaMinutes(unit, distanceKm);
   return minutes === 0 ? 'On scene' : `${minutes} min`;
 }
+
+/* ---- ROUTE FALLBACK -------------------------------------------------------
+ * The situational map draws a responder vector from a unit to the selected
+ * incident. assessDispatch can only nominate a unit when the call carries a
+ * service-level dispatch plan, and most demo/stored calls carry none - so
+ * without a fallback the vector silently never drew for them, which read as
+ * "the distance feature is broken". These helpers pick the unit a dispatcher
+ * would eyeball: the nearest available appliance of the right service.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * @description The service that would lead the response to an incident type,
+ *              or null when the type says nothing (route from the nearest unit
+ *              of any service instead). Deliberately duplicates the keyword
+ *              logic of `glyphForIncidentType` rather than importing it: this
+ *              module stays import-free so `node --test` can load it bare.
+ */
+export function serviceForIncidentType(incidentType?: string): TacticalUnit['type'] | null {
+  if (!incidentType) return null;
+  const t = incidentType.toLowerCase();
+  if (t.includes('fire')) return 'fire';
+  if (t.includes('medical') || t.includes('cardiac') || t.includes('health')) return 'ems';
+  // A collision's first need is the casualty, so the ambulance leads.
+  if (t.includes('accident') || t.includes('traffic') || t.includes('collision')) return 'ems';
+  if (t.includes('crime') || t.includes('violen') || t.includes('robbery')) return 'police';
+  // Flood and waterlogging rescue is fire-service work in Indian cities.
+  if (t.includes('flood') || t.includes('water') || t.includes('drown')) return 'fire';
+  if (t.includes('public_safety') || t.includes('utility') || t.includes('civic')) return 'fire';
+  return null;
+}
+
+/**
+ * @description The nearest unit worth drawing a vector from: available (or
+ *              already assigned to this call), preferring the requested
+ *              service and falling back to any service rather than to nothing.
+ *              Returns null only when no unit qualifies at all.
+ */
+export function nearestAvailableUnit(
+  units: readonly TacticalUnit[],
+  lat: number,
+  lng: number,
+  service?: TacticalUnit['type'] | null,
+  forCallId?: string,
+): TacticalUnit | null {
+  const usable = units.filter(
+    (unit) =>
+      (unit.status === 'available' || (forCallId && unit.assignedCallId === forCallId)) &&
+      (!unit.assignedCallId || unit.assignedCallId === forCallId),
+  );
+  const pool = service ? usable.filter((unit) => unit.type === service) : usable;
+  const candidates = pool.length > 0 ? pool : usable;
+  let best: TacticalUnit | null = null;
+  let bestKm = Infinity;
+  for (const unit of candidates) {
+    const km = haversineKm(unit.lat, unit.lng, lat, lng);
+    if (km < bestKm) {
+      bestKm = km;
+      best = unit;
+    }
+  }
+  return best;
+}

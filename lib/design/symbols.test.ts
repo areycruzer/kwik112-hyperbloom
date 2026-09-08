@@ -5,6 +5,8 @@ import {
   severityColor,
   distressColor,
   glyphForIncidentType,
+  incidentPaint,
+  incidentSymbolSize,
   SYMBOL_ANCHOR,
 } from './symbols.ts';
 
@@ -131,41 +133,100 @@ test('a unit is a bare glyph in its service colour, with no frame around it', ()
   assert.doesNotMatch(svg, new RegExp(PIN_PATH_START));
   assert.match(svg, /<path d="[^"]+" fill="#69D2FF"/);
 
-  // A frameless glyph sits straight on satellite imagery, so it carries its own
-  // dark keyline, laid under the fill rather than over it.
+  // A frameless glyph sits straight on satellite imagery, so it carries its
+  // own off-white rim, laid under the fill rather than over it.
   assert.match(svg, /paint-order="stroke"/);
-  assert.match(svg, /stroke="#0B0B0B"/);
+  assert.match(svg, /stroke="#F2F2F2"/);
 });
 
-test('a selected unit takes a white keyline, because accent is the police colour', () => {
-  // The bug this pins: --accent (#69D2FF) is also the police service colour, so
-  // an accent keyline on a selected PCR van drew blue on blue and selection was
-  // invisible for exactly one of the three services.
+test('a selected unit takes a bold ink keyline, because accent is the police colour', () => {
+  // Two constraints meet here. The resting rim is off-white on every symbol,
+  // so selection must be something else — and it cannot be --accent (#69D2FF),
+  // because that is also the police service colour: an accent keyline on a
+  // selected PCR van is blue on blue, invisible for exactly one of the three
+  // services. Bold ink is visible against all three fills and against the
+  // white-rimmed neighbours.
   const police = buildSymbol({ kind: 'unit', glyph: 'police', service: 'police', selected: true });
-  assert.match(police, /stroke="#F2F2F2"/);
+  assert.match(police, /stroke="#0B0B0B"/);
+  assert.doesNotMatch(police, /stroke="#69D2FF"/);
   assert.doesNotMatch(police, /<circle/);
   // And it is genuinely a different rendering from the unselected van.
   assert.notEqual(police, buildSymbol({ kind: 'unit', glyph: 'police', service: 'police' }));
 
-  // A pin keeps --accent: its fill is a severity colour, never the accent.
+  // A pin's selected rim IS --accent: its fill is a severity colour, never the
+  // accent, so blue-on-blue cannot happen there.
   const pin = buildSymbol({ kind: 'incident', glyph: 'fire', severity: 'critical', selected: true });
   assert.match(pin, /stroke="#69D2FF"/);
+
+  // At rest, both kinds wear the off-white rim.
+  const restingPin = buildSymbol({ kind: 'incident', glyph: 'fire', severity: 'critical' });
+  assert.match(restingPin, /stroke="#F2F2F2"/);
 });
 
 test('a unit glyph is drawn larger than the glyph inside an incident pin', () => {
   // Size is the other half of telling the kinds apart: a unit has no frame
   // eating its box, so at the same nominal size its mark is visibly bigger.
+  //
+  // The comparison has to be like-for-like. A scale factor is relative to the
+  // glyph's OWN bounding box, so comparing the scale of one glyph against a
+  // differently-proportioned one measures nothing (a wide, short helmet needs
+  // less scaling than a tall flame to reach the same extent). The police
+  // shield and the crime shield are the same path and the same box, so their
+  // scales are directly comparable - and any drift in the frameless-unit
+  // sizing rule still shows up here.
   const scaleOf = (svg: string) => {
     const m = svg.match(/scale\(([\d.]+)\)/);
     assert.ok(m, 'glyph must carry a scale transform');
     return Number(m![1]);
   };
-  const unit = buildSymbol({ kind: 'unit', glyph: 'fire', service: 'fire' });
-  const incident = buildSymbol({ kind: 'incident', glyph: 'fire', severity: 'critical' });
+  const unit = buildSymbol({ kind: 'unit', glyph: 'police', service: 'police' });
+  const incident = buildSymbol({ kind: 'incident', glyph: 'crime', severity: 'critical' });
   assert.ok(
     scaleOf(unit) > scaleOf(incident) * 1.4,
     'a frameless unit glyph must be substantially larger than a pinned one',
   );
+});
+
+test('the fire service and the fire hazard no longer draw the same mark', () => {
+  // Both are signal red. When both were a flame, a red flame meant either
+  // "there is a fire here" or "the brigade is here", and only the frame said
+  // which - the single worst ambiguity on the map.
+  const pathOf = (svg: string) => svg.match(/<g transform="[^"]*"><path d="([^"]+)"/)![1];
+  const hazard = pathOf(buildSymbol({ kind: 'incident', glyph: 'fire', severity: 'critical' }));
+  const service = pathOf(buildSymbol({ kind: 'unit', glyph: 'fire', service: 'fire' }));
+  assert.notEqual(hazard, service);
+
+  // The unit is the helmet, and no incident glyph may claim it.
+  const incidentGlyphs = (['medical', 'fire', 'water', 'traffic', 'crime', 'utility', 'unknown'] as const)
+    .map((glyph) => pathOf(buildSymbol({ kind: 'incident', glyph, severity: 'critical' })));
+  assert.ok(!incidentGlyphs.includes(service), 'the helmet must be unique to the fire service');
+});
+
+test('priority drives both size and saturation, so P1 outranks P3 twice over', () => {
+  // Colour alone is a weak hierarchy: it dies in greyscale and for a
+  // colour-blind operator. Size carries the same ranking independently.
+  assert.ok(incidentSymbolSize('critical') > incidentSymbolSize('high'));
+  assert.ok(incidentSymbolSize('high') > incidentSymbolSize('medium'));
+  assert.equal(incidentSymbolSize('low'), incidentSymbolSize('medium'));
+  assert.equal(incidentSymbolSize(undefined), incidentSymbolSize('medium'));
+
+  // P1 and P2 are solid signal colours with a dark mark; anything below is a
+  // graphite chip carrying a coloured mark, so it recedes.
+  assert.equal(incidentPaint('critical').body, '#F40000');
+  assert.equal(incidentPaint('high').body, '#FABC1F');
+  const low = incidentPaint('low');
+  assert.equal(low.body, '#242424');
+  assert.equal(low.glyph, '#47FF85');
+  // The quiet tier must not be painted in a full-chroma body.
+  assert.notEqual(incidentPaint('medium').body, '#47FF85');
+});
+
+test('a committed unit is dimmed, so the map answers "who can I send"', () => {
+  const free = buildSymbol({ kind: 'unit', glyph: 'ems', service: 'ems' });
+  const busy = buildSymbol({ kind: 'unit', glyph: 'ems', service: 'ems', dimmed: true });
+  assert.doesNotMatch(free, /opacity="0\.5"/);
+  assert.match(busy, /opacity="0\.5"/);
+  assert.notEqual(free, busy);
 });
 
 test('the three services draw three different unit glyphs', () => {

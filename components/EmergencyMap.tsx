@@ -18,14 +18,19 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { EmergencyCall } from '@/lib/types';
 import { getTimeElapsed } from '@/lib/mock-data';
 import { escapeHtml } from '@/lib/utils';
-import { buildSymbol, glyphForIncidentType, SYMBOL_ANCHOR } from '@/lib/design/symbols';
+import {
+  buildSymbol,
+  glyphForIncidentType,
+  incidentSymbolSize,
+  SYMBOL_ANCHOR,
+} from '@/lib/design/symbols';
 import { priorityCode, distressOf } from '@/lib/incident';
-import { TACTICAL_UNITS, type TacticalUnit } from '@/lib/units';
+import { TACTICAL_UNITS, nearestAvailableUnit, serviceForIncidentType, type TacticalUnit } from '@/lib/units';
 import { assessDispatch } from '@/lib/dispatch-assurance';
 
 interface EmergencyMapProps {
@@ -133,7 +138,14 @@ export default function EmergencyMap({
           center: [28.7041, 77.1025],
           zoom: 13,
           zoomControl: false,
-          preferCanvas: true,
+          // SVG renderer, deliberately. preferCanvas crashes when the map is
+          // torn down mid-animation - switching Board <-> Map unmounts this
+          // component, and a setView animation still in flight leaves the
+          // canvas renderer's frame callbacks running against a destroyed
+          // context ("Cannot read properties of undefined (reading 'save')"),
+          // taking the responder vector with it. Canvas pays off at thousands
+          // of vector layers; this map draws about two dozen.
+          preferCanvas: false,
         });
 
         // Bright satellite imagery. The attribution control is left on: Esri's
@@ -189,6 +201,35 @@ export default function EmergencyMap({
     }
   }, [selectedCallId]);
 
+  /**
+   * The unit the responder vector leaves from, in order of authority: the
+   * roster-selected unit, the dispatch plan's first assignment, then the
+   * nearest available unit of the service this incident type calls for.
+   *
+   * Derived here rather than inside the route effect because the unit-marker
+   * effect needs it too: a route drawn from a hidden marker starts from
+   * nowhere, so the responding unit stays on the map even when the fleet layer
+   * is off.
+   */
+  const routeUnitId = useMemo(() => {
+    if (!selectedCallId) return null;
+    const call = calls.find((c) => c.id === selectedCallId);
+    const location = call?.caller_location;
+    if (!call || !location?.latitude || !location?.longitude) return null;
+    if (selectedUnitId) return selectedUnitId;
+    const planned = assessDispatch(call, tacticalUnits).assignments[0]?.unit_id;
+    if (planned) return planned;
+    return (
+      nearestAvailableUnit(
+        tacticalUnits,
+        location.latitude,
+        location.longitude,
+        serviceForIncidentType(call.incident_type),
+        call.id,
+      )?.id ?? null
+    );
+  }, [selectedCallId, selectedUnitId, calls, tacticalUnits]);
+
   // Render incident markers as severity-coloured pins built by `buildSymbol`.
   //
   // Depends only on `calls`, `selectedCallId`, `onMarkerClick`, and `mapReady`.
@@ -219,14 +260,16 @@ export default function EmergencyMap({
         distress: distressOf(call),
         label,
         selected: isSelected,
-        size: 46,
+        // Size ranks priority independently of colour, so a P1 reads first even
+        // in greyscale or to a colour-blind operator.
+        size: incidentSymbolSize(call.severity),
       });
 
       // A pin marks its coordinate with its tip, not its centre. The symbol is
       // authored in a 24-unit box, so the tip scales with the rendered size —
       // hard-coding the old centre anchor would float every pin above its
       // incident by half a marker.
-      const incidentSize = 46;
+      const incidentSize = incidentSymbolSize(call.severity);
       const icon = L.divIcon({
         className: 'kwik-map-marker',
         html: svg,
@@ -251,7 +294,8 @@ export default function EmergencyMap({
       // goes through escapeHtml like every other string bound into map markup.
       const tooltipHtml =
         `<span class="tnum text-ink-3">${escapeHtml(priorityCode(call))}</span> ${escapeHtml(label)}`;
-      bindHoverName(marker, tooltipHtml, -38);
+      // Lift the tooltip clear of the pin's own height, which now varies.
+      bindHoverName(marker, tooltipHtml, -Math.round(incidentSize * 0.85));
 
       // Every interpolated value below is caller-derived — incident text on this
       // platform is LLM-transcribed caller speech, and a hostile
@@ -297,19 +341,32 @@ export default function EmergencyMap({
     if (!mapReady || !mapRef.current || !leafletRef.current) return;
     const L = leafletRef.current;
 
-    if (!showUnits) {
-      unitMarkersRef.current.forEach((m) => m.remove());
-      unitMarkersRef.current.clear();
-      return;
-    }
+    // With the fleet layer off, one unit still shows: the one the responder
+    // vector is drawn from. A line that begins at empty terrain reads as a
+    // glitch, and the operator asking "how far is the unit" is asking about
+    // exactly this marker.
+    const visibleUnits = showUnits
+      ? tacticalUnits
+      : tacticalUnits.filter((unit) => unit.id === routeUnitId);
 
-    tacticalUnits.forEach((unit) => {
+    const visibleIds = new Set(visibleUnits.map((unit) => unit.id));
+    unitMarkersRef.current.forEach((marker, id) => {
+      if (!visibleIds.has(id)) {
+        marker.remove();
+        unitMarkersRef.current.delete(id);
+      }
+    });
+
+    visibleUnits.forEach((unit) => {
       const svg = buildSymbol({
         kind: 'unit',
         glyph: unit.type,
         service: unit.type,
         label: `${unit.callsign} (${unit.id})`,
         selected: unit.id === selectedUnitId,
+        // Anything not 'available' is already committed; dimming says so on the
+        // marker instead of making the operator open the roster to find out.
+        dimmed: unit.status !== 'available',
         size: 30,
       });
 
@@ -361,16 +418,91 @@ export default function EmergencyMap({
         { className: 'kwik-map-popup' },
       );
     });
-  }, [tacticalUnits, showUnits, mapReady, selectedUnitId]);
+  }, [tacticalUnits, showUnits, mapReady, selectedUnitId, routeUnitId]);
 
   // Responder vector to the selected incident. The geometry follows actual
   // roads: OSRM (the OpenStreetMap routing engine, public demo server, no key)
   // returns the driving route, drawn Google-Maps style as a cased polyline.
   // The straight dashed line is the instant fallback while the road route
-  // loads — and stays if the router is unreachable, so the map never depends
-  // on a third-party service to show a dispatch vector.
+  // loads, so the map never depends on a third-party service to show a
+  // dispatch vector; if the router stays unreachable, the dashed line remains
+  // and says so in its tooltip.
+  //
+  // Which unit the vector leaves from, in order: the roster-selected unit, the
+  // dispatch plan's first assignment, and finally the nearest available unit
+  // of the service the incident type calls for. The last rung matters most:
+  // demo and stored calls mostly carry no dispatch plan, and without it the
+  // vector silently never drew for them.
   const routeCacheRef = useRef<Map<string, [number, number][]>>(new Map());
+  // In-flight OSRM lookups, shared across effect re-runs. The previous version
+  // aborted the fetch in the effect's cleanup, so every re-run (fleet
+  // hydration, a reservation event, a poll tick) killed the request and
+  // restarted it - under churn the road route never landed and the dashed
+  // fallback simply stayed. A re-run now finds the pending promise and awaits
+  // the same fetch instead of murdering it.
+  const routePendingRef = useRef<Map<string, Promise<[number, number][] | null>>>(new Map());
+  // The route the map should currently be showing; a resolving fetch draws
+  // only if it still matches, so a stale route can never paint over a new one.
+  const routeKeyRef = useRef<string | null>(null);
+  // Centre once per selected incident, not on every effect re-run - re-running
+  // setView yanked the map back under an operator who had panned away.
+  const centredCallRef = useRef<string | null>(null);
   const routeCasingRef = useRef<any>(null);
+
+  /** One OSRM attempt with a hard timeout - the demo server sometimes hangs. */
+  const fetchOsrmAttempt = (
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+  ): Promise<any> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    return fetch(
+      `https://router.project-osrm.org/route/v1/driving/` +
+        `${from.lng},${from.lat};${to.lng},${to.lat}` +
+        `?overview=full&geometries=geojson`,
+      { signal: controller.signal },
+    )
+      .then((response) => {
+        // A non-OK answer (the public server rate-limits with 429) used to be
+        // swallowed as success-with-no-data, which left the dashed line up
+        // with no retry and no explanation. It is a failure; treat it as one.
+        if (!response.ok) throw new Error(`OSRM ${response.status}`);
+        return response.json();
+      })
+      .finally(() => clearTimeout(timer));
+  };
+
+  const fetchRoadRoute = (
+    key: string,
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+  ): Promise<[number, number][] | null> => {
+    const pending = routePendingRef.current.get(key);
+    if (pending) return pending;
+
+    const promise = fetchOsrmAttempt(from, to)
+      // One retry after a beat: the demo server's rate limiter usually admits
+      // the second call, and a single retry cannot pile up because the whole
+      // lookup is deduplicated through routePendingRef.
+      .catch(() => new Promise((r) => setTimeout(r, 1500)).then(() => fetchOsrmAttempt(from, to)))
+      .then((data) => {
+        const coordinates = data?.routes?.[0]?.geometry?.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+        // GeoJSON is [lng, lat]; Leaflet wants [lat, lng].
+        const latlngs = coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]] as [number, number],
+        );
+        routeCacheRef.current.set(key, latlngs);
+        return latlngs;
+      })
+      .catch(() => null)
+      .finally(() => {
+        routePendingRef.current.delete(key);
+      });
+
+    routePendingRef.current.set(key, promise);
+    return promise;
+  };
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !leafletRef.current) return;
@@ -389,6 +521,7 @@ export default function EmergencyMap({
     };
 
     clearRoute();
+    routeKeyRef.current = null;
     if (!selectedCallId) return;
 
     const selectedCall = calls.find((c) => c.id === selectedCallId);
@@ -398,31 +531,13 @@ export default function EmergencyMap({
     const targetLng = selectedCall.caller_location.longitude;
     if (!targetLat || !targetLng) return;
 
-    const assurance = assessDispatch(selectedCall, tacticalUnits);
-    const routeUnitId = selectedUnitId ?? assurance.assignments[0]?.unit_id;
-    const closestUnit = tacticalUnits.find((unit) => unit.id === routeUnitId);
-    if (!closestUnit) return;
+    const routeUnit = tacticalUnits.find((unit) => unit.id === routeUnitId);
+    if (!routeUnit) return;
 
     const accent = cssToken('--accent', '#69D2FF');
     const casingColor = cssToken('--deep', '#0A1526');
 
-    // 1. Straight-line estimate first — zero-latency feedback.
-    const estimate = L.polyline(
-      [
-        [closestUnit.lat, closestUnit.lng],
-        [targetLat, targetLng],
-      ],
-      { color: accent, weight: 3, opacity: 0.85, dashArray: '6, 8' },
-    )
-      .addTo(map)
-      .bindTooltip('Straight-line estimate — road route loading…');
-    routePolylineRef.current = estimate;
-    map.setView([targetLat, targetLng], 14, { animate: true });
-
-    // 2. Upgrade to the road-following driving route when OSRM answers.
-    let cancelled = false;
     const drawRoadRoute = (latlngs: [number, number][]) => {
-      if (cancelled) return;
       clearRoute();
       routeCasingRef.current = L.polyline(latlngs, {
         color: casingColor,
@@ -438,45 +553,87 @@ export default function EmergencyMap({
         .bindTooltip('Estimated road route (OSRM driving profile)');
     };
 
-    const cacheKey = `${closestUnit.id}:${selectedCall.id}:${targetLat.toFixed(5)},${targetLng.toFixed(5)}`;
-    const cached = routeCacheRef.current.get(cacheKey);
+    const key =
+      `${routeUnit.id}:` +
+      `${routeUnit.lat.toFixed(5)},${routeUnit.lng.toFixed(5)}:` +
+      `${targetLat.toFixed(5)},${targetLng.toFixed(5)}`;
+    routeKeyRef.current = key;
+
+    if (centredCallRef.current !== selectedCallId) {
+      centredCallRef.current = selectedCallId;
+      // Frame the whole vector, not just the incident: centring on the incident
+      // alone can push the responding unit — and therefore the route the
+      // operator asked for — off the edge of the viewport.
+      //
+      // But fitBounds derives its zoom from the container's pixel size, and
+      // this effect can run in the same frame the Board -> Map switch remounts
+      // the map, before the container has laid out. Fitting against a
+      // zero-ish size asks Leaflet to fit Delhi into no pixels, and it answers
+      // with the minimum zoom — the whole world. So the fit is deferred a
+      // frame, re-measured, and only used once the container is genuinely
+      // big enough to trust; otherwise we fall back to a fixed-zoom setView on
+      // the incident, which needs no measurement to be correct.
+      const bounds = L.latLngBounds(
+        [routeUnit.lat, routeUnit.lng],
+        [targetLat, targetLng],
+      ).pad(0.28);
+
+      map.setView([targetLat, targetLng], 14, { animate: false });
+
+      requestAnimationFrame(() => {
+        const live = mapRef.current;
+        if (!live || routeKeyRef.current !== key) return;
+        live.invalidateSize({ pan: false });
+        const size = live.getSize();
+        // A settled map region is hundreds of pixels on both axes. Anything
+        // smaller means layout has not happened yet, and the setView above is
+        // already showing the incident correctly.
+        if (size.x >= 240 && size.y >= 240) {
+          live.fitBounds(bounds, { animate: true, maxZoom: 15 });
+        }
+      });
+    }
+
+    const cached = routeCacheRef.current.get(key);
     if (cached) {
       drawRoadRoute(cached);
       return () => {
-        cancelled = true;
+        routeKeyRef.current = null;
         clearRoute();
       };
     }
 
-    const controller = new AbortController();
-    fetch(
-      `https://router.project-osrm.org/route/v1/driving/` +
-        `${closestUnit.lng},${closestUnit.lat};${targetLng},${targetLat}` +
-        `?overview=full&geometries=geojson`,
-      { signal: controller.signal },
+    // Straight-line estimate first - zero-latency feedback while OSRM answers.
+    routePolylineRef.current = L.polyline(
+      [
+        [routeUnit.lat, routeUnit.lng],
+        [targetLat, targetLng],
+      ],
+      { color: accent, weight: 3, opacity: 0.85, dashArray: '6, 8' },
     )
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        const coordinates = data?.routes?.[0]?.geometry?.coordinates;
-        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
-        // GeoJSON is [lng, lat]; Leaflet wants [lat, lng].
-        const latlngs = coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]] as [number, number],
-        );
-        routeCacheRef.current.set(cacheKey, latlngs);
-        drawRoadRoute(latlngs);
-      })
-      .catch(() => {
-        // Router unreachable or aborted — the dashed estimate stays on the map.
+      .addTo(map)
+      .bindTooltip('Straight-line estimate - road route loading…');
+
+    fetchRoadRoute(key, { lat: routeUnit.lat, lng: routeUnit.lng }, { lat: targetLat, lng: targetLng })
+      .then((latlngs) => {
+        // Only the route the map still wants may draw; anything else is stale.
+        if (routeKeyRef.current !== key || !mapRef.current) return;
+        if (latlngs) {
+          drawRoadRoute(latlngs);
+        } else if (routePolylineRef.current) {
+          // Both attempts failed. The dashed line stays - it is an honest
+          // straight-line estimate - but it stops claiming to be loading.
+          routePolylineRef.current.bindTooltip(
+            'Direct line - road route unavailable right now',
+          );
+        }
       });
 
     return () => {
-      cancelled = true;
-      controller.abort();
+      routeKeyRef.current = null;
       clearRoute();
     };
-  }, [selectedCallId, selectedUnitId, calls, tacticalUnits, mapReady]);
-
+  }, [selectedCallId, routeUnitId, calls, tacticalUnits, mapReady]);
 
   return (
     <div className="relative h-full min-h-[450px] w-full flex-1 overflow-hidden bg-deep">
