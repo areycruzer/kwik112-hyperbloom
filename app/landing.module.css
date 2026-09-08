@@ -43,6 +43,11 @@
 .hero h1 { max-width: 800px; margin-top: 22px; font-size: clamp(70px, 9.5vw, 144px); font-weight: 850; line-height: .84; }
 .heroStatement { margin-top: 28px; font-size: clamp(25px, 3vw, 42px); font-weight: 620; line-height: 1.08; }
 .heroCopy { max-width: 540px; margin-top: 18px; color: rgb(255 255 255 / 74%); font-size: 15px; line-height: 1.65; }
+.heroDisclosure { max-width: 540px; margin-top: 14px; color: #c9d2cd; font-size: 12px; line-height: 1.6; }
+.evidenceNote { grid-column: 1 / -1; border-top: 1px solid var(--line); padding: 24px 0; color: #47504b; font-size: 13px; line-height: 1.7; }
+.evidenceNote a, .problemSources a { color: #08677a; text-decoration: underline; }
+.problemSources { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 40px; padding: 0 0 32px; color: #47504b; font-size: 12px; line-height: 1.7; }
+.problemSources strong { color: var(--ink); }
 .heroActions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
 .primaryButton, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 11px; min-height: 48px; padding: 0 18px; font-size: 12px; font-weight: 800; text-transform: uppercase; transition: background 160ms ease, border-color 160ms ease; }
 .primaryButton { background: var(--red); color: white; }
@@ -142,6 +147,7 @@
 }
 
 @media (max-width: 640px) {
+  .problemSources { grid-template-columns: 1fr; }
   .header { height: 62px; padding-inline: 18px; }
   .brand span, .headerCta { display: none; }
   .hero { min-height: 760px; }
