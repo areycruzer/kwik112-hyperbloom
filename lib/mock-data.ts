@@ -404,7 +404,7 @@ export const mockCalls: EmergencyCall[] = [
     top_emotion: 'fear',
     emotion_intensity: 0.68,
     caller_condition: 'distressed',
-    ai_summary: 'Two men on motorcycle snatched gold chain from elderly woman near IKEA junction. Suspects heading towards Gachibowli.',
+    ai_summary: 'Two men on a motorcycle snatched a gold chain from an elderly woman near Nehru Place Market. Suspects heading towards Outer Ring Road.',
     ai_confidence: 0.84,
     persons_involved: 3,
     immediate_threats: ['armed suspects on vehicle', 'injury to victim'],
