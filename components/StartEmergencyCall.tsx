@@ -36,6 +36,9 @@ import { useDialogFocus } from '@/lib/useDialogFocus';
 import { cn } from '@/lib/utils';
 import {
   JUDGE_CALLER_PRESETS,
+  GOLDEN_CALLER_PRESET,
+  GOLDEN_DEMO_CONTRACT,
+  goldenAttackEvidence,
   selectJudgeCallerPreset,
 } from '@/lib/personas';
 import {
@@ -201,6 +204,12 @@ function CallStation({
   const [refining, setRefining] = useState(false);
   const [changed, setChanged] = useState<string[]>([]);
   const [scriptId, setScriptId] = useState(() => selectJudgeCallerPreset(initialScriptId).id);
+  const [goldenAttackReady, setGoldenAttackReady] = useState(false);
+  const [goldenEvidence, setGoldenEvidence] = useState<string | null>(null);
+  const goldenContinueRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('demo') === 'golden') setScriptId('golden');
+  }, []);
   const [scriptedLines, setScriptedLines] = useState<TranscriptLine[]>([]);
   // Prosody frames revealed by the scripted timer, so the emotion panel animates
   // during a demo the way it does off the live socket.
@@ -359,8 +368,9 @@ function CallStation({
   const beginLiveCallEvent = useCallback((
     prosodySource: KwikLiveCallProsodySource,
     language?: string,
+    fixedCallId?: string,
   ) => {
-    liveCallIdRef.current = createLiveCallId();
+    liveCallIdRef.current = fixedCallId ?? createLiveCallId();
     lastLiveFingerprintRef.current = '';
     liveCallEndedRef.current = false;
     publishLiveCallEvent('start', [], prosodySource, language);
@@ -495,7 +505,8 @@ function CallStation({
       prosodySource: 'measured' | 'simulated',
       // The language Hume detected in the caller's speech. Undefined on scripted
       // demos — a scripted call detected nothing, so it carries no language.
-      detectedLanguage?: string
+      detectedLanguage?: string,
+      golden = false,
     ) => {
       setPhase('triaging');
       setChanged([]);
@@ -514,7 +525,7 @@ function CallStation({
             prosodySource,
             detectedLanguage,
             chatGroupId: chatMetadata?.chatGroupId,
-            conversationId: chatMetadata?.chatId,
+            conversationId: golden ? GOLDEN_DEMO_CONTRACT.callId : chatMetadata?.chatId,
             callDurationSeconds: seconds,
           }),
         });
@@ -526,6 +537,14 @@ function CallStation({
         return;
       }
 
+      if (golden) {
+        const evidence = goldenAttackEvidence(payloadLines);
+        created.call.refinable = false;
+        created.call.flags = [...(created.call.flags ?? []), 'SIMULATED_PROMPT_INJECTION', ...(evidence ? ['GOLDEN_CALLER_INJECTION_IGNORED'] : [])];
+        if (evidence && created.call.safety_audit) {
+          created.call.safety_audit.reason += ` ${evidence}. Simulated caller instruction; no model downgrade verdict was generated.`;
+        }
+      }
       publishCall(created.call);
       setResult(created.call);
       setTriageMethod(created.triage_method ?? created.call.triage_method ?? '');
@@ -533,7 +552,7 @@ function CallStation({
       onCallCreated?.(created.call.id);
 
       // 2. Enrich in the background. Failure is silent by design.
-      if (created.refinable) {
+      if (created.refinable && !golden) {
         setRefining(true);
         try {
           const res = await fetch('/api/calls/refine', {
@@ -591,6 +610,10 @@ function CallStation({
   const runScript = useCallback(() => {
     const script = selectJudgeCallerPreset(scriptId);
     const language = script.speechLanguage.split('-')[0];
+    const golden = script.id === 'golden';
+    setGoldenAttackReady(false);
+    setGoldenEvidence(null);
+    goldenContinueRef.current = null;
 
     clearScriptTimers();
     setPhone(script.phone);
@@ -603,7 +626,7 @@ function CallStation({
     setScriptedLanguage(language);
     startedAt.current = Date.now();
     setDuration(0);
-    beginLiveCallEvent('simulated', language);
+    beginLiveCallEvent('simulated', language, golden ? GOLDEN_DEMO_CONTRACT.callId : undefined);
     setPhase('scripted');
 
     const built: TranscriptLine[] = script.lines.map((line) => ({
@@ -616,10 +639,11 @@ function CallStation({
     // exactly what the panel showed.
     const collectedFrames: Record<string, number>[] = [];
 
-    built.forEach((line, index) => {
+    const playback = golden ? built.slice(0, -1) : built;
+    playback.forEach((line, index) => {
       const timer = setTimeout(() => {
         setScriptedLines((prev) => [...prev, line]);
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (!golden && typeof window !== 'undefined' && 'speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(line.text);
           utterance.lang = script.speechLanguage;
           utterance.rate = line.role === 'assistant' ? 0.92 : 1.02;
@@ -630,9 +654,33 @@ function CallStation({
           collectedFrames.push(line.emotions);
           setScriptedFrames((prev) => [...prev, line.emotions as Record<string, number>]);
         }
-      }, index * SCRIPT_STEP_MS);
+      }, index * (golden ? 3000 : SCRIPT_STEP_MS));
       scriptTimersRef.current.push(timer);
     });
+
+    if (golden) {
+      goldenContinueRef.current = () => {
+        goldenContinueRef.current = null;
+        setGoldenAttackReady(false);
+        const attack = built[built.length - 1];
+        setScriptedLines(built);
+        if (attack.emotions) {
+          collectedFrames.push(attack.emotions);
+          setScriptedFrames((previous) => [...previous, attack.emotions!]);
+        }
+        const evidence = goldenAttackEvidence(built);
+        setGoldenEvidence(evidence);
+        publishLiveCallEvent('update', built, 'simulated', language);
+        const finish = setTimeout(() => {
+          const seconds = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
+          publishLiveCallEvent('end', built, 'simulated', language);
+          void triageAndPublish(script.phone, built, collectedFrames, seconds, 'simulated', language, true);
+        }, 2000);
+        scriptTimersRef.current.push(finish);
+      };
+      scriptTimersRef.current.push(setTimeout(() => setGoldenAttackReady(true), GOLDEN_DEMO_CONTRACT.pauseAtMs));
+      return;
+    }
 
     // Once the last line has played, grade the call through the same pipeline a
     // live call uses.
@@ -647,6 +695,9 @@ function CallStation({
   const reset = () => {
     clearScriptTimers();
     setPhase('idle');
+    setGoldenAttackReady(false);
+    setGoldenEvidence(null);
+    goldenContinueRef.current = null;
     setResult(null);
     setErrorText(null);
     setDuration(0);
@@ -659,6 +710,10 @@ function CallStation({
   };
 
   const mmss = `${String(Math.floor(duration / 60)).padStart(2, '0')}:${String(duration % 60).padStart(2, '0')}`;
+  const goldenGrade = useMemo(() => scriptId === 'golden' ? buildLiveCallPayload({
+    state: 'update', callId: GOLDEN_DEMO_CONTRACT.callId, at: '', transcript: scriptedLines,
+    detectedLanguage: 'hi', prosodySource: 'simulated',
+  }).grade : null, [scriptId, scriptedLines]);
   const micLevel = 0;
   const didChange = (field: string) => changed.includes(field);
 
@@ -723,7 +778,7 @@ function CallStation({
                     aria-label="Scripted caller"
                     className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink-2 focus:border-accent focus:outline-none"
                   >
-                    {JUDGE_CALLER_PRESETS.map((s) => (
+                    {[GOLDEN_CALLER_PRESET, ...JUDGE_CALLER_PRESETS].map((s) => (
                       <option key={s.id} value={s.id} className="bg-deep">
                         {s.name} - {s.description}
                       </option>
@@ -773,6 +828,16 @@ function CallStation({
               <div className="flex items-center gap-2 rounded-md border border-mild/30 bg-mild/15 px-3 py-3 text-xs font-medium text-mild">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Playing simulated caller — emotion values are demo data, not measured.
+              </div>
+            )}
+
+            {scriptId === 'golden' && sessionKind === 'scripted' && (
+              <div className="space-y-2 rounded-md border border-accent/40 bg-accent/10 p-3 text-xs" aria-live="polite">
+                <p className="font-bold text-accent">{GOLDEN_DEMO_CONTRACT.provenanceText}</p>
+                {goldenGrade && <Chip tone="critical">{goldenGrade.priorityCode} · {goldenGrade.severity.toUpperCase()}</Chip>}
+                {goldenAttackReady && <button type="button" onClick={() => goldenContinueRef.current?.()} className="w-full rounded-md bg-accent px-3 py-3 font-bold text-deep">Continue attack</button>}
+                {goldenEvidence && <><p className="font-bold text-critical-soft">{goldenEvidence}</p><p>CRITICAL held. Simulated caller instruction; no model verdict was generated.</p></>}
+                {!goldenEvidence && !goldenAttackReady && phase === 'scripted' && <p>Local rules are grading the caller. Attack pauses at 12 seconds.</p>}
               </div>
             )}
 

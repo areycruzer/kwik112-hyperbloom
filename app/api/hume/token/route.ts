@@ -14,7 +14,9 @@ let cached: { token: string; expiresAt: number } | null = null;
 export async function GET() {
   const apiKey = process.env.HUME_API_KEY;
   const secretKey = process.env.HUME_SECRET_KEY;
-  const configId = process.env.NEXT_PUBLIC_HUME_CONFIG_ID ?? null;
+  // Recording configuration requested by the owner; source session settings
+  // still apply the repository's emergency intake prompt after connection.
+  const configId = 'c6464fe6-6281-4f91-b564-24a8b12ba5c6';
 
   if (!apiKey || !secretKey) {
     return NextResponse.json(
