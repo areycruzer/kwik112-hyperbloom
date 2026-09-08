@@ -70,6 +70,21 @@ export interface DashboardHeaderMetric {
   tone: 'default' | 'critical' | 'warning';
 }
 
+export type IncidentActionState = 'done' | 'needs_action' | 'blocked';
+
+export interface IncidentActionChecklistItem {
+  id: 'location' | 'incident' | 'injuries' | 'response' | 'unit' | 'decision';
+  label: string;
+  detail: string;
+  action: string;
+  state: IncidentActionState;
+}
+
+export interface IncidentActionChecklist {
+  nextAction: string;
+  items: IncidentActionChecklistItem[];
+}
+
 export function dashboardHeaderMetrics(
   calls: readonly EmergencyCall[],
   openAlerts: number,
@@ -83,6 +98,105 @@ export function dashboardHeaderMetrics(
     },
     { label: 'Open alerts', value: openAlerts, tone: 'warning' },
   ];
+}
+
+const ACTION_CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
+const ACTION_ASSIGNED_STATUSES = new Set([
+  'dispatched',
+  'en-route',
+  'on_scene',
+  'mitigating',
+  'resolved',
+  'completed',
+  'closed',
+]);
+
+const INJURY_DETAIL_RE = /\b(injur|conscious|breath|bleed|trapped|people|person|patient|hurt)\b/i;
+
+function hasCoordinatePair(call: EmergencyCall): boolean {
+  const location = call.verified_location ?? call.caller_location;
+  return Number.isFinite(location?.latitude) && Number.isFinite(location?.longitude);
+}
+
+function hasIncidentSignal(call: EmergencyCall): boolean {
+  return Boolean(call.incident_type ?? call.incident_subtype ?? call.chief_complaint ?? call.ai_summary);
+}
+
+function hasInjurySignal(call: EmergencyCall): boolean {
+  return typeof call.persons_involved === 'number' || typeof call.ai_triage?.persons_involved === 'number';
+}
+
+function hasResponseSignal(call: EmergencyCall): boolean {
+  return Boolean(call.dispatch_plan ?? call.ai_recommendation) || (call.recommended_units?.length ?? 0) > 0;
+}
+
+function hasAssignedUnit(call: EmergencyCall): boolean {
+  const status = (call.status ?? '').toLowerCase();
+  return (call.dispatched_units?.length ?? 0) > 0 || ACTION_ASSIGNED_STATUSES.has(status);
+}
+
+/** @description Converts one incident into the dispatcher's immediate action checklist. */
+export function incidentActionChecklist(call: EmergencyCall): IncidentActionChecklist {
+  const locationReady = hasCoordinatePair(call);
+  const incidentReady = hasIncidentSignal(call);
+  const injuriesReady = hasInjurySignal(call);
+  const injuryQuestionPending = (call.operator_questions ?? []).some((question) =>
+    INJURY_DETAIL_RE.test(question),
+  );
+  const responseReady = hasResponseSignal(call);
+  const unitReady = hasAssignedUnit(call);
+  const closed = ACTION_CLOSED_STATUSES.has((call.status ?? '').toLowerCase());
+  const isCritical = (call.severity ?? '').toLowerCase() === 'critical';
+
+  const items: IncidentActionChecklistItem[] = [
+    {
+      id: 'location',
+      label: 'Location',
+      detail: locationReady ? 'Coordinates ready for routing' : 'Exact coordinates missing',
+      action: 'Verify routable location',
+      state: locationReady ? 'done' : 'blocked',
+    },
+    {
+      id: 'incident',
+      label: 'Emergency type',
+      detail: incidentReady ? 'Incident category captured' : 'Emergency type still unclear',
+      action: 'Confirm emergency type',
+      state: incidentReady ? 'done' : 'needs_action',
+    },
+    {
+      id: 'injuries',
+      label: 'Injuries',
+      detail: injuriesReady && !injuryQuestionPending ? 'People involved captured' : 'Injury status needs confirmation',
+      action: 'Confirm injuries',
+      state: injuriesReady && !injuryQuestionPending ? 'done' : 'needs_action',
+    },
+    {
+      id: 'response',
+      label: 'Response plan',
+      detail: responseReady ? 'Recommended response is available' : 'No dispatch plan selected yet',
+      action: 'Select response plan',
+      state: responseReady ? 'done' : 'needs_action',
+    },
+    {
+      id: 'unit',
+      label: 'Unit assignment',
+      detail: unitReady ? 'At least one unit is committed' : 'No unit committed to this incident',
+      action: 'Assign response unit',
+      state: unitReady ? 'done' : isCritical ? 'blocked' : 'needs_action',
+    },
+    {
+      id: 'decision',
+      label: 'Decision',
+      detail: closed ? 'Incident decision is closed' : 'Timeline decision still open',
+      action: 'Record timeline decision',
+      state: closed ? 'done' : 'needs_action',
+    },
+  ];
+
+  return {
+    nextAction: items.find((item) => item.state !== 'done')?.action ?? 'Monitor or close incident',
+    items,
+  };
 }
 
 export function compactIncidentSummary(summary: string, maxLength = 140): string {
