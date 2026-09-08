@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/areycruzer/kwik-112/actions/workflows/ci.yml/badge.svg)](https://github.com/areycruzer/kwik-112/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-087b91.svg)](LICENSE)
 
-> Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
+> Every Indian already knows how to use it: dial 112. Kwik 112 demonstrates a proposed multilingual call-taker for that call and the dispatch console behind it in a browser; there is no live telephone integration — the AI may only escalate severity, and a human makes every dispatch decision.
 
 | Held-out local benchmark (development regression suite) | Result |
 | --- | ---: |
 | Critical recall | **100% (9/9)**; Wilson 95% lower bound 0.70 |
-| Incident type / severity accuracy | **60% / 60%** |
-| Under-triage / over-triage | **23.3% / 16.7%** |
+| Incident type / severity accuracy | **60% (18/30) / 60% (18/30)** |
+| Under-triage / over-triage | **23.3% (7/30) / 16.7% (5/30)** |
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
 | Local latency | **p50 ~0.048ms / p95 ~3.79ms** |
 
@@ -37,7 +37,7 @@ Pre-arrival guidance is selected deterministically from conservative dispatcher-
 
 ## Innovation
 
-**The deterministic grade is available before any model response, and model output is prevented from lowering that safety floor.** `lib/triage-local.ts` supplies browser-safe multilingual rules; `lib/triage.ts` wraps the caller transcript as untrusted data, validates structured output, rejects invented facts, and applies the no-downgrade rule.
+**The deterministic grade is available before any model response, and model output is prevented from lowering that safety floor.** `lib/triage-local.ts` supplies browser-safe multilingual rules; `lib/triage.ts` wraps the caller transcript as untrusted data, validates structured output (not a guarantee of factual accuracy), and applies the no-downgrade rule.
 
 Optional Hume prosody is supplementary context with explicit provenance, not an autonomous severity signal. A randomized trial found that machine-learning support did not significantly improve dispatcher recognition in its primary comparison, while standalone alerts traded higher sensitivity for lower specificity ([Blomberg et al., 2021](https://pubmed.ncbi.nlm.nih.gov/33404620/)). Kwik 112 therefore exposes evidence to the operator rather than replacing the operator.
 
@@ -89,9 +89,9 @@ Fresh triage outputs are written to `evaluation/results/local-held_out-latest.js
 | Emergency network | No live 112, ERSS, government, or C-DAC integration |
 | Dispatch authority | AI assists; a human records every dispatch decision |
 | State | Browser-local demo state; no production database or authentication |
-| Audit trail | Session-local demonstration of the audit design (browser storage for the session), not a production record store |
+| Audit trail | Session-local demo design backed by localStorage: persists across browser sessions until cleared; not a production record store |
 | Voice | Hume EVI is optional; scripted browser speech is labeled SIMULATED |
-| Model refinement | GLM 4.5 Flash (free tier, measured latency) is the configured provider; any OpenAI-compatible provider works via `OPENAI_API_KEY` (+ `OPENAI_BASE_URL`) and is used automatically when GLM is absent |
+| Model refinement | GLM 4.5 Flash is the deliberate free-tier primary. `LLM_PROVIDER=auto|glm|openai` selects the path; `auto` uses OpenAI when GLM is absent. Configure `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `OPENAI_MODEL` (default `gpt-4o-mini`). Endpoint compatibility must be verified; local benchmark timing is not provider timing |
 | Emotion influence | Prosody may sharpen priority inside a severity band but can never cross a band boundary (`severityBandCeiling`, tested) |
 | Failure mode | Missing keys, timeout, malformed output, or provider failure preserves the local grade |
 
@@ -99,15 +99,15 @@ Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It
 
 ### Codex and OpenAI contribution
 
-The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits; the detailed, dated log of what the AI agents built — including the live-voice render-loop forensics and the GLM reasoning-latency fix — is committed as [CODEX_LOG.md](CODEX_LOG.md). The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. The provider is asked for a JSON-object response, which then passes application-side shape and provenance validation, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
+The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits; the detailed, dated log of what the AI agents built — including the live-voice render-loop forensics and the GLM reasoning-latency fix — is committed as [CODEX_LOG.md](CODEX_LOG.md). The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. The provider is asked for a JSON-object response, which then passes application-side shape validation and explicit provider labeling, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
 
 The operator checkpoints align with the human-oversight principle in [EU AI Act Article 14](https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng). Risk documentation follows the general posture of the [NIST Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence); neither reference is presented as certification or regulatory compliance.
 
 ## Presentation
 
-**The video puts the caller experience in minute one:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the timestamped transcript as a page on this site](https://pulse112-dispatch-ai.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
+**The submitted video still needs owner trimming and caption verification:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the repository recording script as a page on this site](https://pulse112-dispatch-ai.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
 
-### 120-second transcript
+### Recording narration (not verified uploaded-video captions)
 
 Every Indian already knows how to use it: dial 112.
 The caller needs no app or screen.
@@ -137,6 +137,6 @@ Human dispatch stays in command.
 
 ---
 
-**Evidence summary:** 30 held-out synthetic calls · critical recall **100% (9/9)** · type/severity **60% / 60%** · under/over-triage **23.3% / 16.7%** · location/threat **100% / 100%** · p50/p95 **~0.048ms / ~3.79ms**.
+**Evidence summary:** 30 held-out synthetic calls · critical recall **100% (9/9)** · type/severity **60% / 60%** · under/over-triage **23.3% / 16.7%** · location/threat **100% (25/25) / 100% (3/3)** · p50/p95 **~0.048ms / ~3.79ms**.
 
 MIT licensed.

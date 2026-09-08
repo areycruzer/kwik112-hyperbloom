@@ -10,7 +10,7 @@ Independent browser-based demonstration. Not an official 112, ERSS, Government o
 - Place a test 112 call: /dashboard?startCall=1#voice-station
 - Dispatcher console: /dashboard
 - Held-out benchmark rendered from committed results: /benchmark
-- Demo video transcript (VideoObject): /transcript
+- Repository recording script (uploaded-video captions not yet verified): /transcript
 - Demo video: https://youtu.be/JdzAXL08_24 (trim to the 120s cap pending)
 
 ## Development regression suite (corpus v1.0.0, held_out split, 30 synthetic calls)
