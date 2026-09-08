@@ -43,6 +43,24 @@ const STALE_SECONDS = 30 * 60;
 const LOW_CONFIDENCE = 0.5;
 
 /** @description Compute every open alert for the given calls. */
+/**
+ * @description An elapsed time an operator can act on.
+ *
+ *              Alert text used to carry raw machine units — "unassigned for
+ *              660s", "open for 194 minutes" — leaving the reader to divide by
+ *              sixty in their head, on the screen whose whole job is to convey
+ *              urgency at a glance.
+ */
+function humanDuration(seconds: number): string {
+  if (!Number.isFinite(seconds)) return 'an unknown time';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return 'under a minute';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours} hr ${remainder} min` : `${hours} hr`;
+}
+
 export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
   const alerts: Alert[] = [];
 
@@ -78,11 +96,7 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
       !ASSIGNED_STATUSES.has(status) &&
       ageSeconds > P1_GRACE_SECONDS
     ) {
-      push(
-        'P1_UNASSIGNED',
-        'critical',
-        `Critical incident unassigned for ${Math.floor(ageSeconds)}s.`,
-      );
+      push('P1_UNASSIGNED', 'critical', `Unassigned for ${humanDuration(ageSeconds)}.`);
     }
 
     if (call.model_escalated) {
@@ -98,7 +112,7 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
     }
 
     if (ageSeconds > STALE_SECONDS) {
-      push('STALE_INCIDENT', 'low', `Open for ${Math.floor(ageSeconds / 60)} minutes.`);
+      push('STALE_INCIDENT', 'low', `Open for ${humanDuration(ageSeconds)} with no resolution.`);
     }
   }
 
