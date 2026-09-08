@@ -117,6 +117,13 @@ function normalizeTranscript(input: unknown): Array<{
  */
 const KNOWN_PLACES: Array<[RegExp, { latitude: number; longitude: number; city: string }]> = [
   [/\bsample metro gate 1\b/i, HINGLISH_DEMO_LOCATION],
+  // Approximate neighborhood references: existing mock incidents delhi-3/delhi-9.
+  [/\bshalimar bagh\b/i, { latitude: 28.7124, longitude: 77.1621, city: 'New Delhi' }],
+  [/\b(?:bhagirath palace|chandni chowk)\b/i, { latitude: 28.6562, longitude: 77.23, city: 'New Delhi' }],
+  // BEE station registry names Moolchand Metro at 28.564337,77.234100.
+  // https://www.beeindia.gov.in/WriteReadData/RTF1984/RTF-PDF-e1b78a871e013df5_1776149188.pdf
+  // Rounded reference only; the 1200 m caller-location radius is not a gate fix.
+  [/\bmoolchand\b/i, { latitude: 28.5643, longitude: 77.2341, city: 'New Delhi' }],
   [/\bgreater noida\b/i, { latitude: 28.4744, longitude: 77.503, city: 'Greater Noida' }],
   [/\bnoida\b/i, { latitude: 28.5355, longitude: 77.391, city: 'Noida' }],
   [/\brohini\b/i, { latitude: 28.7196, longitude: 77.1186, city: 'New Delhi' }],
@@ -149,9 +156,10 @@ function placeFromTranscript(text: string): { phrase: string; place: (typeof KNO
 /**
  * Spoken-address geocoding via Nominatim (OpenStreetMap). Used only when the
  * caller's words name a place the local gazetteer cannot pin: the address is
- * "named but not placeable". Policy-compliant: identified User-Agent, one
- * request per call, in-memory cache, hard timeout, and a silent fail-open to
- * the existing un-placeable behaviour.
+ * "named but not placeable" during model refinement only. An identified
+ * User-Agent, process-local cache and timeout bound individual requests; there
+ * is no app-wide rate limit across processes, so policy compliance is not
+ * guaranteed by these safeguards. A miss retains the unplaced caller address.
  */
 const geocodeCache = new Map<string, { latitude: number; longitude: number; city?: string; accuracyRadius: number } | null>();
 
@@ -252,6 +260,7 @@ function resolveLocation(
       latitude: spoken.place.latitude,
       longitude: spoken.place.longitude,
       confidence: 0.45,
+      accuracy_radius: 1200,
       source: 'caller',
     };
   }
@@ -263,7 +272,7 @@ function resolveLocation(
  * @description Assemble an `EmergencyCall` from a finished conversation.
  *
  *              `mode: 'local'` grades with keyword rules only and returns in
- *              microseconds — this is what the operator sees the instant the
+ *              without network I/O — this is what the operator sees when the
  *              call ends, marked `refinable: true`. `mode: 'model'` awaits the
  *              language model (with the same local-rule fallback baked into
  *              `triageTranscript`) and returns the enriched grade, marked
@@ -351,7 +360,8 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
   // from "unresolved location" to a map pin with honest neighbourhood-level
   // accuracy and its own provenance label; a miss keeps the previous
   // low-confidence behaviour, and the operator still sees the spoken words.
-  if (location.source === 'caller' && typeof location.latitude !== 'number' && location.address) {
+  if (mode === 'model' && location.source === 'caller' && typeof location.latitude !== 'number' &&
+      location.address && location.address !== 'Location not yet established') {
     const geocoded = await geocodeSpokenAddress(location.address);
     if (geocoded) {
       location.latitude = geocoded.latitude;
