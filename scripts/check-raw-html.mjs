@@ -16,6 +16,7 @@ async function readArtifact(route, localFile) {
 
 const landing = await readArtifact("/", ".next/server/app/index.html");
 const dashboard = await readArtifact("/dashboard", ".next/server/app/dashboard.html");
+const judges = await readArtifact("/for-judges", ".next/server/app/for-judges.html");
 const robots = await readArtifact("/robots.txt", ".next/server/app/robots.txt.body");
 const sitemap = await readArtifact("/sitemap.xml", ".next/server/app/sitemap.xml.body");
 const llms = await readArtifact("/llms.txt", "public/llms.txt");
@@ -25,26 +26,28 @@ const narration = (await readFile(path.join(process.cwd(), "docs", "kwik-112-rou
 const captions = await readFile(path.join(process.cwd(), "public", "kwik-112-round2.vtt"), "utf8");
 
 const requiredLandingText = [
-  "Kwik 112",
-  "Kwik 112 puts an AI voice call-taker inside India&#x27;s 112 emergency calls",
-  "Working Build",
-  "End-to-End Thinking",
-  "Innovation",
-  "Impact",
-  "Technical Depth",
-  "Presentation",
+  "KWIK 112",
+  "Proposed middleware for the 112 queue",
+  "Codex",
+  "GLM 4.5 Flash",
+  "keypad phone",
   "100%",
   "9/9",
   "60%",
   "23.3%",
   "16.7%",
-  "An independent browser-based build",
-  "An official 112, ERSS, government, or C-DAC service",
+  "Independent synthetic demonstration",
+  "Not an official 112, ERSS, government, or C-DAC service",
 ];
 
 for (const text of requiredLandingText) {
   assert.ok(landing.includes(text), `landing HTML is missing: ${text}`);
 }
+
+for (const heading of ["Problem", "Working build", "Usability", "Product thinking", "End-to-end thinking", "Honesty"]) {
+  assert.ok(new RegExp(`<h2[^>]*>${heading}</h2>`).test(judges), `judge HTML is missing rubric heading: ${heading}`);
+}
+assert.ok(judges.includes("Codex") && judges.includes("GLM"), "judge HTML is missing builder/provider disclosure");
 
 for (const href of [
   "/dashboard",

@@ -44,7 +44,7 @@ export default function Home() {
         <Link href="/" className={styles.brand} aria-label="KWIK 112 home">
           <AudioLines aria-hidden />
           <strong>KWIK 112</strong>
-          <span>Synthetic PSAP simulation</span>
+          <span>Synthetic dispatch simulation</span>
         </Link>
         <nav className={styles.nav} aria-label="Primary navigation">
           <a href="#workflow">Workflow</a>
@@ -60,8 +60,9 @@ export default function Home() {
         <div className={styles.heroContent}>
           <p className={styles.liveLabel}><span /> Live emergency simulation</p>
           <h1 id="hero-title">KWIK 112</h1>
-          <p className={styles.heroStatement}>Train under pressure.<br />Dispatch with clarity.</p>
-          <p className={styles.heroCopy}>Multilingual voice intake, safety-first triage, and one human-controlled command view.</p>
+          <p className={styles.heroStatement}>Use the ring time.<br />Prepare the human response.</p>
+          <p className={styles.heroCopy}>Proposed middleware for the 112 queue. Hindi, Hinglish, and English intake; a safety floor the model cannot lower. The citizen would dial from a keypad phone on 2G—no app, URL, or reading. This browser demo emulates that call.</p>
+          <p className={styles.heroDisclosure}>Built with Codex. GLM 4.5 Flash is the free-tier primary; OpenAI refinement is optional. Independent synthetic demonstration, not an official 112 service.</p>
           <div className={styles.heroActions}>
             <Link id="place-a-call" href={VOICE_STATION_HREF} className={styles.primaryButton}><Headphones aria-hidden /> Start live demo call <ArrowRight aria-hidden /></Link>
             <Link href="/dashboard" className={styles.secondaryButton}>Open dispatch console <ArrowRight aria-hidden /></Link>
@@ -77,10 +78,17 @@ export default function Home() {
             <h2 id="evidence-title">Safety starts before dispatch.</h2>
           </div>
           <dl className={styles.metrics}>
-            <div><dt>Critical recall</dt><dd>100%</dd><p>9 of 9 held-out cases</p></div>
+            <div><dt>Critical recall</dt><dd>100%</dd><p>9/9 held-out cases · Wilson 95% LB 0.70</p></div>
             <div><dt>Threat detection</dt><dd>100%</dd><p>3 of 3 held-out cases</p></div>
             <div><dt>Local triage latency</dt><dd>0.048<span> ms</span></dd><p>Median on the benchmark</p></div>
           </dl>
+          <p className={styles.evidenceNote}>Development regression suite, 30 synthetic calls: type and severity accuracy 60% each (18/30); under-triage 23.3% (7/30), over-triage 16.7% (5/30). Location text 100% (25/25), not coordinate accuracy. Local p95 3.79ms; timings exclude providers and vary by run. <Link href="/benchmark">Inspect the committed results</Link> · <a href="https://github.com/areycruzer/kwik-112/tree/main/evaluation/results">Raw evidence</a>.</p>
+          <ul className={styles.problemSources} aria-label="Sourced emergency intake context">
+            <li><strong>0.28% genuine</strong> of about 16 lakh daily combined 112/Dial 100 calls in Telangana. <a href="https://the420.in/telangana-emergency-calls-ai-tools-erss-dial-112-genuine-calls-dispatch-2026/">25 June 2026 report</a>.</li>
+            <li><strong>Under 15 seconds</strong> is the MHA answer-speed target; the reported national response average is about 18 minutes. Different stages, not measured ring time. <a href="https://www.mha.gov.in/sites/default/files/2022-08/NERSGuideline_2100815%5B1%5D.pdf">MHA, 2015, p20</a>; <a href="https://www.newindianexpress.com/amp/story/states/telangana/2026/Aug/06/telangana-police-launch-30-faster-ai-driven-emergency-response-system-dial-112">DGP report, 6 August 2026</a>.</li>
+            <li><strong>10,000 of 15,672</strong> daily Delhi calls were reported blank; IVR filtering was already in place. <a href="https://timesofindia.indiatimes.com/city/delhi/112-number-gets-10000-blank-calls-a-day-thanks-to-phones-power-button/articleshow/71383219.cms">1 October 2019 report</a>.</li>
+            <li><strong>A merged queue:</strong> SaveLIFE Foundation v. Union of India, W.P.(C) 726/2024, 2026 INSC 567, ordered six helplines integrated into 112 within three months. The window has closed by calendar inference; implementation is not established here. <a href="https://api.sci.gov.in/supremecourt/2024/49959/49959_2024_3_60_71558_FinalOrder_26-May-2026.pdf">Order, 26 May 2026</a>.</li>
+          </ul>
         </div>
       </section>
 
@@ -102,7 +110,7 @@ export default function Home() {
             <div className={styles.callersIntro}>
               <p className={styles.kicker}>Three scripted calls</p>
               <h2 id="callers-title">Hear the pressure. Watch the incident form.</h2>
-              <p>Each performance carries a distinct language, emergency, and emotional state through the same live incident pipeline.</p>
+              <p>Each scripted performance carries a distinct language and emergency through the incident pipeline. Its emotion frames are simulated; optional live Hume calls carry model-estimated prosody. Fleet and ETAs are synthetic.</p>
               <Link href={VOICE_STATION_HREF} className={styles.textLink}>Open voice station <ArrowRight aria-hidden /></Link>
             </div>
             <div className={styles.callerList}>
@@ -123,7 +131,7 @@ export default function Home() {
         <div className={styles.sectionInner}>
           <div className={styles.proofGrid}>
             <div className={styles.proofLead}><p className={styles.kicker}>Built for scrutiny</p><h2 id="final-title">Conservative by code. Accountable by design.</h2></div>
-            <div className={styles.safetyCopy}><ShieldCheck aria-hidden /><p>Deterministic triage sets a safety floor. Model refinement can escalate a case, never lower its priority. A human makes every dispatch decision.</p></div>
+            <div className={styles.safetyCopy}><ShieldCheck aria-hidden /><p>Deterministic triage sets a safety floor. A calm report of no pulse remains critical. Emotion stays within its severity band; possible prank cues are annotations, never automatic rejection. Humans record INTAKE, DISPATCH, and RESOLUTION; overrides need notes. The browser-local audit persists until storage is cleared.</p></div>
             <ul className={styles.proofList}>
               <li><Check aria-hidden /><span><strong>30</strong> held-out synthetic calls</span></li>
               <li><Check aria-hidden /><span><strong>0</strong> autonomous dispatch decisions</span></li>
@@ -147,6 +155,7 @@ export default function Home() {
           <nav aria-label="Footer navigation">
             <Link href="/for-judges">For judges</Link>
             <Link href="/transcript">Transcript</Link>
+            <Link href="/llms.txt">Crawler guide</Link>
             <a href="https://github.com/areycruzer/kwik-112" target="_blank" rel="noreferrer"><Github aria-hidden /> GitHub</a>
           </nav>
         </div>
