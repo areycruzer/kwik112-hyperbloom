@@ -13,6 +13,7 @@
  */
 
 import type { EmergencyCall } from '@/lib/types';
+import { recommendUnits } from '@/lib/unit-recommendation';
 import type { ChipTone } from '@/components/ui/panel';
 
 /** Severity → the design system's three-tone chip scale. */
@@ -85,6 +86,23 @@ export function recommendedUnits(call: EmergencyCall): string[] {
     if (units.length) return units;
   }
   return [];
+}
+
+/**
+ * @description The standard response for this incident type, derived rather
+ *              than read off the call.
+ *
+ *              Kept separate from `recommendedUnits` above, which is contracted
+ *              to report only what the call actually carries. This is the
+ *              fallback a console shows while a call is still unplanned: every
+ *              cardiac arrest wants an ALS ambulance whether or not anyone has
+ *              filled in a dispatch plan yet, and the UI labels it a standard
+ *              response so it is never mistaken for a decision already made.
+ */
+export function standardResponseUnits(call: EmergencyCall): string[] {
+  const type = call.incident_type;
+  if (!type) return [];
+  return recommendUnits(type, (call.severity ?? 'low') as Parameters<typeof recommendUnits>[1]);
 }
 
 /** A 0–1 fraction as a whole-percent string, or null when absent. */

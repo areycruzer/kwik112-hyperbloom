@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   applyUnitReservations,
   readUnitReservations,
+  releaseUnit,
   releaseUnits,
   reserveUnits,
 } from './dispatch-reservations.ts';
@@ -71,6 +72,32 @@ test('resolution releases only units owned by that incident', async () => {
   try {
     await releaseUnits('call-a');
     assert.deepEqual(readUnitReservations(), { 'EMS-2': 'call-b' });
+  } finally {
+    removeFakeWindow();
+  }
+});
+
+test('releaseUnit stands one unit down and leaves the rest of the call assigned', async () => {
+  installFakeWindow();
+  try {
+    await reserveUnits('call-a', ['EMS-1', 'EMS-2']);
+    await releaseUnit('call-a', 'EMS-1');
+
+    const assigned = applyUnitReservations(fleet, 'call-a');
+    assert.equal(assigned.find((u) => u.id === 'EMS-1')?.assignedCallId, undefined);
+    assert.equal(assigned.find((u) => u.id === 'EMS-2')?.assignedCallId, 'call-a');
+  } finally {
+    removeFakeWindow();
+  }
+});
+
+test('releaseUnit cannot stand down a unit rolling on another call', async () => {
+  installFakeWindow();
+  try {
+    await reserveUnits('call-a', ['EMS-1']);
+    // A second dispatcher, looking at their own incident, tries to recall it.
+    await releaseUnit('call-b', 'EMS-1');
+    assert.deepEqual(readUnitReservations(), { 'EMS-1': 'call-a' });
   } finally {
     removeFakeWindow();
   }

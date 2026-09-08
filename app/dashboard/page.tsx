@@ -34,6 +34,7 @@ import {
   recommendedUnits,
   confidencePercent,
   spokenLanguage,
+  standardResponseUnits,
 } from '@/lib/incident';
 import { cn } from '@/lib/utils';
 import {
@@ -55,7 +56,8 @@ import { Chip, DataRow } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
 import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
 import { UnitRoster } from '@/components/UnitRoster';
-import { TACTICAL_UNITS } from '@/lib/units';
+import { TACTICAL_UNITS, etaLabel, haversineKm } from '@/lib/units';
+import { releaseUnit, reserveUnits } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
 import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
@@ -311,6 +313,44 @@ export default function DashboardPage() {
     [],
   );
   const handleDispatchUnit = useCallback(() => setWorkflowOpen(true), []);
+
+  /**
+   * Notifying a unit. Selecting a row in the roster used to be the end of the
+   * interaction - it highlighted the marker and nothing else - so a dispatcher
+   * could see the nearest ambulance and its ETA with no way to actually send
+   * it. Reserving the unit against the call is what "notify" means here: it
+   * flips the unit to en-route for this incident and busy for every other, and
+   * the incident's Dispatch section lists it with its projected arrival.
+   */
+  const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
+
+  const handleNotifyUnit = useCallback(
+    async (unitId: string, callId: string, callsign: string) => {
+      const result = await reserveUnits(callId, [unitId]);
+      setDispatchNotice(
+        result.ok
+          ? `${callsign} notified · en route`
+          : // A conflict means another incident already has it. Say so rather
+            // than failing silently, because the operator must now pick again.
+            `${callsign} is already committed to another incident`,
+      );
+    },
+    [],
+  );
+
+  const handleRecallUnit = useCallback(
+    async (unitId: string, callId: string, callsign: string) => {
+      await releaseUnit(callId, unitId);
+      setDispatchNotice(`${callsign} stood down`);
+    },
+    [],
+  );
+
+  // The notice belongs to one unit-and-incident pairing; changing either makes
+  // it stale, so it clears rather than describing a selection that is gone.
+  useEffect(() => {
+    setDispatchNotice(null);
+  }, [selectedUnitId, selectedCallId]);
   const handleOpenWorkflow = useCallback((call: EmergencyCall) => {
     setSelectedCallId(call.id);
     setWorkflowOpen(true);
@@ -339,6 +379,23 @@ export default function DashboardPage() {
     ? linkedPrimaryFor(selectedCall.id, fusionDecisions)
     : null;
   const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
+
+  // Everything the dispatch action bar needs about the current pairing.
+  const selectedUnit = operationalUnits.find((unit) => unit.id === selectedUnitId) ?? null;
+  const selectedUnitAssignedHere =
+    !!selectedUnit && !!selectedCall && selectedUnit.assignedCallId === selectedCall.id;
+  const selectedUnitCommittedElsewhere =
+    !!selectedUnit && !!selectedUnit.assignedCallId && !selectedUnitAssignedHere;
+  const selectedUnitEta = (() => {
+    const point = selectedCall?.caller_location;
+    if (!selectedUnit || typeof point?.latitude !== 'number' || typeof point?.longitude !== 'number') {
+      return '—';
+    }
+    return etaLabel(
+      selectedUnit,
+      haversineKm(selectedUnit.lat, selectedUnit.lng, point.latitude, point.longitude),
+    );
+  })();
 
   // Primary figures appear once, in the command bar.
   // Operational alerts are derived from call state, then reduced by whatever the
@@ -712,6 +769,55 @@ export default function DashboardPage() {
                       onSelectUnit={handleSelectUnit}
                     />
                   </div>
+
+                  {/* Dispatch action. Appears only once both halves of the
+                      decision exist - a unit to send and an incident to send it
+                      to - so it never offers an action that cannot be taken. */}
+                  {selectedUnit && selectedCall && (
+                    <div className="shrink-0 border-t border-rule-strong bg-panel p-2.5">
+                      <p className="text-2xs text-ink-4">
+                        <span className="text-ink-2">{selectedUnit.callsign}</span>
+                        {' → '}
+                        <span className="capitalize text-ink-2">
+                          {selectedCall.incident_subtype || selectedCall.incident_type || 'incident'}
+                        </span>
+                      </p>
+                      {selectedUnitAssignedHere ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleRecallUnit(selectedUnit.id, selectedCall.id, selectedUnit.callsign)
+                          }
+                          className="mt-2 w-full rounded-[4px] border border-rule-strong bg-ground px-3 py-2 text-xs font-semibold text-ink-2 transition-colors hover:border-mild hover:text-mild"
+                        >
+                          Stand down
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleNotifyUnit(selectedUnit.id, selectedCall.id, selectedUnit.callsign)
+                          }
+                          disabled={selectedUnitCommittedElsewhere}
+                          className={cn(
+                            'mt-2 w-full rounded-[4px] px-3 py-2 text-xs font-semibold transition-colors',
+                            selectedUnitCommittedElsewhere
+                              ? 'cursor-not-allowed border border-rule bg-ground text-ink-4'
+                              : 'bg-accent text-deep hover:bg-accent-dim',
+                          )}
+                        >
+                          {selectedUnitCommittedElsewhere
+                            ? 'Committed elsewhere'
+                            : `Notify & dispatch · ETA ${selectedUnitEta}`}
+                        </button>
+                      )}
+                      {dispatchNotice && (
+                        <p role="status" className="mt-1.5 text-2xs text-accent-bright">
+                          {dispatchNotice}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </aside>
               )}
             </div>
@@ -892,7 +998,22 @@ function IncidentDetail({
     typeof location?.accuracy_radius === 'number' ? `±${location.accuracy_radius} m` : null;
   const threats = call.immediate_threats ?? [];
   const units = recommendedUnits(call);
+  const standardResponse = units.length === 0 && !call.dispatch_plan ? standardResponseUnits(call) : [];
   const dispatchPlan = call.dispatch_plan;
+  // Units a dispatcher has actually sent from the roster, with the arrival the
+  // roster projected. This is what closes the loop: pressing Dispatch there has
+  // to be visible here, or the operator cannot tell whether it worked.
+  const incidentFleet = useReservedFleet(TACTICAL_UNITS, call.id);
+  const assignedUnits = incidentFleet
+    .filter((unit) => unit.assignedCallId === call.id)
+    .map((unit) => {
+      const point = call.caller_location;
+      const km =
+        typeof point?.latitude === 'number' && typeof point?.longitude === 'number'
+          ? haversineKm(unit.lat, unit.lng, point.latitude, point.longitude)
+          : null;
+      return { unit, eta: etaLabel(unit, km), distance: km === null ? null : `${km.toFixed(1)} km` };
+    });
   const operatorQuestions = call.operator_questions ?? [];
   const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
@@ -1029,18 +1150,17 @@ function IncidentDetail({
 
         <SectionHeading>Recommended response</SectionHeading>
 
+        {/* The instructions only. The card used to repeat its own heading
+            ("Immediate safety guidance") directly under a field label that
+            already said what it was, and close with a standing caution about
+            following protocol - neither of which is read to the caller, and
+            both of which pushed the actual words down the panel. */}
         <Field label="Pre-arrival guidance (dispatcher reads)">
-          <div className="rounded-[6px] border border-mild/40 bg-mild/5 p-2.5">
-            <p className="text-xs font-semibold text-ink">{guidance.title}</p>
-            <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-xs leading-relaxed text-ink-2">
-              {guidance.instructions.map((instruction) => (
-                <li key={instruction}>{instruction}</li>
-              ))}
-            </ul>
-            <p className="mt-2 border-t border-mild/20 pt-1.5 text-2xs leading-relaxed text-mild">
-              {guidance.caution}
-            </p>
-          </div>
+          <ul className="flex list-disc flex-col gap-1.5 rounded-[6px] border border-mild/40 bg-mild/5 p-2.5 pl-6 text-xs leading-relaxed text-ink-2">
+            {guidance.instructions.map((instruction) => (
+              <li key={instruction}>{instruction}</li>
+            ))}
+          </ul>
         </Field>
 
         {/* Dispatch: who is going, and whether they arrive inside the response
@@ -1079,8 +1199,47 @@ function IncidentDetail({
                 </Chip>
               ))}
             </div>
+          ) : standardResponse.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
+                {standardResponse.map((unit) => (
+                  <Chip key={unit} tone="neutral">
+                    {unit}
+                  </Chip>
+                ))}
+              </div>
+              {/* Labelled, because this is what a control room sends to this
+                  kind of incident - not a decision anyone has taken on this
+                  call. Printing "No units recommended yet" instead was true
+                  and useless: every cardiac arrest wants an ALS ambulance
+                  whether or not a plan has been filled in. */}
+              <span className="text-2xs text-ink-4">
+                Standard response for this incident type · not yet confirmed
+              </span>
+            </div>
           ) : (
             <span className="text-sm text-ink-3">No units recommended yet.</span>
+          )}
+
+          {assignedUnits.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              <span className="label">Dispatched from roster</span>
+              {assignedUnits.map(({ unit, eta, distance }) => (
+                <div
+                  key={unit.id}
+                  className="rounded-[4px] border border-accent/40 bg-accent/5 px-2 py-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-ink">{unit.callsign}</span>
+                    <span className="tnum text-2xs text-accent-bright">ETA {eta}</span>
+                  </div>
+                  <p className="tnum mt-0.5 text-2xs text-ink-4">
+                    {unit.agency} · {unit.id}
+                    {distance ? ` · ${distance}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
           {/* Response assurance grounds the generic service advice above in the
               live fleet: it is the check that the recommendation can actually

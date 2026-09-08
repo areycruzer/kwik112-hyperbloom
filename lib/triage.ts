@@ -388,17 +388,11 @@ export function localTriage(transcript: string): TriageResult {
 }
 
 /** @description Suggest units from the incident type. */
-export function recommendUnits(type: string, severity: Severity): string[] {
-  const base: Record<string, string[]> = {
-    fire: ['Fire Engine', 'Rescue Ladder', 'ALS Ambulance'],
-    medical_emergency: ['ALS Ambulance', 'Nearest Patrol Assist'],
-    accident: ['ALS Ambulance', 'Highway Patrol', 'Rescue Tender'],
-    crime: ['Police Patrol', 'Supervisor Escalation'],
-    public_safety: ['Municipal Response Unit', 'Police Patrol'],
-  };
-  const units = base[type] ?? ['Nearest Available Unit', 'Field Supervisor'];
-  return severity === 'critical' ? ['Advanced Life Support Ambulance', ...units] : units;
-}
+// The standard-response table moved to lib/unit-recommendation, which imports
+// nothing, so the console can ask the same question without pulling this
+// module's logger and LLM client into the browser bundle. Re-exported here so
+// the API routes that already import it from '@/lib/triage' keep working.
+export { recommendUnits } from './unit-recommendation.ts';
 
 /** @description Convert triage into a bounded dispatch recommendation. */
 export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
