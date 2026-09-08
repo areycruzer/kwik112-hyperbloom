@@ -22,6 +22,7 @@ import {
   rankEmotions,
   recommendDispatchPlan,
   recommendUnits,
+  prankMismatchFlag,
   scoreOf,
   severityBandCeiling,
   severityFromScore,
@@ -143,6 +144,62 @@ function placeFromTranscript(text: string): { phrase: string; place: (typeof KNO
     if (match) return { phrase: match[0], place };
   }
   return null;
+}
+
+/**
+ * Spoken-address geocoding via Nominatim (OpenStreetMap). Used only when the
+ * caller's words name a place the local gazetteer cannot pin: the address is
+ * "named but not placeable". Policy-compliant: identified User-Agent, one
+ * request per call, in-memory cache, hard timeout, and a silent fail-open to
+ * the existing un-placeable behaviour.
+ */
+const geocodeCache = new Map<string, { latitude: number; longitude: number; city?: string; accuracyRadius: number } | null>();
+
+const NOMINATIM_TIMEOUT_MS = 2500;
+
+async function geocodeSpokenAddress(address: string): Promise<{ latitude: number; longitude: number; city?: string; accuracyRadius: number } | null> {
+  const key = address.trim().toLowerCase();
+  if (geocodeCache.has(key)) return geocodeCache.get(key) ?? null;
+
+  const url =
+    'https://nominatim.openstreetmap.org/search?q=' +
+    encodeURIComponent(address + ', India') +
+    '&format=json&limit=1&countrycodes=in';
+
+  let result: { latitude: number; longitude: number; city?: string; accuracyRadius: number } | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Kwik112-demo/1.0 (independent emergency-dispatch demonstration; repo: github.com/areycruzer/kwik-112)' },
+      cache: 'no-store',
+    });
+    if (response.ok) {
+      const data = (await response.json()) as Array<{ lat: string; lon: string; type?: string; address?: Record<string, string> }>;
+      const top = data?.[0];
+      if (top) {
+        const lat = Number(top.lat);
+        const lon = Number(top.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          // A station/suburb/postcode hit is a neighbourhood fix, not a doorway.
+          const coarse = /^(postcode|county|state|country)$/.test(top.type || '');
+          result = {
+            latitude: lat,
+            longitude: lon,
+            city: top.address?.city || top.address?.town || top.address?.suburb || undefined,
+            accuracyRadius: coarse ? 2500 : 400,
+          };
+        }
+      }
+    }
+  } catch {
+    result = null;
+  } finally {
+    clearTimeout(timer);
+  }
+  geocodeCache.set(key, result);
+  return result;
 }
 
 function resolveLocation(
@@ -274,6 +331,12 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     Math.round(Math.max(baseScore, baseScore + distressBoost * 0.2)),
   );
   const severity = severityFromScore(severityScore);
+
+  // Measured prosody that is composed and undistressed on a low/medium-grade
+  // incident is the prank signature — surfaced to the operator as a flag,
+  // never as a severity change (see prankMismatchFlag for the guardrails).
+  const prankFlag = prankMismatchFlag(severity, distress, ranked[0]?.emotion);
+  if (prankFlag && !triage.flags.includes(prankFlag)) triage.flags.push(prankFlag);
   const top = ranked[0];
 
   const location = resolveLocation(
@@ -282,6 +345,23 @@ export async function buildCall(input: BuildCallInput, mode: 'local' | 'model'):
     triage.extraction.location?.confidence ?? 0,
     callerText || fullText
   );
+
+  // The caller named a place the gazetteer could not pin — ask the open web
+  // (Nominatim) for its coordinates before giving up. A hit upgrades the card
+  // from "unresolved location" to a map pin with honest neighbourhood-level
+  // accuracy and its own provenance label; a miss keeps the previous
+  // low-confidence behaviour, and the operator still sees the spoken words.
+  if (location.source === 'caller' && typeof location.latitude !== 'number' && location.address) {
+    const geocoded = await geocodeSpokenAddress(location.address);
+    if (geocoded) {
+      location.latitude = geocoded.latitude;
+      location.longitude = geocoded.longitude;
+      location.city = geocoded.city ?? location.city;
+      location.accuracy_radius = geocoded.accuracyRadius;
+      location.confidence = 0.65;
+      location.source = 'geocoded';
+    }
+  }
   const operatorQuestions = buildOperatorQuestions(triage);
 
   const callId =

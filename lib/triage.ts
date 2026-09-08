@@ -11,6 +11,7 @@ import {
   applyEscalations,
   keywordTriage,
   localTriage as localTriageBase,
+  prankMismatchFlag,
   priorityFromSeverity,
   scoreOf,
   severityBandCeiling,
@@ -21,6 +22,7 @@ import type { TriageResult } from './triage-local.ts';
 export {
   applyEscalations,
   keywordTriage,
+  prankMismatchFlag,
   priorityFromSeverity,
   scoreOf,
   severityBandCeiling,

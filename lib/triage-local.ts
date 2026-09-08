@@ -15,7 +15,7 @@ const ESCALATIONS = [
   { re: /\b(unconscious|unresponsive|passed out|collapsed|behosh)\b|बेहोश/i,
     score: 88, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Unresponsive casualty',
     type: 'medical_emergency', subtype: 'unresponsive patient' },
-  { re: /\b(not breathing|drowning|choking|overdose|saans nahi)\b|सांस नहीं/i,
+  { re: /\b(not breathing|drowning|choking|overdose|saans nahi|saans? ruk)\b|सांस नहीं|सांस रुक/i,
     score: 93, specificity: 1, label: 'MEDICAL_EMERGENCY', threat: 'Airway/breathing compromise',
     type: 'medical_emergency', subtype: 'respiratory emergency' },
   { re: /\bheat\s*stroke\b/i,
@@ -80,6 +80,11 @@ function cleanSpokenLocation(value: string): string | undefined {
 
 function extractSpokenLocation(transcript: string): string | undefined {
   const patterns = [
+    // A named city with a sector/phase/block wins over generic landmarks:
+    // "Noida Sector 62 mein" must not collapse to "Atlanti ke paas".
+    /\b((?:greater\s+noida|noida|ghaziabad|gurugram|gurgaon|faridabad|delhi|rohini|pitampura)\s+(?:sector|block|phase)\s*\d+[a-z]?)\b/iu,
+    // Same sectors spoken city-last: "Sector 62 Noida mein".
+    /\b((?:sector|block|phase)\s*\d+[a-z]?\s+(?:greater\s+noida|noida|ghaziabad|gurugram|gurgaon|faridabad|delhi|rohini|pitampura))\b/iu,
     /\baddress\s+([^,.!?\n]+?)(?=\s+(?:hai|hain|is)\b|[,\.!?\n]|$)/iu,
     /\b(?:main|hum|ham)\s+([^.!?\n]+?)\s+ke\s+(?:saamne|samne|bahar|baahar|peeche)\s+(?:hoon|hun|hain|hai)\b/iu,
     /(?:मैं|हम)\s+([^।.!?\n]+?)\s+के\s+(?:सामने|बाहर|पीछे)\s+(?:हूँ|हूं|हैं|है)/u,
@@ -267,4 +272,39 @@ export function severityBandCeiling(score: number): number {
   if (score >= 60) return 79;
   if (score >= 40) return 59;
   return 39;
+}
+
+/** Emotions whose dominance, with low distress, suggests the caller is
+ *  relaxed rather than in an emergency. Keys are lowercase. */
+const COMPOSED_EMOTIONS = new Set([
+  'calmness',
+  'amusement',
+  'excitement',
+  'interest',
+  'admiration',
+  'joy',
+]);
+
+/**
+ * @description Prosody-content mismatch flag: measured Hume prosody that is
+ *              composed and undistressed while the deterministic rules graded
+ *              the incident low or medium is the signature of a probable prank
+ *              or nuisance call. This only ever ANNOTATES the card for the
+ *              operator — it can never lower severity, and it is never raised
+ *              on high/critical content, where calm words about a
+ *              life-threatening situation must still grade critically (an
+ *              unemotional reporter describing "no breathing" is common and
+ *              must not be dismissed).
+ */
+export function prankMismatchFlag(
+  severity: string,
+  distress: number | null,
+  topEmotion: string | undefined,
+): string | null {
+  if (distress === null || !topEmotion) return null;
+  if (severity !== 'low' && severity !== 'medium') return null;
+  if (distress >= 25) return null;
+  return COMPOSED_EMOTIONS.has(topEmotion.toLowerCase())
+    ? 'POSSIBLE_PRANK_PROSODY_MISMATCH'
+    : null;
 }
