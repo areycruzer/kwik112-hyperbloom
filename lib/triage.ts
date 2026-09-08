@@ -268,11 +268,26 @@ export function sanitizeModelExtraction(raw: unknown, transcript: string): Triag
   const persons = model.persons_involved as Record<string, unknown> | undefined;
   const address = str(location?.address, 240);
   const city = str(location?.city, 120);
+  // This is a bounded evidence check, not semantic fact verification. Model
+  // location strings must occur in caller evidence after case/punctuation cleanup.
+  const normalizeEvidence = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const evidence = ` ${normalizeEvidence(transcript)} `;
+  const grounded = (value: string) => evidence.includes(` ${normalizeEvidence(value)} `);
+  const locationGrounded = (!address || grounded(address)) && (!city || grounded(city));
+  const modelCount = Math.round(num(persons?.count, 0, 999, 1));
+  const localCount = fallback.extraction.persons_involved.count;
+  const countGrounded = modelCount === localCount || new RegExp(
+    `\\b${modelCount}\\s+(?:(?:injured|trapped|hurt|wounded)\\s+)?(?:people|persons?|patients?|victims?|passengers?|children|log|aadmi|mahila|bachche)\\b`, 'iu',
+  ).test(transcript);
+  const evidenceFlags = [
+    ...(!locationGrounded ? ['MODEL_LOCATION_UNGROUNDED'] : []),
+    ...(!countGrounded ? ['MODEL_COUNT_UNGROUNDED'] : []),
+  ];
 
   const result: TriageResult = {
     method: 'model',
     labels: strArray(model.labels),
-    flags: strArray(model.flags),
+    flags: [...new Set([...strArray(model.flags), ...evidenceFlags])],
     extraction: {
       incident_type: type,
       incident_subtype:
@@ -280,15 +295,15 @@ export function sanitizeModelExtraction(raw: unknown, transcript: string): Triag
         str(model.incident_type, 120) ??
         fallback.extraction.incident_subtype,
       severity: severityFromScore(score),
-      location: {
+      location: locationGrounded && (address || city) ? {
         address: address ?? city,
-        landmarks: strArray(location?.landmarks),
+        landmarks: strArray(location?.landmarks).filter(grounded),
         city,
         confidence: num(location?.confidence, 0, 1, 0),
-      },
+      } : structuredClone(fallback.extraction.location),
       persons_involved: {
-        count: Math.round(num(persons?.count, 0, 999, 1)),
-        injuries: Boolean(persons?.injuries),
+        count: Math.max(localCount, countGrounded ? modelCount : localCount),
+        injuries: fallback.extraction.persons_involved.injuries || Boolean(persons?.injuries),
         descriptions: strArray(persons?.descriptions),
       },
       immediate_threats: strArray(model.immediate_threats),
@@ -315,10 +330,27 @@ export function enforceLocalSafetyFloor(
   const guarded = structuredClone(modelResult);
   const localScore = scoreOf(localResult);
   const modelScore = scoreOf(guarded);
-  if (modelScore >= localScore) return guarded;
-
-  (guarded as TriageResult & { severityScore: number }).severityScore = localScore;
-  guarded.extraction.severity = severityFromScore(localScore);
+  if (modelScore < localScore) {
+    (guarded as TriageResult & { severityScore: number }).severityScore = localScore;
+    guarded.extraction.severity = severityFromScore(localScore);
+  }
+  // applyEscalations may already have equalized the scores while the model
+  // still says OTHER. Preserve the local response type independently of score.
+  if (localScore >= 60 && localResult.extraction.incident_type !== 'other' &&
+      guarded.extraction.incident_type !== localResult.extraction.incident_type) {
+    const modelResponseLabel: Record<string, string> = {
+      medical_emergency: 'MEDICAL_EMERGENCY', fire: 'FIRE_EMERGENCY',
+      accident: 'TRAFFIC_INCIDENT', crime: 'VIOLENT_CRIME',
+    };
+    const retained = modelResponseLabel[guarded.extraction.incident_type];
+    if (retained && !guarded.labels.includes(retained)) guarded.labels.push(retained);
+    guarded.extraction.incident_type = localResult.extraction.incident_type;
+    guarded.extraction.incident_subtype = localResult.extraction.incident_subtype;
+    if (!guarded.flags.includes('LOCAL_RESPONSE_PRESERVED')) guarded.flags.push('LOCAL_RESPONSE_PRESERVED');
+  }
+  guarded.labels = [...new Set([...guarded.labels, ...localResult.labels])];
+  guarded.extraction.persons_involved.count = Math.max(guarded.extraction.persons_involved.count, localResult.extraction.persons_involved.count);
+  guarded.extraction.persons_involved.injuries ||= localResult.extraction.persons_involved.injuries;
   for (const threat of localResult.extraction.immediate_threats) {
     if (!guarded.extraction.immediate_threats.includes(threat)) {
       guarded.extraction.immediate_threats.push(threat);
@@ -431,8 +463,29 @@ export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
     add('police', 'Traffic Police', 'Traffic control and access management');
     if (critical) add('rescue', 'Rescue Tender', 'Extrication support for critical collision');
   } else if (type === 'public_safety') {
+    if (severity === 'high' || critical) add('fire', 'Fire & Rescue Tender', `Hazard response: ${reasonText}`);
+    if (critical) add('ems', 'Advanced Life Support Ambulance', 'Medical standby for critical public-safety incident');
     add('civic', 'Municipal Response Unit', `Public safety response: ${reasonText}`);
     if (severity === 'high') add('police', 'Police Patrol', 'Perimeter and public-safety support');
+  }
+
+  // Local labels retain independently recognized hazards when the primary
+  // incident type differs; a model may add a response but cannot erase one.
+  const hasLabel = (...labels: string[]) => labels.some((label) => triage.labels.includes(label));
+  const addService = (service: DispatchPlan['units'][number]['service'], unit: string, reason: string) => {
+    if (!units.some((entry) => entry.service === service)) add(service, unit, reason);
+  };
+  if (hasLabel('MEDICAL_EMERGENCY', 'TRAUMA_EMERGENCY', 'TRAFFIC_INCIDENT')) {
+    addService('ems', critical ? 'Advanced Life Support Ambulance' : 'Nearest Ambulance', 'Medical response retained for a recognized casualty risk');
+  }
+  if (hasLabel('FIRE_EMERGENCY', 'HAZMAT')) {
+    addService('fire', 'Fire Engine', 'Fire/hazard response retained for a recognized hazard');
+  }
+  if (hasLabel('FIRE_EMERGENCY') || (critical && hasLabel('TRAFFIC_INCIDENT'))) {
+    addService('rescue', 'Rescue Tender', 'Rescue support retained for a recognized fire or collision risk');
+  }
+  if (hasLabel('VIOLENT_CRIME', 'TRAFFIC_INCIDENT')) {
+    addService('police', 'Police Patrol', 'Scene safety and access support retained for a recognized hazard');
   }
 
   if (units.length === 0) {
@@ -443,7 +496,7 @@ export function recommendDispatchPlan(triage: TriageResult): DispatchPlan {
     priority_code,
     units,
     eta_risk: critical ? 'high' : severity === 'high' ? 'medium' : 'low',
-    operator_confirmation_required: critical || (triage.extraction.location.confidence ?? 0) < 0.5,
+    operator_confirmation_required: critical || (type === 'public_safety' && severity === 'high') || (triage.extraction.location.confidence ?? 0) < 0.5,
   };
 }
 

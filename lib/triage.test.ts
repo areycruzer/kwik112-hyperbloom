@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   TRIAGE_SYSTEM_PROMPT,
+  applyEscalations,
   buildOperatorQuestions,
   buildSafetyAudit,
   buildTranscriptEnvelope,
@@ -426,4 +427,74 @@ test('the stopped-breathing Hindi variant escalates to critical', async () => {
     const result = localTriage(`meri patni ka ${phrase}, jaldi aao`);
     assert.equal(result.extraction.severity, 'critical', `phrase must escalate: ${phrase}`);
   }
+});
+
+function modelPayload(transcript: string, changes: Record<string, unknown> = {}) {
+  const local = localTriage(transcript);
+  return { ...local.extraction, severity_score: 25, severity: 'low', labels: [], flags: [], ...changes };
+}
+
+test('equalized model score cannot erase locally recognized medical response or threats', () => {
+  const transcript = 'My father has no pulse near Rohini Delhi.';
+  const local = localTriage(transcript);
+  const model = sanitizeModelExtraction(modelPayload(transcript, { incident_type: 'other', incident_subtype: 'general assistance', immediate_threats: [] }), transcript);
+  const escalated = applyEscalations(model, transcript);
+  const guarded = enforceLocalSafetyFloor(escalated, local);
+  assert.equal(guarded.extraction.incident_type, 'medical_emergency');
+  assert.ok(local.extraction.immediate_threats.every(threat => guarded.extraction.immediate_threats.includes(threat)));
+  assert.equal(recommendDispatchPlan(guarded).units[0].service, 'ems');
+});
+
+test('model grounding rejects fabricated address and count while preserving local injuries', () => {
+  const transcript = 'My father has no pulse near Rohini Delhi.';
+  const result = sanitizeModelExtraction(modelPayload(transcript, { location: { address: '88 Marine Drive Mumbai', city: 'Mumbai', confidence: 0.99 }, persons_involved: { count: 88, injuries: false } }), transcript);
+  assert.equal(result.extraction.location.address, localTriage(transcript).extraction.location.address);
+  assert.notEqual(result.extraction.location.city, 'Mumbai');
+  assert.equal(result.extraction.persons_involved.count, 1);
+  assert.equal(result.extraction.persons_involved.injuries, true);
+  assert.ok(result.flags.some(flag => /UNGROUNDED/.test(flag)));
+});
+
+test('model grounding retains explicit normalized caller address and larger evidenced count', () => {
+  const transcript = 'At 12, Ring Road Delhi there are 12 injured passengers after a crash.';
+  const result = sanitizeModelExtraction(modelPayload(transcript, { location: { address: '12 Ring Road Delhi', city: 'Delhi', confidence: 0.8 }, persons_involved: { count: 12, injuries: true } }), transcript);
+  assert.equal(result.method, 'model');
+  assert.equal(result.extraction.location.address, '12 Ring Road Delhi');
+  assert.equal(result.extraction.persons_involved.count, 12);
+});
+
+test('gas hazard dispatch plan includes the fire response shown in recommendations', () => {
+  const triage = localTriage('There is a smell of gas from an LPG cylinder near Rohini.');
+  assert.equal(triage.extraction.incident_type, 'public_safety');
+  assert.equal(triage.extraction.severity, 'high');
+  const plan = recommendDispatchPlan(triage);
+  assert.ok(plan.units.some(unit => unit.service === 'fire'));
+  assert.equal(plan.operator_confirmation_required, true);
+});
+
+test('preserving local medical routing does not erase an additional model fire response', () => {
+  const transcript = 'My father has no pulse near Rohini.';
+  const local = localTriage(transcript);
+  const model = structuredClone(local);
+  model.extraction.incident_type = 'fire';
+  model.extraction.incident_subtype = 'fire response';
+  model.labels = ['FIRE_EMERGENCY'];
+  const guarded = enforceLocalSafetyFloor(model, local);
+  const services = recommendDispatchPlan(guarded).units.map(unit => unit.service);
+  assert.equal(guarded.extraction.incident_type, 'medical_emergency');
+  assert.ok(services.includes('ems'));
+  assert.ok(services.includes('fire'));
+});
+
+test('armed suspect and model-recognized blaze retain police and fire services together', () => {
+  const transcript = 'An armed suspect set the curtains ablaze at Rohini Delhi.';
+  const local = localTriage(transcript);
+  const model = sanitizeModelExtraction(modelPayload(transcript, { incident_type: 'fire', incident_subtype: 'curtains ablaze', severity: 'critical', severity_score: 95, labels: [] }), transcript);
+  const result = enforceLocalSafetyFloor(model, local);
+  const services = recommendDispatchPlan(result).units.map(unit => unit.service);
+  assert.equal(result.extraction.incident_type, 'crime');
+  assert.ok(services.includes('police'));
+  assert.ok(services.includes('fire'));
+  assert.ok(services.includes('ems'));
+  assert.ok(services.includes('rescue'));
 });
