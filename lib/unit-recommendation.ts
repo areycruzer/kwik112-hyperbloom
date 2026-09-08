@@ -28,7 +28,11 @@ const STANDARD_RESPONSE: Record<string, string[]> = {
   medical_emergency: ['ALS Ambulance', 'Nearest Patrol Assist'],
   accident: ['ALS Ambulance', 'Highway Patrol', 'Rescue Tender'],
   crime: ['Police Patrol', 'Supervisor Escalation'],
-  public_safety: ['Municipal Response Unit', 'Police Patrol'],
+  // Building collapse, gas leak, waterlogging, downed power lines — in Indian
+  // cities these are fire-and-rescue work first. This bucket used to summon a
+  // municipal van and a police patrol, so a building collapse with families
+  // trapped under debris was proposed no rescue appliance at all.
+  public_safety: ['Fire & Rescue Tender', 'Municipal Response Unit', 'Police Patrol'],
 };
 
 /**

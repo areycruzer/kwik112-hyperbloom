@@ -38,18 +38,29 @@ export interface TacticalUnit {
 }
 
 /**
- * Mock First Responder Fleet positioned around north-west Delhi (Rohini and
- * its surrounds), matching the incident coordinates the demo data uses.
+ * Mock First Responder Fleet.
+ *
+ * The console serves incidents in nine cities, so the fleet is in nine cities.
+ * It used to be Delhi-only while the demo data spanned the country, which meant
+ * a Kolkata building collapse was assured against a Delhi appliance and the
+ * console reported a 3,039-minute ETA — fifty hours — with a straight face.
+ * Response assurance exists to catch a late response; measuring one against a
+ * fleet 1,300 km away is not a check, it is noise. See the coverage test in
+ * lib/units.test.ts, which fails if an incident city loses its units.
  *
  * Naming follows the real services, in the words they use themselves:
- *   - PCR Van            → Delhi Police's Police Control Room response vehicle.
- *   - Fire Tender        → Delhi Fire Service's standard pumping appliance.
- *   - Hydraulic Platform → DFS aerial appliance; what reaches a fourth floor.
- *   - Ambulance / ALS    → CATS, the Centralised Accident & Trauma Services,
- *                          Delhi's public ambulance fleet. "ALS" is its
- *                          advanced life-support variant.
+ *   - PCR Van            → Police Control Room response vehicle.
+ *   - Fire / Rescue Tender, Hydraulic Platform → the fire service's pumping,
+ *     technical-rescue and aerial appliances.
+ *   - Ambulance / ALS    → the state ambulance service. Delhi runs CATS; most
+ *     states run the 108 service.
+ *
+ * Every city outside Delhi carries one rescue-capable tender rather than
+ * separate fire and rescue appliances: a rescue tender does both, and a
+ * `rescue` request with no capable unit anywhere reports as uncovered.
  */
 export const TACTICAL_UNITS: TacticalUnit[] = [
+  // ---- Delhi (Rohini and surrounds) --------------------------------------
   { id: 'PCR-11', callsign: 'PCR Van 11', agency: 'Delhi Police', type: 'police', capabilities: ['police'], lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
   // Rolling at 48 km/h but uncommitted — returning to station. It is 'available',
   // not 'en-route': see the status invariant below.
@@ -59,6 +70,46 @@ export const TACTICAL_UNITS: TacticalUnit[] = [
   { id: 'CATS-302', callsign: 'Ambulance 302', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
   { id: 'PCR-24', callsign: 'PCR Van 24', agency: 'Delhi Police', type: 'police', capabilities: ['police'], lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
   { id: 'CATS-309', callsign: 'ALS Ambulance 309', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
+
+  // ---- Mumbai -------------------------------------------------------------
+  { id: 'MUM-PCR-51', callsign: 'PCR Van 51', agency: 'Mumbai Police', type: 'police', capabilities: ['police'], lat: 18.9380, lng: 72.8280, status: 'available', speed: '0 km/h' },
+  { id: 'MUM-FIRE-52', callsign: 'Rescue Tender 52', agency: 'Mumbai Fire Brigade', type: 'fire', capabilities: ['fire', 'rescue'], lat: 18.9560, lng: 72.8410, status: 'available', speed: '0 km/h' },
+  { id: 'MUM-EMS-53', callsign: 'Ambulance 53', agency: '108 Ambulance · Maharashtra', type: 'ems', capabilities: ['ems', 'als'], lat: 18.9420, lng: 72.8250, status: 'available', speed: '0 km/h' },
+
+  // ---- Bengaluru ----------------------------------------------------------
+  { id: 'BLR-PCR-61', callsign: 'PCR Van 61', agency: 'Bengaluru City Police', type: 'police', capabilities: ['police'], lat: 12.9250, lng: 77.6150, status: 'available', speed: '0 km/h' },
+  { id: 'BLR-FIRE-62', callsign: 'Rescue Tender 62', agency: 'Karnataka Fire & Emergency Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 12.9100, lng: 77.6320, status: 'available', speed: '0 km/h' },
+  { id: 'BLR-EMS-63', callsign: 'Ambulance 63', agency: '108 Ambulance · Karnataka', type: 'ems', capabilities: ['ems', 'als'], lat: 12.9210, lng: 77.6100, status: 'available', speed: '0 km/h' },
+
+  // ---- Kolkata ------------------------------------------------------------
+  { id: 'KOL-PCR-71', callsign: 'PCR Van 71', agency: 'Kolkata Police', type: 'police', capabilities: ['police'], lat: 22.5800, lng: 88.3560, status: 'available', speed: '0 km/h' },
+  { id: 'KOL-FIRE-72', callsign: 'Rescue Tender 72', agency: 'West Bengal Fire Service', type: 'fire', capabilities: ['fire', 'rescue'], lat: 22.5660, lng: 88.3720, status: 'available', speed: '0 km/h' },
+  { id: 'KOL-EMS-73', callsign: 'Ambulance 73', agency: 'West Bengal EMS', type: 'ems', capabilities: ['ems', 'als'], lat: 22.5760, lng: 88.3500, status: 'available', speed: '0 km/h' },
+
+  // ---- Chennai ------------------------------------------------------------
+  { id: 'MAA-PCR-81', callsign: 'PCR Van 81', agency: 'Chennai City Police', type: 'police', capabilities: ['police'], lat: 13.0570, lng: 80.2750, status: 'available', speed: '0 km/h' },
+  { id: 'MAA-FIRE-82', callsign: 'Rescue Tender 82', agency: 'Tamil Nadu Fire & Rescue Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 13.0430, lng: 80.2900, status: 'available', speed: '0 km/h' },
+  { id: 'MAA-EMS-83', callsign: 'Ambulance 83', agency: '108 Ambulance · Tamil Nadu', type: 'ems', capabilities: ['ems', 'als'], lat: 13.0540, lng: 80.2690, status: 'available', speed: '0 km/h' },
+
+  // ---- Hyderabad ----------------------------------------------------------
+  { id: 'HYD-PCR-91', callsign: 'PCR Van 91', agency: 'Hyderabad City Police', type: 'police', capabilities: ['police'], lat: 17.4550, lng: 78.3610, status: 'available', speed: '0 km/h' },
+  { id: 'HYD-FIRE-92', callsign: 'Rescue Tender 92', agency: 'Telangana Fire Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 17.4400, lng: 78.3760, status: 'available', speed: '0 km/h' },
+  { id: 'HYD-EMS-93', callsign: 'Ambulance 93', agency: '108 Ambulance · Telangana', type: 'ems', capabilities: ['ems', 'als'], lat: 17.4510, lng: 78.3550, status: 'available', speed: '0 km/h' },
+
+  // ---- Pune ---------------------------------------------------------------
+  { id: 'PNQ-PCR-101', callsign: 'PCR Van 101', agency: 'Pune City Police', type: 'police', capabilities: ['police'], lat: 18.5280, lng: 73.8490, status: 'available', speed: '0 km/h' },
+  { id: 'PNQ-FIRE-102', callsign: 'Rescue Tender 102', agency: 'Maharashtra Fire Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 18.5130, lng: 73.8640, status: 'available', speed: '0 km/h' },
+  { id: 'PNQ-EMS-103', callsign: 'Ambulance 103', agency: '108 Ambulance · Maharashtra', type: 'ems', capabilities: ['ems', 'als'], lat: 18.5240, lng: 73.8430, status: 'available', speed: '0 km/h' },
+
+  // ---- Ahmedabad ----------------------------------------------------------
+  { id: 'AMD-PCR-111', callsign: 'PCR Van 111', agency: 'Ahmedabad City Police', type: 'police', capabilities: ['police'], lat: 23.0330, lng: 72.5620, status: 'available', speed: '0 km/h' },
+  { id: 'AMD-FIRE-112', callsign: 'Rescue Tender 112', agency: 'Gujarat Fire Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 23.0190, lng: 72.5770, status: 'available', speed: '0 km/h' },
+  { id: 'AMD-EMS-113', callsign: 'Ambulance 113', agency: '108 Ambulance · Gujarat', type: 'ems', capabilities: ['ems', 'als'], lat: 23.0290, lng: 72.5560, status: 'available', speed: '0 km/h' },
+
+  // ---- Jaipur -------------------------------------------------------------
+  { id: 'JAI-PCR-121', callsign: 'PCR Van 121', agency: 'Rajasthan Police', type: 'police', capabilities: ['police'], lat: 26.9310, lng: 75.8190, status: 'available', speed: '0 km/h' },
+  { id: 'JAI-FIRE-122', callsign: 'Rescue Tender 122', agency: 'Rajasthan Fire Services', type: 'fire', capabilities: ['fire', 'rescue'], lat: 26.9170, lng: 75.8340, status: 'available', speed: '0 km/h' },
+  { id: 'JAI-EMS-123', callsign: 'Ambulance 123', agency: '108 Ambulance · Rajasthan', type: 'ems', capabilities: ['ems', 'als'], lat: 26.9270, lng: 75.8130, status: 'available', speed: '0 km/h' },
 ];
 
 /* ---- STATUS INVARIANT -----------------------------------------------------
