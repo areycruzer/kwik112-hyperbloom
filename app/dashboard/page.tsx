@@ -56,7 +56,7 @@ import { Chip, DataRow } from '@/components/ui/panel';
 import { DistressMeter } from '@/components/DistressMeter';
 import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
 import { UnitRoster } from '@/components/UnitRoster';
-import { TACTICAL_UNITS, etaLabel, haversineKm } from '@/lib/units';
+import { TACTICAL_UNITS, etaLabel, haversineKm, localFleet } from '@/lib/units';
 import { releaseUnit, reserveUnits } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
@@ -406,8 +406,33 @@ export default function DashboardPage() {
     : null;
   const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
 
+  /**
+   * The units on screen for the open incident. A dispatcher working a Delhi
+   * call has no business reading Karnataka's appliances, so the roster and the
+   * map show local cover only — everything else is noise that pushes the units
+   * that can actually respond off the bottom of the panel.
+   *
+   * A unit committed to THIS call stays visible wherever it came from: mutual
+   * aid has to remain recallable, and a unit you cannot see is a unit you
+   * cannot stand down.
+   */
+  const localCover = useMemo(() => {
+    const point = selectedCall?.caller_location;
+    if (typeof point?.latitude !== 'number' || typeof point?.longitude !== 'number') {
+      return { units: operationalUnits, mutualAid: false, radiusKm: 0 };
+    }
+    const local = localFleet(operationalUnits, point.latitude, point.longitude);
+    const shown = new Set(local.units.map((unit) => unit.id));
+    const committed = operationalUnits.filter(
+      (unit) => unit.assignedCallId === selectedCall?.id && !shown.has(unit.id),
+    );
+    return { ...local, units: [...local.units, ...committed] };
+  }, [operationalUnits, selectedCall]);
+
+  const visibleUnits = localCover.units;
+
   // Everything the dispatch action bar needs about the current pairing.
-  const selectedUnit = operationalUnits.find((unit) => unit.id === selectedUnitId) ?? null;
+  const selectedUnit = visibleUnits.find((unit) => unit.id === selectedUnitId) ?? null;
   const selectedUnitAssignedHere =
     !!selectedUnit && !!selectedCall && selectedUnit.assignedCallId === selectedCall.id;
   const selectedUnitCommittedElsewhere =
@@ -728,7 +753,7 @@ export default function DashboardPage() {
               <div className="relative min-w-0 flex-1">
                 <EmergencyMap
                   calls={calls}
-                  units={operationalUnits}
+                  units={visibleUnits}
                   selectedCallId={selectedCall?.id || null}
                   onMarkerClick={handleMarkerClick}
                   onDispatchUnit={handleDispatchUnit}
@@ -772,10 +797,15 @@ export default function DashboardPage() {
                   <div className="flex shrink-0 items-start justify-between gap-3 border-b border-rule-strong px-3 py-2.5">
                     <div>
                       <h2 className="text-sm font-semibold text-ink">Response units</h2>
+                      {/* Say why the list is short. Filtering the fleet
+                          silently would leave a dispatcher wondering where the
+                          rest of it went. */}
                       <p className="mt-0.5 text-2xs text-ink-4">
-                        {selectedCall?.caller_location?.address
-                          ? `Distance to ${selectedCall.caller_location.address}`
-                          : 'Select an incident to compare distance'}
+                        {!selectedCall?.caller_location?.address
+                          ? 'Select an incident to compare distance'
+                          : localCover.mutualAid
+                            ? `No local cover — nearest units to ${selectedCall.caller_location.address}`
+                            : `Within ${localCover.radiusKm} km of ${selectedCall.caller_location.address}`}
                       </p>
                     </div>
                     <button
@@ -789,7 +819,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto p-2">
                     <UnitRoster
-                      units={operationalUnits}
+                      units={visibleUnits}
                       selectedCall={selectedCall ?? null}
                       selectedUnitId={selectedUnitId}
                       onSelectUnit={handleSelectUnit}

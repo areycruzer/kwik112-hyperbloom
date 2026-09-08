@@ -76,6 +76,13 @@ export default function AlertsModule({
     );
   }, [calls]);
 
+  // An alert carries only a callId, so the row needs the call to name it.
+  const callsById = useMemo(() => {
+    const map = new Map<string, EmergencyCall>();
+    for (const call of calls) map.set(call.id, call);
+    return map;
+  }, [calls]);
+
   const open = alerts.filter((a) => !acks.has(a.key));
   const acknowledged = alerts.filter((a) => acks.has(a.key));
 
@@ -98,10 +105,12 @@ export default function AlertsModule({
         {/* Header */}
         <div className="flex items-baseline justify-between gap-3">
           <div>
+            {/* The subtitle used to describe the implementation — "computed
+                from live call state, never seeded" — which is a fact about the
+                code, not about the incidents an operator has to clear. */}
             <h1 className="text-lg font-semibold text-ink">Operational alerts</h1>
             <p className="mt-0.5 text-sm text-ink-3">
-              Computed from live call state, never seeded. Clears as incidents are located,
-              assigned, and resolved.
+              Incidents needing attention now. Each clears as it is located, assigned or resolved.
             </p>
           </div>
           <span className="tnum shrink-0 text-lg font-semibold text-mild">{open.length}</span>
@@ -122,6 +131,7 @@ export default function AlertsModule({
                   <AlertRow
                     key={alert.key}
                     alert={alert}
+                    incident={callsById.get(alert.callId)}
                     onSelectCall={onSelectCall}
                     onAck={() => handleAck(alert.key)}
                   />
@@ -131,24 +141,33 @@ export default function AlertsModule({
           </div>
         </section>
 
-        {/* Acknowledged alerts — collapsed into their own section, not removed */}
+        {/* Acknowledged alerts — collapsed into their own section, not removed,
+            so an operator can still see what was cleared. Hidden entirely while
+            empty: a bordered panel whose only content is "nothing acknowledged
+            yet" is furniture. */}
+        {acknowledged.length > 0 && (
         <section className="rounded-md border border-rule-strong bg-panel">
           <div className="flex items-center justify-between gap-2 border-b border-rule px-3 py-2">
             <span className="label">Acknowledged</span>
             <span className="tnum text-2xs text-ink-4">{acknowledged.length}</span>
           </div>
           <div className="p-2">
-            {acknowledged.length === 0 ? (
-              <p className="p-3 text-sm text-ink-3">Nothing acknowledged yet.</p>
-            ) : (
+            {(
               <ul className="flex flex-col gap-2">
                 {acknowledged.map((alert) => (
-                  <AlertRow key={alert.key} alert={alert} onSelectCall={onSelectCall} acknowledged />
+                  <AlertRow
+                    key={alert.key}
+                    alert={alert}
+                    incident={callsById.get(alert.callId)}
+                    onSelectCall={onSelectCall}
+                    acknowledged
+                  />
                 ))}
               </ul>
             )}
           </div>
         </section>
+        )}
       </div>
     </div>
   );
@@ -156,11 +175,14 @@ export default function AlertsModule({
 
 function AlertRow({
   alert,
+  incident,
   onSelectCall,
   onAck,
   acknowledged,
 }: {
   alert: Alert;
+  /** The call this alert is about, so the row can name it. */
+  incident?: EmergencyCall;
   onSelectCall?: (id: string) => void;
   onAck?: () => void;
   acknowledged?: boolean;
@@ -174,13 +196,21 @@ function AlertRow({
     >
       <Chip tone={severityTone(alert.severity)}>{alert.severity}</Chip>
 
+      {/* The incident, then what is wrong with it. This row used to lead with
+          the rule's own enum (P1_UNASSIGNED) over a sentence that restated both
+          the enum and the severity already shown in the chip — so three
+          simultaneous critical alerts rendered as three identical rows, and an
+          operator could not tell which incident any of them was about. */}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-wide text-ink-3">
-            {alert.code}
-          </span>
-        </div>
-        <p className="mt-0.5 text-sm text-ink-2">{alert.message}</p>
+        <p className="truncate text-sm font-medium capitalize text-ink">
+          {incident?.incident_subtype || incident?.incident_type || `Incident ${alert.callId}`}
+        </p>
+        <p className="mt-0.5 text-sm text-ink-2">
+          {alert.message}
+          {incident?.caller_location?.address && (
+            <span className="text-ink-4"> · {incident.caller_location.address}</span>
+          )}
+        </p>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">

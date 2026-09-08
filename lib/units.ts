@@ -220,6 +220,67 @@ export function etaLabel(
   return minutes === 0 ? 'On scene' : `${minutes} min`;
 }
 
+/* ---- LOCAL COVER ----------------------------------------------------------
+ * A dispatcher working a Delhi incident has no business reading Karnataka's
+ * appliances. The roster and the map show the units that could actually
+ * respond, which is a question of geography, not of the whole fleet.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * How far a unit can be and still count as local cover, in km.
+ *
+ * Sized to hold a metro region together while keeping neighbouring cities
+ * apart. Delhi NCR spans roughly 50 km end to end, so a smaller radius would
+ * cut the capital's own outer incidents off from its fleet; the closest pair of
+ * served cities is Mumbai and Pune at about 118 km, so a larger one would start
+ * offering Pune's tenders to a Mumbai fire.
+ */
+export const LOCAL_COVER_RADIUS_KM = 80;
+
+export interface LocalFleet {
+  /** Units that can respond, nearest first. */
+  units: TacticalUnit[];
+  /**
+   * True when nothing was in range and these are simply the nearest units in
+   * the country. That is a mutual-aid situation and the UI has to say so —
+   * silently showing a 400 km appliance as though it were local is how a
+   * dispatcher ends up promising an arrival that cannot happen.
+   */
+  mutualAid: boolean;
+  radiusKm: number;
+}
+
+/**
+ * @description The units worth showing for an incident at this point: those
+ *              within `radiusKm`, nearest first.
+ *
+ *              Never returns an empty roster. An incident outside every covered
+ *              region falls back to the nearest `fallbackCount` units with
+ *              `mutualAid` set, because "no units" and "no units nearby" are
+ *              different answers and only one of them is true.
+ */
+export function localFleet(
+  units: readonly TacticalUnit[],
+  lat: number,
+  lng: number,
+  radiusKm: number = LOCAL_COVER_RADIUS_KM,
+  fallbackCount = 3,
+): LocalFleet {
+  const byDistance = units
+    .map((unit) => ({ unit, km: haversineKm(unit.lat, unit.lng, lat, lng) }))
+    .sort((a, b) => a.km - b.km);
+
+  const inRange = byDistance.filter((entry) => entry.km <= radiusKm);
+  if (inRange.length > 0) {
+    return { units: inRange.map((e) => e.unit), mutualAid: false, radiusKm };
+  }
+  return {
+    units: byDistance.slice(0, fallbackCount).map((e) => e.unit),
+    mutualAid: byDistance.length > 0,
+    radiusKm,
+  };
+}
+
 /* ---- ROUTE FALLBACK -------------------------------------------------------
  * The situational map draws a responder vector from a unit to the selected
  * incident. assessDispatch can only nominate a unit when the call carries a

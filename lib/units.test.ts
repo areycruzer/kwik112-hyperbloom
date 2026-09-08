@@ -5,6 +5,8 @@ import {
   etaLabel,
   etaMinutes,
   haversineKm,
+  localFleet,
+  LOCAL_COVER_RADIUS_KM,
   nearestAvailableUnit,
   serviceForIncidentType,
   speedKmh,
@@ -216,4 +218,49 @@ test('technical rescue is covered in every city, not only Delhi', () => {
     );
     assert.ok(capable.length > 0, `${city.name} has no rescue-capable appliance`);
   }
+});
+
+test('a city sees its own units and nobody else’s', () => {
+  // The complaint this fixes: a Delhi incident listed Karnataka's appliances.
+  for (const city of SERVICE_CITIES) {
+    const local = localFleet(TACTICAL_UNITS, city.lat, city.lng);
+    assert.equal(local.mutualAid, false, `${city.name} should have local cover`);
+    assert.ok(local.units.length > 0);
+    for (const unit of local.units) {
+      const km = haversineKm(unit.lat, unit.lng, city.lat, city.lng);
+      assert.ok(km <= LOCAL_COVER_RADIUS_KM, `${unit.id} is ${km.toFixed(0)} km from ${city.name}`);
+    }
+    // And every other city's units are excluded.
+    const localIds = new Set(local.units.map((u) => u.id));
+    for (const other of SERVICE_CITIES) {
+      if (other.name === city.name) continue;
+      const otherLocal = localFleet(TACTICAL_UNITS, other.lat, other.lng).units;
+      for (const unit of otherLocal) {
+        assert.ok(
+          !localIds.has(unit.id),
+          `${unit.id} covers both ${city.name} and ${other.name}`,
+        );
+      }
+    }
+  }
+});
+
+test('the radius holds a metro together without reaching the next city', () => {
+  // Delhi NCR spans ~50 km, so its outer incidents must still see the fleet.
+  const outerDelhi = localFleet(TACTICAL_UNITS, 28.5065, 77.175);
+  assert.equal(outerDelhi.mutualAid, false);
+  assert.ok(outerDelhi.units.length > 0);
+
+  // Mumbai and Pune are the closest served pair (~118 km) and must not share.
+  const mumbai = new Set(localFleet(TACTICAL_UNITS, 18.9476, 72.8343).units.map((u) => u.id));
+  const pune = localFleet(TACTICAL_UNITS, 18.5204, 73.8567).units.map((u) => u.id);
+  assert.ok(pune.every((id) => !mumbai.has(id)), 'Pune and Mumbai must not share cover');
+});
+
+test('an incident outside every region falls back to mutual aid, never to nothing', () => {
+  // Mid-Bay-of-Bengal. "No units" and "no units nearby" are different answers.
+  const adrift = localFleet(TACTICAL_UNITS, 15.0, 87.0);
+  assert.equal(adrift.mutualAid, true);
+  assert.ok(adrift.units.length > 0, 'the roster must never be empty');
+  assert.ok(adrift.units.length <= 3);
 });
