@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, ClipboardCheck, Headphones, Mic, Timer } from
 import { VOICE_STATION_HREF } from "@/lib/voice-launch";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/for-judges" },
   title: "For judges — evaluate Kwik 112 in 120 seconds",
   description:
     "Three one-click paths to evaluate Kwik 112: place a call, open the console, reproduce the benchmark. No login, no credentials, no setup.",
@@ -74,7 +75,25 @@ export default function ForJudgesPage() {
             ))}
           </div>
 
-          <h2 className="mt-14 text-lg font-bold">What is real, simulated, or synthetic — in one table</h2>
+          <h2 className="mt-14 text-lg font-bold">Problem</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">India's 112 line carries mostly noise (Telangana: ~0.28% of ~16 lakh daily calls genuine), a 15-second answer standard, and a Supreme Court order (26 May 2026) merging six helplines into one queue. Sourced stats with dates live on the <Link href="/" className="font-semibold text-[#087b91] hover:underline">landing page</Link>.</p>
+
+          <h2 className="mt-10 text-lg font-bold">Working build</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">No login, no credentials, no setup: place a call above, watch the transcript, emotion telemetry, and deterministic grade appear live, then run the three human checkpoints. Every number on /benchmark regenerates from the repository with one command.</p>
+
+          <h2 className="mt-10 text-lg font-bold">Usability</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">The citizen needs no app, no literacy, and no data plan — a phone call in Hindi, Hinglish, or English. The dispatcher gets one pre-graded card per call instead of raw chaos.</p>
+
+          <h2 className="mt-10 text-lg font-bold">Product thinking</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">The AI may escalate severity but can never lower the deterministic floor — enforced in code with regression and prompt-injection tests, not a prompt promise. Emotion can sharpen priority inside a severity band but never cross a band boundary.</p>
+
+          <h2 className="mt-10 text-lg font-bold">End-to-end thinking</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">Voice intake → instant rules grade → optional escalate-only refinement → three human checkpoints with written-note overrides → unit reservation, road-following routes, and a session-local audit trail. Every value carries provenance: local rules / model / fallback; measured / simulated / absent.</p>
+
+          <h2 className="mt-10 text-lg font-bold">Honesty</h2>
+          <p className="mt-2 text-sm leading-6 text-[#555e59]">100% critical recall (9/9) but only 60% type/severity accuracy and 23.3% under-triage — published with denominators and Wilson intervals, reproducible via <code>npm run evaluate:local</code>. The real/simulated/synthetic table below labels every capability. Independent, synthetic-only, disclaimed on every viewport.</p>
+
+          <h2 className="mt-12 text-lg font-bold">What is real, simulated, or synthetic — in one table</h2>
           <p className="mt-2 text-sm text-[#555e59]">Every capability of this build, labelled. The same provenance labels appear inside the product interface.</p>
           <div className="mt-5 overflow-x-auto border border-[#cfd4cf]">
             <table className="w-full min-w-[720px] border-collapse text-left">
@@ -89,6 +108,29 @@ export default function ForJudgesPage() {
                     <td className="p-4 text-sm text-[#555e59]">{detail}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 className="mt-14 text-lg font-bold">Built with Codex — the provider stack, disclosed</h2>
+          <p className="mt-3 max-w-[760px] text-sm leading-6 text-[#555e59]">
+            Codex and coding agents implemented and reviewed the core of this build: the deterministic
+            triage engine and its no-downgrade floor (with regression and prompt-injection tests), the
+            evaluation harness behind every number on <Link href="/benchmark" className="font-semibold text-[#087b91] hover:underline">/benchmark</Link>,
+            the live voice pipeline (a production render-loop was diagnosed and fixed via controlled
+            repro in real Chromium), and this judge package. The dated, commit-linked log is{" "}
+            <a href="https://github.com/areycruzer/kwik-112/blob/main/CODEX_LOG.md" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">CODEX_LOG.md</a> in the repository.
+          </p>
+          <div className="mt-4 overflow-x-auto border border-[#cfd4cf]">
+            <table className="w-full min-w-[600px] border-collapse text-left">
+              <thead className="bg-[#202422] text-white">
+                <tr><th className="w-40 p-3 text-xs uppercase">Layer</th><th className="p-3 text-xs uppercase">Provider</th><th className="p-3 text-xs uppercase">Why</th></tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[#cfd4cf]"><th className="p-3 text-sm">Build tooling</th><td className="p-3 text-sm">Codex + coding agents (OpenAI)</td><td className="p-3 text-sm text-[#555e59]">Implementation and adversarial review; the safety floor is code, not a prompt</td></tr>
+                <tr className="border-t border-[#cfd4cf]"><th className="p-3 text-sm">Voice + prosody</th><td className="p-3 text-sm">Hume EVI</td><td className="p-3 text-sm text-[#555e59]">Live multilingual call-taker with per-utterance emotion measurement</td></tr>
+                <tr className="border-t border-[#cfd4cf]"><th className="p-3 text-sm">Refinement model</th><td className="p-3 text-sm">GLM 4.5 Flash (free tier); any OpenAI-compatible provider via <code>OPENAI_API_KEY</code></td><td className="p-3 text-sm text-[#555e59]">Measured latency at zero cost for the public demo; the deterministic grader is provider-independent — refinement may only escalate</td></tr>
+                <tr className="border-t border-[#cfd4cf]"><th className="p-3 text-sm">Routing</th><td className="p-3 text-sm">OSRM (OpenStreetMap)</td><td className="p-3 text-sm text-[#555e59]">Road-following dispatch routes with a straight-line offline fallback</td></tr>
               </tbody>
             </table>
           </div>
