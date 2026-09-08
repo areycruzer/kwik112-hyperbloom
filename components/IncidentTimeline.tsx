@@ -10,6 +10,13 @@
  *      Here state loads via `readTimeline(call.id)` in an effect keyed on the
  *      call id, so opening a different incident resets the view.
  *
+ * DISPATCH confirms the units the operator actually sent from the response
+ * roster. It used to re-derive its own set from `assessDispatch` at the moment
+ * of confirmation, so a dispatcher who hand-picked Ambulance 302 could confirm
+ * here and silently commit a different set — leaving the audit record
+ * describing a dispatch that never happened. Hand-picked units are the
+ * authority; the derived set is only the fallback when nothing is assigned yet.
+ *
  * The three decision points (INTAKE → DISPATCH → RESOLUTION) come from
  * `lib/timeline.ts`; this component renders them and records operator decisions
  * through `recordDecision`/`writeTimeline`. An override REQUIRES a note — the
@@ -24,9 +31,9 @@ import { EmergencyCall } from '@/lib/types';
 import { Chip, type ChipTone } from '@/components/ui/panel';
 import { Symbol } from '@/components/ui/symbol';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
-import { recommendedUnits } from '@/lib/incident';
+import { recommendedUnits, standardResponseUnits } from '@/lib/incident';
 import { assessDispatch } from '@/lib/dispatch-assurance';
-import { TACTICAL_UNITS } from '@/lib/units';
+import { TACTICAL_UNITS, etaLabel, haversineKm, type TacticalUnit } from '@/lib/units';
 import { releaseUnits, reserveUnits } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { useDialogFocus } from '@/lib/useDialogFocus';
@@ -85,10 +92,17 @@ const ACTION_LABEL: Record<DecisionAction, string> = {
  * hardcoded to a service: a utility incident yields its own summary, units, and
  * threats, never fire/EMS boilerplate.
  */
+/** Projected arrival for a unit against this call, or an em-dash with no fix. */
+function etaForCall(unit: TacticalUnit, call: EmergencyCall): string {
+  const point = call.caller_location;
+  if (typeof point?.latitude !== 'number' || typeof point?.longitude !== 'number') return '—';
+  return etaLabel(unit, haversineKm(unit.lat, unit.lng, point.latitude, point.longitude));
+}
+
 function proposalFor(
   point: DecisionPoint,
   call: EmergencyCall,
-  fleet = TACTICAL_UNITS,
+  fleet: readonly TacticalUnit[] = TACTICAL_UNITS,
   linkedPrimaryCallId?: string | null,
 ): Proposal {
   const summary =
@@ -112,46 +126,86 @@ function proposalFor(
           items: [`Primary incident #${linkedPrimaryCallId}`],
         };
       }
+      // What the operator actually sent, from the response roster. This wins
+      // over anything re-derived here: the record must describe the appliances
+      // that are rolling, not a set recomputed at the moment of confirmation.
+      const dispatched = fleet.filter((unit) => unit.assignedCallId === call.id);
+      if (dispatched.length > 0) {
+        return {
+          heading: `Confirm ${dispatched.length} unit${dispatched.length === 1 ? '' : 's'} dispatched from the roster`,
+          body: 'These units are already assigned to this incident. Confirming records them as the dispatch decision.',
+          items: dispatched.map(
+            (unit) => `${unit.callsign} (${unit.id}) · ETA ${etaForCall(unit, call)}`,
+          ),
+        };
+      }
+
       const assurance = assessDispatch(call, fleet);
       const units = assurance.assignments.map(
         (assignment) =>
           `${assignment.callsign} (${assignment.unit_id}) · ETA ${assignment.eta_minutes} min · ${assignment.status === 'on_target' ? 'ON TARGET' : 'AT RISK'}`,
       );
-      const fallbackUnits = recommendedUnits(call);
 
-      if (!assurance.dispatch_ready) {
+      if (units.length > 0) {
         return {
           heading:
-            assurance.status === 'location_required'
-              ? 'Verify location before dispatch'
-              : assurance.status === 'plan_required'
-                ? 'Create a service-level dispatch plan'
-                : 'Escalate uncovered services before dispatch',
+            assurance.status === 'no_coverage'
+              ? 'Escalate uncovered services before dispatch'
+              : assurance.status === 'at_risk'
+                ? 'Response target at risk · dispatch or escalate now'
+                : `Dispatch within configured ${assurance.target_minutes}-minute target`,
           body: assurance.reason,
-          items: units.length > 0 ? units : fallbackUnits,
+          items: units,
         };
       }
 
+      // A missing location is a real precondition and stays a precondition.
+      if (assurance.status === 'location_required') {
+        return {
+          heading: 'Verify location before dispatch',
+          body: assurance.reason,
+          items: [],
+        };
+      }
+
+      // Everything else used to surface as "Create a service-level dispatch
+      // plan" with the assurance module's own error as the body — a missing
+      // precondition wearing an AI PROPOSAL heading, on every call that had no
+      // stored plan, which is nearly all of them. A building collapse with
+      // families trapped deserves a proposal, so propose the response a control
+      // room sends to this kind of incident and let the operator pick the
+      // appliances.
+      const onFile = recommendedUnits(call);
+      const standard = onFile.length > 0 ? onFile : standardResponseUnits(call);
       return {
-        heading: units.length
-          ? assurance.status === 'at_risk'
-            ? `Response target at risk · dispatch or escalate now`
-            : `Dispatch within configured ${assurance.target_minutes}-minute target`
-          : 'No recommended units on file',
-        body: units.length
-          ? assurance.reason
+        heading: standard.length > 0
+          ? 'Assign the standard response for this incident type'
+          : 'No unit recommendation on file',
+        body: standard.length > 0
+          ? 'No units are assigned yet. This is what a control room sends to this kind of incident — assign the appliances in the response roster, then confirm.'
           : 'No unit recommendation was produced for this incident. Dispatch on operator judgment, then record the decision.',
-        items: units.length > 0 ? units : fallbackUnits,
+        items: standard,
       };
     }
     case 'RESOLUTION': {
+      // A close-out check, not a re-read of the intake narrative. This used to
+      // repeat `summary` verbatim, so the same paragraph appeared twice on one
+      // screen and the step said nothing about what resolving actually does.
       const threats = call.immediate_threats ?? [];
+      const stillCommitted = fleet.filter((unit) => unit.assignedCallId === call.id);
       return {
         heading: threats.length
           ? 'Resolve once these threats are cleared'
           : 'Resolve and close the incident',
-        body: summary,
-        items: threats,
+        body:
+          'Closing returns this incident\u2019s units to the fleet and completes its decision record. ' +
+          (threats.length
+            ? 'Confirm each threat below is cleared first.'
+            : 'No outstanding threats were recorded on this incident.'),
+        items: [
+          ...threats.map((threat) => `Threat cleared: ${threat}`),
+          ...stillCommitted.map((unit) => `Release ${unit.callsign} (${unit.id})`),
+        ],
       };
     }
   }
@@ -201,10 +255,49 @@ export default function IncidentTimeline({
     () => (call ? assessDispatch(call, operationalFleet) : null),
     [call, operationalFleet],
   );
+  /**
+   * The units this decision will record. Whatever the operator sent from the
+   * response roster is the authority; the assurance-derived set is only the
+   * fallback for a timeline driven on its own. Confirming a set other than the
+   * one already rolling would put the audit record at odds with the fleet.
+   */
+  const dispatchUnitIds = useMemo(() => {
+    if (!call) return [];
+    const handPicked = operationalFleet
+      .filter((unit) => unit.assignedCallId === call.id)
+      .map((unit) => unit.id);
+    if (handPicked.length > 0) return handPicked;
+    return dispatchAssurance?.assignments.map((assignment) => assignment.unit_id) ?? [];
+  }, [call, operationalFleet, dispatchAssurance]);
+
   const duplicateDispatchBlocked = pending === 'DISPATCH' && Boolean(linkedPrimaryCallId);
-  const dispatchBlocked =
-    pending === 'DISPATCH' && dispatchAssurance?.dispatch_ready === false;
-  const blockedConfirmation = duplicateDispatchBlocked || (dispatchBlocked && action !== 'overridden');
+
+  /**
+   * What stops a dispatch being confirmed. `dispatch_ready === false` used to
+   * cover this, but it is false whenever the call carries no stored plan —
+   * which is nearly every call — so the step was unconfirmable by default and
+   * an operator could only ever get past it by overriding. Overriding is for
+   * departing from the recommendation, not for routine work.
+   *
+   * What actually blocks a dispatch is: no units chosen, no location to send
+   * them to, or a service nobody can cover.
+   */
+  const dispatchBlockReason = (() => {
+    if (pending !== 'DISPATCH') return null;
+    if (dispatchAssurance?.status === 'location_required') {
+      return 'Verify the incident location before dispatch, or choose Override and document why.';
+    }
+    if (dispatchUnitIds.length === 0) {
+      return 'Assign units in the response roster before confirming dispatch, or choose Override and document why.';
+    }
+    if (dispatchAssurance?.status === 'no_coverage') {
+      return 'A requested service has no available unit. Escalate for mutual aid, or choose Override and document why.';
+    }
+    return null;
+  })();
+
+  const blockedConfirmation =
+    duplicateDispatchBlocked || (Boolean(dispatchBlockReason) && action !== 'overridden');
 
   const submit = useCallback(async () => {
     if (!pending || !call || blockedConfirmation) return;
@@ -212,10 +305,9 @@ export default function IncidentTimeline({
     const proposal = proposalFor(pending, call, operationalFleet, linkedPrimaryCallId);
 
     if (pending === 'DISPATCH' && action !== 'overridden') {
-      const reservation = await reserveUnits(
-        call.id,
-        dispatchAssurance?.assignments.map((assignment) => assignment.unit_id) ?? [],
-      );
+      // Reserving units already held by this call is a no-op, so confirming a
+      // roster-driven dispatch simply ratifies it.
+      const reservation = await reserveUnits(call.id, dispatchUnitIds);
       if (!reservation.ok) {
         setReservationError(
           `Unit reservation changed. Recheck: ${reservation.conflicts.join(', ')}.`,
@@ -249,7 +341,7 @@ export default function IncidentTimeline({
     setAction('confirmed');
     setNote('');
     setReservationError('');
-  }, [action, blockedConfirmation, call, dispatchAssurance, linkedPrimaryCallId, note, operationalFleet, pending, timeline]);
+  }, [action, blockedConfirmation, call, dispatchUnitIds, linkedPrimaryCallId, note, operationalFleet, pending, timeline]);
 
   if (!open || !call) return null;
 
@@ -443,7 +535,7 @@ export default function IncidentTimeline({
                         <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
                         {duplicateDispatchBlocked
                           ? `Separate dispatch is blocked because this call shares response with #${linkedPrimaryCallId}.`
-                          : 'Dispatch confirmation is blocked. Resolve the assurance issue, or choose Override and document why.'}
+                          : dispatchBlockReason}
                       </p>
                     )}
 
