@@ -61,8 +61,8 @@ for (const href of [
 
 const noscript = dashboard.match(/<noscript>([\s\S]*?)<\/noscript>/i)?.[1] ?? "";
 assert.ok(
-  noscript.includes("Kwik 112 dispatch console:") &&
-    noscript.includes("JavaScript is required for the live voice call") &&
+  noscript.includes("Kwik 112 dispatch console") &&
+    noscript.includes("JavaScript is required for the voice call station") &&
     noscript.includes("not an official 112 service"),
   "dashboard HTML is missing its noscript summary",
 );
@@ -83,8 +83,9 @@ const captionNarration = captions
   .split(/\r?\n/)
   .filter((line) => line && line !== "WEBVTT" && !line.includes("-->"))
   .join(" ");
-assert.ok(readme.includes(narration), "README transcript does not include the canonical narration verbatim");
-assert.ok(videoPackage.includes(narration), "video package does not include the canonical narration verbatim");
+const unixLines = (value) => value.replace(/\r\n/g, "\n");
+assert.ok(unixLines(readme).includes(unixLines(narration)), "README narration does not include the canonical narration verbatim");
+assert.ok(unixLines(videoPackage).includes(unixLines(narration)), "video package does not include the canonical narration verbatim");
 assert.equal(normalize(captionNarration), normalize(narration), "VTT narration differs from the canonical narration");
 assert.ok(captions.includes("01:46.000 --> 01:55.000"), "VTT runtime must end at or before 1:55");
 
