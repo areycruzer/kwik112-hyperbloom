@@ -57,3 +57,20 @@ test('live calls receive a short bootstrap and a complete emergency pre-intake p
   assert.match(prompt, /Hindi|Hinglish/i);
   assert.match(prompt, /never invent.*ETA/is);
 });
+
+test('station auto-opens once per session, never for returning operators', async () => {
+  const { shouldAutoOpenStationOnce } = await import('./voice-launch.ts');
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+  };
+  // First visit in a fresh session: opens, and marks the session.
+  assert.equal(shouldAutoOpenStationOnce(storage), true);
+  // Every later navigation in the same session: never again.
+  assert.equal(shouldAutoOpenStationOnce(storage), false);
+  assert.equal(shouldAutoOpenStationOnce(storage), false);
+  // Unavailable storage (SSR, blocked): never auto-open.
+  assert.equal(shouldAutoOpenStationOnce(null), false);
+  assert.equal(shouldAutoOpenStationOnce(undefined), false);
+});

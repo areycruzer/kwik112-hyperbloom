@@ -59,3 +59,24 @@ export function shouldAutoLaunchVoiceStation(search: string, hash: string): bool
 
   return requestedByQuery || requestedByHash;
 }
+
+/**
+ * The official competition link opens /dashboard directly, and reviewers are
+ * told to test the citizen experience first. Rather than a permanent band
+ * above the operator console, the station auto-opens once per browser
+ * session: a fresh reviewer lands inside the citizen journey instantly, while
+ * an operator refreshing the console never sees it again.
+ */
+export function shouldAutoOpenStationOnce(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
+): boolean {
+  if (!storage) return false;
+  try {
+    if (storage.getItem('kwik_station_auto_opened') === '1') return false;
+    storage.setItem('kwik_station_auto_opened', '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
