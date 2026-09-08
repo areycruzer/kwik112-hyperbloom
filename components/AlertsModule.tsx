@@ -21,6 +21,7 @@ import {
 
 import type { EmergencyCall } from '@/lib/types';
 import {
+  ACK_STORAGE_KEY,
   acknowledge,
   deriveAlerts,
   readAcknowledged,
@@ -74,10 +75,12 @@ const ALERT_META: Record<Alert['code'], { icon: LucideIcon; label: string; tone:
 
 export default function AlertsModule({
   calls,
+  now,
   onSelectCall,
   onAckChange,
 }: {
   calls: EmergencyCall[];
+  now: number;
   onSelectCall?: (id: string) => void;
   onAckChange?: () => void;
 }) {
@@ -85,10 +88,14 @@ export default function AlertsModule({
 
   useEffect(() => {
     setAcks(readAcknowledged());
+    const sync = (event: StorageEvent) => {
+      if (event.key === null || event.key === ACK_STORAGE_KEY) setAcks(readAcknowledged());
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
   }, []);
 
   const alerts = useMemo(() => {
-    const now = Date.now();
     const input: AlertInput[] = calls.map((c) => ({
       id: c.id,
       severity: c.severity,
@@ -101,7 +108,7 @@ export default function AlertsModule({
     return deriveAlerts(input, now).sort(
       (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
     );
-  }, [calls]);
+  }, [calls, now]);
 
   const callsById = useMemo(() => {
     const map = new Map<string, EmergencyCall>();

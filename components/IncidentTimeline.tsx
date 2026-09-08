@@ -10,12 +10,8 @@
  *      Here state loads via `readTimeline(call.id)` in an effect keyed on the
  *      call id, so opening a different incident resets the view.
  *
- * DISPATCH confirms the units the operator actually sent from the response
- * roster. It used to re-derive its own set from `assessDispatch` at the moment
- * of confirmation, so a dispatcher who hand-picked Ambulance 302 could confirm
- * here and silently commit a different set — leaving the audit record
- * describing a dispatch that never happened. Hand-picked units are the
- * authority; the derived set is only the fallback when nothing is assigned yet.
+ * Roster selections are proposals. Only a human DISPATCH confirmation reserves
+ * those same units and persists their receipt; RESOLUTION returns them to fleet.
  *
  * The three decision points (INTAKE → DISPATCH → RESOLUTION) come from
  * `lib/timeline.ts`; this component renders them and records operator decisions
@@ -26,7 +22,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HTMLAttributes } from 'react';
 import { EmergencyCall } from '@/lib/types';
 import { Chip, type ChipTone } from '@/components/ui/panel';
@@ -34,8 +30,9 @@ import { Symbol } from '@/components/ui/symbol';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { recommendedUnits, standardResponseUnits } from '@/lib/incident';
 import { assessDispatch } from '@/lib/dispatch-assurance';
+import { linkedPrimaryFor, readFusionDecisions } from '@/lib/incident-fusion';
 import { TACTICAL_UNITS, etaLabel, haversineKm, type TacticalUnit } from '@/lib/units';
-import { releaseUnits, reserveUnits } from '@/lib/dispatch-reservations';
+import { readUnitReservations, releaseUnits, reserveUnits } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { useDialogFocus } from '@/lib/useDialogFocus';
 import {
@@ -58,6 +55,7 @@ interface IncidentTimelineProps {
   onClose: () => void;
   call: EmergencyCall | null;
   linkedPrimaryCallId?: string | null;
+  selectedUnitId?: string;
 }
 
 type DecisionAction = 'confirmed' | 'amended' | 'overridden';
@@ -105,6 +103,7 @@ function proposalFor(
   call: EmergencyCall,
   fleet: readonly TacticalUnit[] = TACTICAL_UNITS,
   linkedPrimaryCallId?: string | null,
+  selectedUnitIds?: readonly string[],
 ): Proposal {
   const summary =
     call.ai_summary || call.chief_complaint || 'No AI summary captured for this incident.';
@@ -127,17 +126,14 @@ function proposalFor(
           items: [`Primary incident #${linkedPrimaryCallId}`],
         };
       }
-      // What the operator actually sent, from the response roster. This wins
-      // over anything re-derived here: the record must describe the appliances
-      // that are rolling, not a set recomputed at the moment of confirmation.
-      const dispatched = fleet.filter((unit) => unit.assignedCallId === call.id);
-      if (dispatched.length > 0) {
+      if (selectedUnitIds?.length) {
         return {
-          heading: `Confirm ${dispatched.length} unit${dispatched.length === 1 ? '' : 's'} dispatched from the roster`,
-          body: 'These units are already assigned to this incident. Confirming records them as the dispatch decision.',
-          items: dispatched.map(
-            (unit) => `${unit.callsign} (${unit.id}) · ETA ${etaForCall(unit, call)}`,
-          ),
+          heading: `Confirm dispatch of ${selectedUnitIds.length} selected unit${selectedUnitIds.length === 1 ? '' : 's'}`,
+          body: 'Units remain proposals until you confirm this DISPATCH checkpoint.',
+          items: selectedUnitIds.map((id) => {
+            const unit = fleet.find((candidate) => candidate.id === id);
+            return unit ? `${unit.callsign} (${unit.id}) · ETA ${etaForCall(unit, call)}` : `${id} · unavailable`;
+          }),
         };
       }
 
@@ -217,6 +213,7 @@ export default function IncidentTimeline({
   onClose,
   call,
   linkedPrimaryCallId,
+  selectedUnitId,
 }: IncidentTimelineProps) {
   const callId = call?.id ?? null;
 
@@ -224,6 +221,7 @@ export default function IncidentTimeline({
   const [action, setAction] = useState<DecisionAction>('confirmed');
   const [note, setNote] = useState('');
   const [reservationError, setReservationError] = useState('');
+  const submitting = useRef(false);
 
   // Initial focus, Tab trap, Escape-to-close, and focus restore — from the one
   // shared hook the voice station also uses, so the two dialogs cannot diverge.
@@ -240,9 +238,24 @@ export default function IncidentTimeline({
     setAction('confirmed');
     setNote('');
     setReservationError('');
+    setAmendedSelection(null);
+    const sync = (event: StorageEvent) => {
+      if (event.key === null || event.key === 'dispatch_timeline') {
+        setTimeline(readTimeline(callId));
+        setAction('confirmed');
+        setNote('');
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
   }, [callId, open]);
 
-  const pending = useMemo(() => currentPoint(timeline), [timeline]);
+  const [amendedSelection, setAmendedSelection] = useState<string | null>(null);
+  const dispatchAmendment = Boolean(selectedUnitId && selectedUnitId !== amendedSelection &&
+    timeline.records.some((record) => record.point === 'DISPATCH') &&
+    !timeline.records.some((record) => record.point === 'RESOLUTION') &&
+    !['resolved', 'completed', 'closed'].includes(call?.status ?? ''));
+  const pending = dispatchAmendment ? 'DISPATCH' : currentPoint(timeline);
   const complete = useMemo(() => isComplete(timeline), [timeline]);
   const decidedByPoint = useMemo(() => {
     const map = new Map<DecisionPoint, DecisionRecord>();
@@ -252,24 +265,29 @@ export default function IncidentTimeline({
 
   const overrideMissingNote = action === 'overridden' && note.trim() === '';
   const operationalFleet = useReservedFleet(TACTICAL_UNITS, call?.id ?? '');
-  const dispatchAssurance = useMemo(
-    () => (call ? assessDispatch(call, operationalFleet) : null),
-    [call, operationalFleet],
-  );
-  /**
-   * The units this decision will record. Whatever the operator sent from the
-   * response roster is the authority; the assurance-derived set is only the
-   * fallback for a timeline driven on its own. Confirming a set other than the
-   * one already rolling would put the audit record at odds with the fleet.
-   */
   const dispatchUnitIds = useMemo(() => {
     if (!call) return [];
-    const handPicked = operationalFleet
-      .filter((unit) => unit.assignedCallId === call.id)
-      .map((unit) => unit.id);
-    if (handPicked.length > 0) return handPicked;
-    return dispatchAssurance?.assignments.map((assignment) => assignment.unit_id) ?? [];
-  }, [call, operationalFleet, dispatchAssurance]);
+    const assigned = operationalFleet.filter((unit) => unit.assignedCallId === call.id).map((unit) => unit.id);
+    if (selectedUnitId) {
+      const suggested = assessDispatch(call, operationalFleet).assignments.map((assignment) => assignment.unit_id);
+      let proposed = [...new Set([...assigned, selectedUnitId, ...suggested])];
+      // Keep the explicit selection and existing commitments. Remove a default
+      // choice only when the existing capability rules confirm full coverage.
+      for (const id of suggested) {
+        if (id === selectedUnitId || assigned.includes(id)) continue;
+        const remaining = proposed.filter((candidate) => candidate !== id);
+        const coverage = assessDispatch(call, operationalFleet.filter((unit) => remaining.includes(unit.id)));
+        if (coverage.status === 'on_target' || coverage.status === 'at_risk') proposed = remaining;
+      }
+      return proposed;
+    }
+    if (assigned.length) return assigned;
+    return assessDispatch(call, operationalFleet).assignments.map((assignment) => assignment.unit_id);
+  }, [call, operationalFleet, selectedUnitId]);
+  const dispatchAssurance = useMemo(
+    () => call ? assessDispatch(call, operationalFleet.filter((unit) => dispatchUnitIds.includes(unit.id))) : null,
+    [call, operationalFleet, dispatchUnitIds],
+  );
 
   const duplicateDispatchBlocked = pending === 'DISPATCH' && Boolean(linkedPrimaryCallId);
 
@@ -288,6 +306,9 @@ export default function IncidentTimeline({
     if (dispatchAssurance?.status === 'location_required') {
       return 'Verify the incident location before dispatch, or choose Override and document why.';
     }
+    if (dispatchUnitIds.some((id) => !operationalFleet.some((unit) => unit.id === id && (unit.status === 'available' || unit.assignedCallId === call?.id)))) {
+      return 'A selected unit is unavailable. Select another unit or document an override.';
+    }
     if (dispatchUnitIds.length === 0) {
       return 'Assign units in the response roster before confirming dispatch, or choose Override and document why.';
     }
@@ -301,48 +322,119 @@ export default function IncidentTimeline({
     duplicateDispatchBlocked || (Boolean(dispatchBlockReason) && action !== 'overridden');
 
   const submit = useCallback(async () => {
-    if (!pending || !call || blockedConfirmation) return;
-    const trimmed = note.trim();
-    const proposal = proposalFor(pending, call, operationalFleet, linkedPrimaryCallId);
+    if (!pending || !call || blockedConfirmation || submitting.current) return;
+    submitting.current = true;
+    try {
+      const commit = async () => {
+        const latest = readTimeline(call.id);
+        if (JSON.stringify(latest) !== JSON.stringify(timeline) || (!dispatchAmendment && currentPoint(latest) !== pending)) {
+          setTimeline(latest);
+          setReservationError('This checkpoint changed in another console. Review the current decision before continuing.');
+          return;
+        }
+        if (action === 'overridden' && !note.trim()) return;
+        if (pending === 'DISPATCH' && linkedPrimaryFor(call.id, readFusionDecisions())) {
+          setReservationError('This call is now linked to a primary incident. Separate dispatch is blocked.');
+          return;
+        }
+        const beforeUnits = Object.entries(readUnitReservations()).filter(([, owner]) => owner === call.id).map(([id]) => id);
+        const beforeRaw = localStorage.getItem('kwik_emergency_calls');
+        const beforeCalls: EmergencyCall[] = beforeRaw ? JSON.parse(beforeRaw) : [];
+        const beforeCall = Array.isArray(beforeCalls) ? beforeCalls.find((entry) => entry.id === call.id) : undefined;
+        let callWritten = false;
+        try {
+          const trimmed = note.trim();
+          const proposal = proposalFor(pending, call, operationalFleet, linkedPrimaryCallId, dispatchUnitIds);
 
-    if (pending === 'DISPATCH' && action !== 'overridden') {
-      // Reserving units already held by this call is a no-op, so confirming a
-      // roster-driven dispatch simply ratifies it.
-      const reservation = await reserveUnits(call.id, dispatchUnitIds);
-      if (!reservation.ok) {
-        setReservationError(
-          `Unit reservation changed. Recheck: ${reservation.conflicts.join(', ')}.`,
-        );
-        return;
-      }
-    }
+          if (pending === 'DISPATCH' && action !== 'overridden') {
+            const reservation = await reserveUnits(call.id, dispatchUnitIds);
+            if (!reservation.ok) {
+              setReservationError(
+                `Unit reservation changed. Recheck: ${reservation.conflicts.join(', ')}.`,
+              );
+              return;
+            }
+          }
 
-    if (pending === 'RESOLUTION' && action !== 'overridden') {
-      await releaseUnits(call.id);
-    }
+          if (pending === 'RESOLUTION' && action !== 'overridden') {
+            await releaseUnits(call.id);
+            if (Object.values(readUnitReservations()).includes(call.id)) throw new Error('Unit release failed');
+          }
 
-    let record: DecisionRecord;
-    if (action === 'overridden') {
-      // Guarded by the disabled submit, but never build the record without a
-      // note: `recordDecision` throws otherwise.
-      if (trimmed === '') return;
-      record = { point: pending, action: 'overridden', at: new Date().toISOString(), note: trimmed, proposal };
-    } else {
-      record = {
-        point: pending,
-        action,
-        at: new Date().toISOString(),
-        ...(trimmed ? { note: trimmed } : {}),
-        proposal,
+          let record: DecisionRecord;
+          if (action === 'overridden') {
+            // Guarded by the disabled submit, but never build the record without a
+            // note: `recordDecision` throws otherwise.
+            if (trimmed === '') return;
+            record = { point: pending, action: 'overridden', at: new Date().toISOString(), note: trimmed, proposal };
+          } else {
+            record = {
+              point: pending,
+              action: dispatchAmendment ? 'amended' : action,
+              at: new Date().toISOString(),
+              ...(dispatchAmendment ? { note: [latest.records.find((entry) => entry.point === 'DISPATCH')?.note, `Dispatch amendment: previously ${latest.records.find((entry) => entry.point === 'DISPATCH')?.proposal?.items.join('; ') || 'no recorded units'}; now ${proposal.items.join('; ')}.`, trimmed].filter(Boolean).join(' ') } : trimmed ? { note: trimmed } : {}),
+              proposal,
+            };
+          }
+          const next = recordDecision(latest, record);
+          writeTimeline(next);
+          if (JSON.stringify(readTimeline(call.id)) !== JSON.stringify(next)) throw new Error('Timeline write failed');
+          if (action !== 'overridden' && (pending === 'DISPATCH' || pending === 'RESOLUTION')) {
+            const raw = localStorage.getItem('kwik_emergency_calls');
+            const parsed = raw ? JSON.parse(raw) : [];
+            const stored: EmergencyCall[] = Array.isArray(parsed) ? parsed : [];
+            const existing = stored.find((entry) => entry.id === call.id) ?? call;
+            const at = record.at;
+            const updated: EmergencyCall = {
+              ...existing,
+              status: pending === 'DISPATCH' ? 'dispatched' : 'resolved',
+              updated_at: at,
+              ...(pending === 'DISPATCH' ? { dispatch_time: at } : { resolved_at: at }),
+            };
+            localStorage.setItem('kwik_emergency_calls', JSON.stringify([updated, ...stored.filter((entry) => entry.id !== call.id)]));
+            callWritten = true;
+            window.dispatchEvent(new CustomEvent('kwik-call-updated', { detail: { call: updated, isUpdate: true } }));
+          }
+          setTimeline(next);
+          if (pending === 'DISPATCH') setAmendedSelection(selectedUnitId ?? null);
+          setAction('confirmed');
+          setNote('');
+          setReservationError('');
+        } catch {
+          // Restore only this incident's entries; unrelated callers and unit
+          // reservations may have changed while the browser lock was awaited.
+          writeTimeline(latest);
+          await releaseUnits(call.id);
+          const restored = await reserveUnits(call.id, beforeUnits);
+          let callRestored = !callWritten;
+          if (callWritten) {
+            try {
+              const current: EmergencyCall[] = JSON.parse(localStorage.getItem('kwik_emergency_calls') ?? '[]');
+              const others = current.filter((entry) => entry.id !== call.id);
+              localStorage.setItem('kwik_emergency_calls', JSON.stringify(beforeCall ? [beforeCall, ...others] : others));
+              callRestored = true;
+            } catch { /* The error below explicitly requires reconciliation. */ }
+          }
+          const restoredIds = Object.entries(readUnitReservations()).filter(([, owner]) => owner === call.id).map(([id]) => id).sort();
+          const rollbackOk = restored.ok && callRestored && JSON.stringify(restoredIds) === JSON.stringify([...beforeUnits].sort()) && JSON.stringify(readTimeline(call.id)) === JSON.stringify(latest);
+          setTimeline(readTimeline(call.id));
+          setReservationError(rollbackOk
+            ? 'Could not persist this decision. Previous checkpoint and fleet state restored; retry when storage is available.'
+            : 'Storage failed and the previous state could not be fully restored. Reconcile this incident’s timeline, status, and fleet before another dispatch.');
+        }
+
       };
+      if (typeof navigator !== 'undefined' && navigator.locks) {
+        await navigator.locks.request(`dispatch-timeline-${call.id}`, { mode: 'exclusive' }, commit);
+      } else {
+        await commit();
+      }
+    } catch {
+      setReservationError('Could not persist the decision. Reopen the workflow and verify the stored record before retrying.');
+    } finally {
+      submitting.current = false;
     }
-    const next = recordDecision(timeline, record);
-    writeTimeline(next);
-    setTimeline(next);
-    setAction('confirmed');
-    setNote('');
-    setReservationError('');
-  }, [action, blockedConfirmation, call, dispatchUnitIds, linkedPrimaryCallId, note, operationalFleet, pending, timeline]);
+  }, [action, blockedConfirmation, call, dispatchUnitIds, dispatchAmendment, linkedPrimaryCallId, note, operationalFleet, pending, selectedUnitId, timeline]);
 
   if (!open || !call) return null;
 
@@ -397,7 +489,7 @@ export default function IncidentTimeline({
           <span className="text-xs text-ink-3">
             {complete
               ? 'All decision points recorded.'
-              : `Awaiting: ${POINT_LABELS[pending as DecisionPoint]}`}
+              : dispatchAmendment ? 'Awaiting: Dispatch amendment — review the revised unit set' : `Awaiting: ${POINT_LABELS[pending as DecisionPoint]}`}
           </span>
           <span className="tnum text-2xs uppercase tracking-wide text-ink-4">
             {timeline.records.length} / {DECISION_POINTS.length} decided
@@ -407,8 +499,8 @@ export default function IncidentTimeline({
         {/* Decision points */}
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {DECISION_POINTS.map((point) => {
-            const record = decidedByPoint.get(point);
-            const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet, linkedPrimaryCallId);
+            const record = dispatchAmendment && point === 'DISPATCH' ? undefined : decidedByPoint.get(point);
+            const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet, linkedPrimaryCallId, dispatchUnitIds);
             const isCurrent = point === pending;
             const isDecided = Boolean(record);
             const isUpcoming = !isDecided && !isCurrent;
