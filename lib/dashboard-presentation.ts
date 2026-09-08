@@ -140,3 +140,70 @@ export function unitRosterAccessibleLabel(
   const base = `${unit.callsign}, ${unit.agency} unit ${unit.id}, ${UNIT_STATUS_LABEL[unit.status]}, ${distance} away, speed ${unit.speed}`;
   return eta ? `${base}, ETA ${eta}` : base;
 }
+
+/* ---- INCIDENT QUEUE ORDER -------------------------------------------------
+ * The queue is the dispatcher's work list and it was rendering in whatever
+ * order the calls happened to arrive in the array, so a P1 cardiac arrest sat
+ * below two P2s. On the console's highest-traffic surface that is not an
+ * ordering choice, it is an absence of one.
+ * ------------------------------------------------------------------------- */
+
+const QUEUE_SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+/** Statuses that mean the incident is finished and no longer competing for attention. */
+const QUEUE_CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
+
+function queueClosedRank(call: EmergencyCall): number {
+  return QUEUE_CLOSED_STATUSES.has((call.status ?? '').toLowerCase()) ? 1 : 0;
+}
+
+function queueSeverityRank(call: EmergencyCall): number {
+  // An ungraded call ranks below every graded one but above a closed one: it
+  // still needs a human, it just has not been told how badly yet.
+  return QUEUE_SEVERITY_RANK[(call.severity ?? '').toLowerCase()] ?? 4;
+}
+
+function queueAge(call: EmergencyCall): number {
+  const at = Date.parse(call.created_at ?? '');
+  // An unparseable timestamp sorts as the OLDEST of its grade, never the
+  // newest. We cannot establish how long this caller has been waiting, and the
+  // safe reading of "unknown" on a dispatch queue is "possibly the longest" —
+  // the same choice lib/alerts makes when it treats an unknown age as past
+  // every grace period. Sorting it last would let a malformed record sink out
+  // of sight, which is the one outcome that must not happen here.
+  return Number.isNaN(at) ? -Infinity : at;
+}
+
+/**
+ * @description Order two incidents the way a dispatcher works them: open before
+ *              closed, then by priority, then oldest first within a priority.
+ *
+ *              Oldest-first inside a grade is deliberate. Two P1s are equally
+ *              urgent by grade, so the tie-break that matters is which caller
+ *              has been waiting longer — that is the one at risk of breaching
+ *              its response target, and it is the one the alerts panel is
+ *              already shouting about.
+ */
+export function compareIncidentsForQueue(a: EmergencyCall, b: EmergencyCall): number {
+  const byOpen = queueClosedRank(a) - queueClosedRank(b);
+  if (byOpen !== 0) return byOpen;
+
+  const bySeverity = queueSeverityRank(a) - queueSeverityRank(b);
+  if (bySeverity !== 0) return bySeverity;
+
+  const byAge = queueAge(a) - queueAge(b);
+  if (byAge !== 0) return byAge;
+
+  // Stable, deterministic last resort so the list never reshuffles on a re-render.
+  return (a.id ?? '').localeCompare(b.id ?? '');
+}
+
+/** @description A new array of incidents in queue order; the input is untouched. */
+export function sortIncidentQueue(calls: readonly EmergencyCall[]): EmergencyCall[] {
+  return [...calls].sort(compareIncidentsForQueue);
+}

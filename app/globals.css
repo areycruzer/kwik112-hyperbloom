@@ -28,6 +28,8 @@
      The design system bans dynamic colour blending in class names; keeping the
      refine-flash keyframe off it too lets the forbidden-pattern grep stay clean. */
   --accent-rgb: 105 210 255;
+  /* Channels for --critical, so alpha compositing needs no colour function. */
+  --critical-rgb: 244 0 0;
 
   --safe: #47FF85;
   --mild: #FABC1F;
@@ -198,6 +200,41 @@ html, body {
 .leaflet-container .leaflet-control-zoom a.leaflet-disabled {
   background-color: var(--panel);
   color: var(--ink-4);
+}
+
+/* Visually hidden, but read aloud. Used for the live region that announces a
+   new critical call: the message must reach a screen reader without taking a
+   corner of a console that has no spare corners. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A newly arrived critical incident. Three pulses, then it settles: an arrival
+   cue is not a status, and a row left unactioned must not flash for the rest of
+   the shift. The colour is the critical channel at low alpha, never a hardcoded
+   hex and never a dynamic colour-blend function. */
+@keyframes incident-arrived-pulse {
+  0%, 100% { background-color: transparent; border-color: var(--rule); }
+  50%      { background-color: rgb(var(--critical-rgb) / 0.18); border-color: var(--critical); }
+}
+.incident-arrived {
+  animation: incident-arrived-pulse 1.1s ease-in-out 3;
+}
+/* Motion is the cue, but it must not be the ONLY cue, and it must not move for
+   anyone who asked it not to. A steady critical border says the same thing. */
+@media (prefers-reduced-motion: reduce) {
+  .incident-arrived {
+    animation: none;
+    border-color: var(--critical);
+  }
 }
 
 /* Refinement flash. When the model upgrades a local-rules grade in place, each
