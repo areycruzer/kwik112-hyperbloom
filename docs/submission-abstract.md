@@ -1,9 +1,15 @@
-# Kwik 112 submission abstract
+# Final abstract — owner submission copy
 
-Every Indian already knows how to use it: dial 112. Kwik 112 is the multilingual AI call-taker in that call and the auditable dispatch console behind it — the AI may only escalate severity, and a human makes every dispatch decision.
+This version corrects two claim/code conflicts in the supplied text: the telephone integration is proposed, and prank annotations do not remove calls from human review. It also retains the mandatory Codex disclosure. The court window is a calendar inference, not proof of implementation. Submit only if the form remains editable.
 
-The caller needs no app or screen. A live or scripted Hindi, Hinglish, or English call becomes a streaming transcript with language and prosody provenance. Browser-safe deterministic rules issue an immediate grade; optional structured model refinement can clarify the incident or escalate severity but cannot downgrade the rules floor. The dispatcher then records INTAKE, DISPATCH, and RESOLUTION decisions, with override notes, unit reservations, pre-arrival guidance, and an audit receipt.
+## Abstract
 
-On corpus v1.0.0's 30 held-out synthetic calls, local rules retained 9/9 critical cases (100% critical recall; Wilson 95% lower bound 0.70), with 60% incident-type accuracy, 60% severity accuracy, 23.3% under-triage, 16.7% over-triage, 100% location accuracy on 25 location cases, and 100% threat accuracy on 3 threat cases. Local latency was approximately 0.048ms p50 and 3.79ms p95. These measurements describe this small synthetic corpus, not clinical or production performance.
+On 26 May 2026, in SaveLIFE Foundation v. Union of India (W.P.(C) 726/2024), the Supreme Court gave States three months to merge 100, 101, 102, 108, 1033 and 1091 into 112. That window has closed. Six streams converge on one queue, with a 15-second answer standard and reported response times measured in minutes—different stages, not interchangeable measures.
 
-Kwik 112 is an independent browser-based demonstration with browser-local state. It uses no real caller data, has no live 112, ERSS, government, or C-DAC integration, and never autonomously dispatches responders. Hume voice is optional; the committed benchmark is model-free. Codex assisted implementation and review, while the OpenAI SDK supports the optional structured refinement path.
+Kwik 112 demonstrates proposed ring-time middleware. The intended citizen interface is a phone dialling 112: no app, URL, or literacy requirement. This browser simulation captures Hindi, Hinglish, or English, transcribes live, and supplements intake with vocal-distress estimates. A deterministic rules engine sets a severity floor the model may raise but never lower, enforced by regression and prompt-injection tests.
+
+Possible prank cues are annotations for human review, never automatic rejection. Pre-graded cards carry transcripts, spoken-location evidence, and synthetic response-unit routing. Three human checkpoints—INTAKE, DISPATCH, RESOLUTION—require written-note overrides and retain a browser-local audit; AI never dispatches.
+
+The versioned development regression suite reports 100% critical recall (9/9; Wilson 95% LB 0.70), 60% type/severity accuracy (18/30 each), and 23.3% under-triage (7/30), reproducible with one command. These are synthetic engineering results, not field safety evidence.
+
+VANKI and TG-ERSS deserve credit; cited reports do not publish an executable grading floor. Built with Codex; GLM 4.5 Flash primary, optional OpenAI refinement. Independent, synthetic-data-only demonstration; no live 112 integration or government affiliation.
