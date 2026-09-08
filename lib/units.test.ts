@@ -134,9 +134,6 @@ test('a cardiac arrest roster starts with ambulances and hides unrelated fire un
       incident_subtype: 'cardiac arrest',
       severity: 'critical',
       dispatch_plan: {
-        priority_code: 'P1',
-        eta_risk: 'high',
-        operator_confirmation_required: true,
         units: [
           { service: 'ems' },
           { service: 'police' },
