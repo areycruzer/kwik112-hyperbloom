@@ -16,7 +16,6 @@ const narration = "Every Indian already knows how to use it: dial 112.\nThe call
 export default function TranscriptPage() {
   return (
     <main className="min-h-screen bg-[#f4f5f2] text-[#151817]">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <section className="bg-[#171717] py-14 text-white">
         <div className="mx-auto max-w-[820px] px-5 md:px-8">
           <p className="text-xs font-semibold uppercase text-[#78dcff]">Demo companion</p>
