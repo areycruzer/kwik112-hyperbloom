@@ -59,6 +59,14 @@ export interface SymbolSpec {
    * name on hover instead.
    */
   plate?: boolean;
+  /**
+   * Render the symbol at reduced opacity. Used for a responder that is not
+   * available - already committed to another incident, or out of service. A
+   * dispatcher scanning the map for "who can I send" needs that answered by the
+   * marker itself; before this, a committed unit and a free one were pixel-
+   * identical and the only way to tell them apart was to open the roster.
+   */
+  dimmed?: boolean;
   size?: number;
   selected?: boolean;
 }
@@ -71,6 +79,15 @@ const SEVERITY_COLORS: Record<string, string> = {
   medium: '#47FF85',
   low: '#47FF85',
 };
+
+/**
+ * The body a low-priority incident is drawn in. A P3 used to be painted in the
+ * same full-chroma safe green as everything else in the palette, which made the
+ * least urgent marker on the map one of the loudest - seventeen incidents all
+ * shouting equally. A muted body with a coloured glyph keeps the grade readable
+ * while letting the P1s be the only saturated things on screen.
+ */
+const MUTED_BODY = '#242424';
 
 const SERVICE_COLORS: Record<UnitService, string> = {
   police: '#69D2FF',
@@ -86,12 +103,49 @@ const INK = '#0B0B0B';
 /** --accent. Selection is a thicker accent outline, never a scale transform. */
 const ACCENT = '#69D2FF';
 /**
- * --ink, used as a unit's selected keyline. --accent cannot serve there: it is
- * the same value as the police service colour, so a selected PCR van drawn with
- * an accent keyline is a blue shield keylined in its own blue — i.e. identical
- * to an unselected one. White separates every service colour from its outline.
+ * The resting rim, drawn around every symbol in off-white (--ink's bright end).
+ * A light rim plus a soft shadow is what lets a saturated mark sit on busy
+ * satellite imagery without shouting — the "sticker" treatment every mapping
+ * product converges on — and it reads equally well on the console's dark
+ * panels. The old near-black outlines just thickened each mark's own darkness.
  */
-const INK_BRIGHT = '#F2F2F2';
+const RIM = '#F2F2F2';
+
+/**
+ * @description How an incident pin is painted: body fill and inner glyph.
+ *
+ *              This is the console's visual hierarchy, and it is deliberately
+ *              NOT "every severity gets its own bright colour". Saturation is
+ *              the strongest pre-attentive channel there is, so it is spent only
+ *              where it earns attention: P1 is solid signal red, P2 solid amber,
+ *              and everything below is a graphite chip carrying a coloured mark.
+ *              Read down a screen of seventeen incidents, the two P1s are the
+ *              only things that shout.
+ */
+export function incidentPaint(severity?: string): { body: string; glyph: string } {
+  if (severity === 'critical') return { body: SEVERITY_COLORS.critical, glyph: INK };
+  if (severity === 'high') return { body: SEVERITY_COLORS.high, glyph: INK };
+  if (severity === 'medium' || severity === 'low') {
+    return { body: MUTED_BODY, glyph: SEVERITY_COLORS.medium };
+  }
+  // Ungraded: neutral body, dark mark. Never a fabricated severity colour.
+  return { body: UNKNOWN, glyph: INK };
+}
+
+/**
+ * @description Rendered pixel size for an incident pin, by severity.
+ *
+ *              Size is the second half of the hierarchy above, and it works
+ *              where colour cannot: it survives greyscale, colour-blindness and
+ *              a glance from across a control room. A P1 is half again the area
+ *              of a P3, so the eye lands on it first without any colour being
+ *              read at all.
+ */
+export function incidentSymbolSize(severity?: string): number {
+  if (severity === 'critical') return 48;
+  if (severity === 'high') return 40;
+  return 34;
+}
 
 export function severityColor(severity?: string): string {
   if (!severity) return UNKNOWN;
@@ -247,6 +301,21 @@ const GLYPHS: Record<string, Glyph> = {
     d: 'M12 2.6 4.6 5.5v5.3c0 4.6 3.15 8.9 7.4 10 4.25-1.1 7.4-5.4 7.4-10V5.5Z',
     box: [4.6, 2.6, 14.8, 18.2],
   },
+  /**
+   * The fire SERVICE, as distinct from the fire HAZARD above. A tender used to
+   * carry the same flame the fire incident carries, in the same signal red, so
+   * a red flame on the map meant either "there is a fire here" or "the fire
+   * brigade is here" and the operator had to work out which from the frame
+   * alone. A helmet is unmistakably the service, and collides with nothing.
+   */
+  fireUnit: {
+    d:
+      'M12 4.6c-4.2 0-7.6 3.3-7.9 7.4h15.8C19.6 7.9 16.2 4.6 12 4.6Z' +
+      'M2.6 12h18.8c.6 0 1.1.5 1.1 1.1v1.9c0 .6-.5 1.1-1.1 1.1H2.6' +
+      'c-.6 0-1.1-.5-1.1-1.1v-1.9C1.5 12.5 2 12 2.6 12Z' +
+      'M11 6.8h2v4.2h-2Z',
+    box: [1.5, 4.6, 21, 11.5],
+  },
   ems: {
     d: 'M10.3 4.6h3.4v5.7h5.7v3.4h-5.7v5.7h-3.4v-5.7H4.6v-3.4h5.7Z',
     box: [4.6, 4.6, 14.8, 14.8],
@@ -284,6 +353,7 @@ function placeGlyph(
   side: number,
   ink: string,
   outline?: string,
+  outlineWidth = 2.2,
 ): string {
   const [minX, minY, w, h] = glyph.box;
   const scale = side / Math.max(w, h);
@@ -298,13 +368,13 @@ function placeGlyph(
   const paint = glyph.stroke
     ? `fill="none" stroke="${ink}" stroke-width="${glyph.stroke}" stroke-linecap="round"`
     : `fill="${ink}" fill-rule="evenodd"` +
-      (outline ? ` stroke="${outline}" stroke-width="2.2" stroke-linejoin="round" paint-order="stroke"` : '');
+      (outline ? ` stroke="${outline}" stroke-width="${outlineWidth}" stroke-linejoin="round" paint-order="stroke"` : '');
 
   // A line glyph cannot use paint-order — there is no fill to lay the keyline
   // under — so it gets an explicit wider pass drawn first instead.
   const haloPass =
     outline && glyph.stroke
-      ? `<path d="${glyph.d}" fill="none" stroke="${outline}" stroke-width="${glyph.stroke + 2.2}" ` +
+      ? `<path d="${glyph.d}" fill="none" stroke="${outline}" stroke-width="${glyph.stroke + outlineWidth}" ` +
         `stroke-linecap="round" stroke-linejoin="round" />`
       : '';
 
@@ -329,12 +399,16 @@ function placeGlyph(
 export function buildSymbol(spec: SymbolSpec): string {
   const size = spec.size ?? 28;
   const isIncident = spec.kind === 'incident';
+  const paint = incidentPaint(spec.severity);
   const color = isIncident
-    ? severityColor(spec.severity)
+    ? paint.body
     : SERVICE_COLORS[spec.service ?? (spec.glyph as UnitService)] ?? UNKNOWN;
 
   const hasDistress = typeof spec.distress === 'number';
-  const glyph = GLYPHS[spec.glyph] ?? GLYPHS.unknown;
+  // 'fire' means two different things depending on the kind: the hazard (a
+  // flame, on an incident pin) and the service (a helmet, on a tender).
+  const glyphKey = !isIncident && spec.glyph === 'fire' ? 'fireUnit' : spec.glyph;
+  const glyph = GLYPHS[glyphKey] ?? GLYPHS.unknown;
 
   // Everything hangs off the symbol's optical centre: the pin's head for an
   // incident, the middle of the box for a bare unit glyph.
@@ -345,14 +419,19 @@ export function buildSymbol(spec: SymbolSpec): string {
   const glyphSide = isIncident ? 11.4 : 19.5;
   const ringRadius = isIncident ? 9.2 : 10.2;
 
-  // Selection recolours the existing outline rather than adding a ring, which
+  // Selection recolours the existing rim rather than adding a ring, which
   // keeps a selected symbol inside the 24-unit box so nothing clips at the edge
-  // of the viewBox. A pin takes --accent against its severity fill; a unit takes
-  // white, because --accent is the police colour (see INK_BRIGHT).
-  const strokeColor = spec.selected ? (isIncident ? ACCENT : INK_BRIGHT) : INK;
-  const strokeWidth = spec.selected ? 2 : 1.1;
+  // of the viewBox. A selected pin trades its white rim for --accent; a
+  // selected unit trades it for bold ink, because --accent IS the police
+  // service colour — an accent keyline on a PCR van is blue on blue, and
+  // selection would be invisible for exactly one of the three services.
+  const strokeColor = spec.selected ? (isIncident ? ACCENT : INK) : RIM;
+  const strokeWidth = spec.selected ? 2.4 : 1.4;
 
-  // Incidents get a pin; units get no frame at all.
+  // Incidents get a pin; units get no frame at all. A selected unit's keyline
+  // thickens as well as darkening, since its silhouette has no frame to carry
+  // the state.
+  const unitKeylineWidth = spec.selected ? 3 : 2.2;
   const frame = isIncident
     ? `<path d="${PIN_PATH}" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linejoin="round" />`
     : '';
@@ -400,6 +479,7 @@ export function buildSymbol(spec: SymbolSpec): string {
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewW} 24" width="${width}" height="${size}" ` +
     `data-kind="${esc(spec.kind)}"${hasDistress ? ` data-distress="${Math.round(spec.distress as number)}"` : ''} ` +
+    `${spec.dimmed ? 'opacity="0.5" ' : ''}` +
     `role="img" aria-label="${esc(spec.label ?? spec.glyph)}">` +
     title +
     ring +
@@ -407,8 +487,8 @@ export function buildSymbol(spec: SymbolSpec): string {
     // Inside a pin the glyph is ink on the severity fill; standing alone it IS
     // the symbol, so it takes the service colour and carries its own keyline.
     (isIncident
-      ? placeGlyph(glyph, 12, centreY, glyphSide, INK)
-      : placeGlyph(glyph, 12, centreY, glyphSide, color, strokeColor)) +
+      ? placeGlyph(glyph, 12, centreY, glyphSide, paint.glyph)
+      : placeGlyph(glyph, 12, centreY, glyphSide, color, strokeColor, unitKeylineWidth)) +
     plate +
     `</svg>`
   );

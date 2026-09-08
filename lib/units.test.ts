@@ -5,6 +5,8 @@ import {
   etaLabel,
   etaMinutes,
   haversineKm,
+  nearestAvailableUnit,
+  serviceForIncidentType,
   speedKmh,
 } from './units.ts';
 
@@ -84,4 +86,51 @@ test('haversine measures the distance between two Delhi coordinates', () => {
   const km = haversineKm(28.7041, 77.1025, 28.7241, 77.1262);
   assert.ok(km > 2 && km < 4, `expected a few km across Rohini, got ${km}`);
   assert.equal(haversineKm(28.7041, 77.1025, 28.7041, 77.1025), 0);
+});
+
+test('incident types map to the service that would lead the response', () => {
+  assert.equal(serviceForIncidentType('fire'), 'fire');
+  assert.equal(serviceForIncidentType('medical_emergency'), 'ems');
+  assert.equal(serviceForIncidentType('traffic_collision'), 'ems');
+  assert.equal(serviceForIncidentType('crime'), 'police');
+  assert.equal(serviceForIncidentType('flood_rescue'), 'fire');
+  // An unknown type nominates no service, so the caller routes from the
+  // nearest unit of any kind rather than guessing a wrong one.
+  assert.equal(serviceForIncidentType('something else'), null);
+  assert.equal(serviceForIncidentType(undefined), null);
+});
+
+test('nearestAvailableUnit prefers the requested service over raw distance', () => {
+  // Around the Rohini fixture: the nearest EMS unit is further than several
+  // police/fire units, but a cardiac call must still route from an ambulance.
+  const cardiac = nearestAvailableUnit(TACTICAL_UNITS, 28.7041, 77.1025, 'ems');
+  assert.ok(cardiac, 'a unit must be found');
+  assert.equal(cardiac!.type, 'ems');
+});
+
+test('nearestAvailableUnit falls back to any service rather than to nothing', () => {
+  // Ask for EMS from a fleet that has none: a vector from the nearest police
+  // van beats a map with no vector at all - the whole bug this guards was the
+  // vector silently not drawing.
+  const noEms = TACTICAL_UNITS.filter((u) => u.type !== 'ems');
+  const unit = nearestAvailableUnit(noEms, 28.7041, 77.1025, 'ems');
+  assert.ok(unit, 'must fall back to some unit');
+  assert.notEqual(unit!.type, 'ems');
+});
+
+test('nearestAvailableUnit skips units reserved for other calls', () => {
+  const fleet = TACTICAL_UNITS.map((u) =>
+    u.type === 'ems' ? { ...u, assignedCallId: 'other-call' } : u,
+  );
+  const unit = nearestAvailableUnit(fleet, 28.7041, 77.1025, 'ems', 'my-call');
+  assert.ok(unit);
+  // Every EMS unit is spoken for by another call, so the fallback pool wins.
+  assert.notEqual(unit!.type, 'ems');
+
+  // But a unit reserved for THIS call is fair game - it is the response.
+  const mine = TACTICAL_UNITS.map((u) =>
+    u.id === 'CATS-302' ? { ...u, status: 'busy' as const, assignedCallId: 'my-call' } : u,
+  );
+  const own = nearestAvailableUnit(mine, 28.725, 77.135, 'ems', 'my-call');
+  assert.equal(own?.id, 'CATS-302');
 });
