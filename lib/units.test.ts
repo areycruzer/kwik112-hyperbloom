@@ -138,8 +138,8 @@ test('a cardiac arrest roster starts with ambulances and hides unrelated fire un
         eta_risk: 'high',
         operator_confirmation_required: true,
         units: [
-          { service: 'ems', unit: 'Advanced Life Support Ambulance', reason: 'Cardiac arrest' },
-          { service: 'police', unit: 'Nearest Patrol Assist', reason: 'Scene access' },
+          { service: 'ems' },
+          { service: 'police' },
         ],
       },
     },
