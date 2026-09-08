@@ -48,25 +48,13 @@ export function ResponseAssurancePanel({
     );
   }
 
-  // A call that has not been planned yet is the NORMAL state of a call that
-  // just arrived - not a fault. It used to render as three loud chips (PLAN
-  // REQUIRED / DISPATCH BLOCKED, two of them red) plus a sentence explaining
-  // that nothing could be computed: the panel announcing its own emptiness in
-  // the most alarming way available, on almost every call on the console.
-  // Waiting for a plan is now one quiet line that still states the clock this
-  // incident will be held to.
-  if (assurance.status === 'plan_required') {
-    return (
-      <p className="text-xs leading-relaxed text-ink-3">
-        Awaiting a service-level dispatch plan. Once units are assigned, arrival
-        is checked against the{' '}
-        <span className="tnum text-ink-2">
-          {assurance.priority_code} {assurance.target_minutes}-minute
-        </span>{' '}
-        target.
-      </p>
-    );
-  }
+  // A call with no dispatch plan yet renders nothing at all. This panel exists
+  // to check a plan against the clock; with no plan there is nothing to check,
+  // and the Dispatch section above already shows the standard response for the
+  // incident type. Earlier versions printed a notice here saying assurance
+  // could not be calculated - a paragraph whose whole content was its own
+  // absence, on almost every call on the console.
+  if (assurance.status === 'plan_required') return null;
 
   return (
     <div className="rounded-[6px] border border-rule bg-panel p-2">

@@ -101,6 +101,37 @@ function commitRelease(callId: string): void {
   }
 }
 
+function commitReleaseUnit(callId: string, unitId: string): void {
+  if (typeof window === 'undefined') return;
+  const reservations = readUnitReservations();
+  // Only the owning call may stand a unit down. Without the ownership check a
+  // second dispatcher could recall an appliance already rolling on someone
+  // else's incident.
+  if (reservations[unitId] !== callId) return;
+  delete reservations[unitId];
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(reservations));
+    notifyReservationChange();
+  } catch {
+    /* The persisted state remains unchanged when browser storage is unavailable. */
+  }
+}
+
+/**
+ * @description Stand one unit down from a call, leaving the call's other units
+ *              assigned. `releaseUnits` clears the whole incident; recalling a
+ *              single appliance needed its own door.
+ */
+export async function releaseUnit(callId: string, unitId: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    await navigator.locks.request(LOCK_KEY, { mode: 'exclusive' }, () =>
+      commitReleaseUnit(callId, unitId),
+    );
+    return;
+  }
+  commitReleaseUnit(callId, unitId);
+}
+
 export async function releaseUnits(callId: string): Promise<void> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
     await navigator.locks.request(LOCK_KEY, { mode: 'exclusive' }, () =>
