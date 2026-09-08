@@ -129,6 +129,7 @@ export default function CallDetailPage({ params }: PageProps) {
         found = mockCalls.find((c) => c.id === callId);
       }
       if (found) {
+        setNotFound(false);
         setCall(found);
         setTimeline(readTimeline(callId));
       } else {
