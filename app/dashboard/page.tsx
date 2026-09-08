@@ -28,6 +28,7 @@ import { CallStatus, EmergencyCall } from '@/lib/types';
 import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
 import { ACK_STORAGE_KEY, deriveAlerts, readAcknowledged, type AlertInput } from '@/lib/alerts';
+import { prepareGoldenDemo } from '@/lib/golden-prep';
 import {
   severityTone,
   priorityCode,
@@ -122,6 +123,17 @@ function visibleIncident(call: EmergencyCall): boolean {
 }
 
 export default function DashboardPage() {
+  const [goldenMode, setGoldenMode] = useState(false);
+  const goldenModeRef = useRef(false);
+  const goldenPrepared = useRef(false);
+  useEffect(() => {
+    if (goldenPrepared.current || new URLSearchParams(window.location.search).get('demo') !== 'golden') return;
+    goldenPrepared.current = true;
+    goldenModeRef.current = true;
+    prepareGoldenDemo(localStorage);
+    setGoldenMode(true);
+    setVoiceLaunchSignal((value) => value + 1);
+  }, []);
   const [calls, setCalls] = useState<EmergencyCall[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -204,7 +216,7 @@ export default function DashboardPage() {
   /** @description Stored calls shadow their mock counterpart instead of joining it. */
   const mergeCalls = (stored: EmergencyCall[]): EmergencyCall[] => {
     const byId = new Map<string, EmergencyCall>();
-    for (const call of [...stored, ...mockCalls].filter(visibleIncident)) {
+    for (const call of [...stored, ...(goldenModeRef.current ? [] : mockCalls)].filter(visibleIncident)) {
       if (call && call.id && !byId.has(call.id)) byId.set(call.id, call);
     }
     return [...byId.values()];
@@ -823,7 +835,7 @@ export default function DashboardPage() {
           <div id="voice-station" className="flex items-center gap-2">
             <StartEmergencyCall
               launchSignal={voiceLaunchSignal}
-              initialScriptId="hinglish-five-minute"
+              initialScriptId={goldenMode ? 'golden' : 'hinglish-five-minute'}
               onCallCreated={(id) => {
                 setSelectedCallId(id);
                 setMainView('map');
@@ -833,6 +845,27 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {goldenMode && (
+        <div className="shrink-0 border-b border-rule bg-panel px-4 py-3 text-xs text-ink" aria-label="Golden recording controls">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <strong>GOLDEN DEMO · SIMULATED · Independent demonstration</strong>
+            <a className="font-bold text-accent underline" href="/dashboard?demo=golden">Reset recording</a>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span>Background: POSSIBLE_PRANK · human review | Routine LOW</span>
+            {calls.find((call) => call.id === 'golden-demo-call') ? (() => {
+              const golden = calls.find((call) => call.id === 'golden-demo-call')!;
+              return <>
+                <strong className="text-critical-bright">{golden.severity?.toUpperCase()} · {golden.priority_code}</strong>
+                <span>{golden.caller_location?.address} · caller words / approximate gazetteer · ±1,200m</span>
+                {golden.flags?.includes('GOLDEN_CALLER_INJECTION_IGNORED') && <strong className="text-accent">Injected LOW request ignored by local rules</strong>}
+                <button className="rounded border border-accent px-3 py-1 font-bold text-accent" onClick={() => handleOpenWorkflow(golden)}>Human checkpoints</button>
+              </>;
+            })() : <span>Play the golden caller; pause before the attack.</span>}
+          </div>
+        </div>
+      )}
 
       {liveCall && liveCall.state !== 'end' && <LiveCallStrip payload={liveCall} />}
 
