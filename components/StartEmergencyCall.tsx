@@ -49,6 +49,7 @@ import {
   emergencyVoiceConnectSettings,
   emergencyVoiceSessionSettings,
 } from '@/lib/voice-launch';
+import { readApiJson } from '@/lib/api-response';
 
 interface StartEmergencyCallProps {
   onCallCreated?: (callId: string) => void;
@@ -517,8 +518,8 @@ function CallStation({
             callDurationSeconds: seconds,
           }),
         });
-        created = await res.json();
-        if (!res.ok || !created.call) throw new Error(created.error || 'Triage failed.');
+        created = await readApiJson<any>(res, 'Call triage');
+        if (!created.call) throw new Error('Call triage returned an incomplete response. Please try again.');
       } catch (error) {
         setErrorText(error instanceof Error ? error.message : 'Triage failed.');
         setPhase('error');
@@ -550,8 +551,8 @@ function CallStation({
               callDurationSeconds: seconds,
             }),
           });
-          const refined = await res.json();
-          if (res.ok && refined?.call) {
+          const refined = await readApiJson<any>(res, 'Call refinement');
+          if (refined?.call) {
             publishCall(refined.call, { isUpdate: true }); // republish; merge over the stored record
             setResult(refined.call);
             setTriageMethod(refined.triage_method ?? refined.call.triage_method ?? '');
