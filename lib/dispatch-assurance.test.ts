@@ -208,3 +208,36 @@ test('allocates constrained rescue capability before flexible fire coverage', ()
   assert.equal(result.assignments.find((item) => item.requested_service === 'rescue')?.unit_id, 'DFS-206');
   assert.equal(result.assignments.find((item) => item.requested_service === 'fire')?.unit_id, 'DFS-211');
 });
+
+test('a call with no explicit priority code is assured against its severity', () => {
+  // The regression this pins, in the exact shape it shipped: the console's
+  // demo and stored calls carry neither a dispatch plan nor a `priority_code`,
+  // and the old `?? 'P3'` fallback then measured a critical incident against
+  // P3's 30-minute target while every other view labelled it P1. Response
+  // assurance exists to catch a late response; on the wrong clock it cannot.
+  const bare = (overrides: Partial<EmergencyCall>) =>
+    assessDispatch(
+      call({ priority_code: undefined, dispatch_plan: undefined, ...overrides }),
+      TACTICAL_UNITS,
+    );
+
+  const critical = bare({ severity: 'critical' });
+  assert.equal(critical.priority_code, 'P1');
+  assert.equal(critical.target_minutes, 8);
+
+  const high = bare({ severity: 'high' });
+  assert.equal(high.priority_code, 'P2');
+  assert.equal(high.target_minutes, 15);
+
+  const low = bare({ severity: 'low' });
+  assert.equal(low.priority_code, 'P3');
+  assert.equal(low.target_minutes, 30);
+
+  // An explicit code still wins over the severity derivation.
+  assert.equal(bare({ severity: 'critical', priority_code: 'P3' }).priority_code, 'P3');
+
+  // And a legacy "Code N" grade is normalised the way the console displays it.
+  const legacy = bare({ severity: 'low', priority_code: 'Code 3' });
+  assert.equal(legacy.priority_code, 'P1');
+  assert.equal(legacy.target_minutes, 8);
+});

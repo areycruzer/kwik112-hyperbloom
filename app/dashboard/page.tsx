@@ -929,43 +929,17 @@ function IncidentDetail({
           />
           <div className="min-w-0 flex-1">
             <h2 className="text-md font-semibold capitalize text-ink">{subtype}</h2>
+            {/* The priority code alone. "P1" and "CRITICAL" are the same fact
+                said twice, and the chip already carries the severity colour. */}
             <div className="mt-1 flex items-center gap-2">
               <Chip tone={severityTone(call.severity)} dot>
                 {priorityCode(call)}
               </Chip>
-              <span className="text-2xs uppercase tracking-wide text-ink-4">
-                {call.severity ?? 'ungraded'}
-              </span>
+              {call.severity == null && (
+                <span className="text-2xs uppercase tracking-wide text-ink-4">ungraded</span>
+              )}
             </div>
           </div>
-        </div>
-
-        <SectionHeading>What happened</SectionHeading>
-
-        <Field label={confidenceGrade ? `AI summary · ${confidenceGrade} confidence` : 'AI summary'}>
-          <p className="text-sm leading-relaxed text-ink-2">
-            {call.ai_summary ||
-              call.ai_triage?.summary ||
-              call.chief_complaint ||
-              'No AI triage summary is available for this incident yet.'}
-          </p>
-        </Field>
-
-        {threats.length > 0 && (
-          <Field label="Immediate threats">
-            <div className="flex flex-wrap gap-1.5">
-              {threats.map((threat) => (
-                <Chip key={threat} tone="critical">{threat}</Chip>
-              ))}
-            </div>
-          </Field>
-        )}
-
-        <div className="rounded-[6px] border border-rule bg-panel p-3">
-          <DistressMeter level={distressOf(call)} />
-          {distressOf(call) == null && (
-            <p className="mt-1.5 text-2xs text-ink-4">No voice stress reading is available for this call.</p>
-          )}
         </div>
 
         <SectionHeading>Where and caller</SectionHeading>
@@ -998,6 +972,38 @@ function IncidentDetail({
             )}
           </span>
         </Field>
+
+        <SectionHeading>What happened</SectionHeading>
+
+        <Field label={confidenceGrade ? `AI summary · ${confidenceGrade} confidence` : 'AI summary'}>
+          <p className="text-sm leading-relaxed text-ink-2">
+            {call.ai_summary ||
+              call.ai_triage?.summary ||
+              call.chief_complaint ||
+              'No AI triage summary is available for this incident yet.'}
+          </p>
+        </Field>
+
+        {threats.length > 0 && (
+          <Field label="Threats">
+            <div className="flex flex-wrap gap-1.5">
+              {threats.map((threat) => (
+                <Chip key={threat} tone="critical">{threat}</Chip>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {/* Voice stress, only when prosody was actually measured. This used to
+            be a bordered panel on every call, and on the many calls with no
+            reading it was a large empty box whose only content was a sentence
+            saying it was empty. Absence is still visible where it costs
+            nothing: the map pin simply draws no distress ring. */}
+        {distressOf(call) != null && (
+          <Field label="Voice stress">
+            <DistressMeter level={distressOf(call)} />
+          </Field>
+        )}
 
         {/* Safety audit */}
         {safetyAudit && (
@@ -1037,8 +1043,11 @@ function IncidentDetail({
           </div>
         </Field>
 
-        {/* Dispatch recommendation */}
-        <Field label="Dispatch recommendation">
+        {/* Dispatch: who is going, and whether they arrive inside the response
+            target. These were two separate headings that, on an unplanned call,
+            both said "nothing yet" one after the other. They answer one
+            question and now sit under one label. */}
+        <Field label="Dispatch">
           {dispatchPlan ? (
             <div className="rounded-[6px] border border-rule bg-panel p-2">
               <div className="mb-2 flex flex-wrap gap-1.5">
@@ -1073,12 +1082,14 @@ function IncidentDetail({
           ) : (
             <span className="text-sm text-ink-3">No units recommended yet.</span>
           )}
+          {/* Response assurance grounds the generic service advice above in the
+              live fleet: it is the check that the recommendation can actually
+              be met on the clock this priority is held to. */}
+          <div className="mt-2">
+            <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
+          </div>
         </Field>
 
-        {/* Response assurance: grounds generic service advice in the live fleet. */}
-        <Field label="Response assurance">
-          <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
-        </Field>
 
         <SectionHeading>Operator actions</SectionHeading>
 
@@ -1121,7 +1132,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return (
     <div className="flex flex-col gap-1">
       <span className="label flex items-center gap-1.5">
-        {label.startsWith('Immediate') && <AlertTriangle className="h-3 w-3 text-mild" aria-hidden />}
+        {label === 'Threats' && <AlertTriangle className="h-3 w-3 text-mild" aria-hidden />}
         {label}
       </span>
       {children}
