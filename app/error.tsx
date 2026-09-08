@@ -14,8 +14,10 @@ export default function Error({
       <div className="max-w-md rounded border border-[#363c39] bg-[#202422] p-6">
         <h2 className="text-lg font-bold">Something interrupted the console</h2>
         <p className="mt-2 text-sm leading-6 text-[#c3cbc7]">
-          The dispatcher console hit an unexpected error. No data was lost — state is
-          session-local. Reload the console, or continue with a scripted demo call.
+          The dispatcher console hit an unexpected error. Saved browser-local records may
+          be recoverable; an unfinished call or unsaved changes may be lost. Reload the
+          console, or continue with a scripted demo call. This is an independent synthetic
+          demonstration, not an official 112 service.
         </p>
         {error.digest ? (
           <p className="mt-2 font-mono text-2xs text-[#98a29d]">digest: {error.digest}</p>
