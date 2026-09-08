@@ -74,11 +74,42 @@ function estimateEtaMinutes(distanceKm: number, type: TacticalUnit['type']): num
   return Math.max(2, Math.ceil(1.5 + travelMinutes));
 }
 
+/**
+ * @description The priority this call is held to, on the P-scale.
+ *
+ *              Must agree with `priorityCode()` in lib/incident.ts, which is
+ *              what every other view shows. It cannot import it — this module
+ *              stays dependency-light so `node --test` can load it bare — so
+ *              the derivation is repeated here and pinned by a test that a
+ *              critical call gets the P1 target.
+ *
+ *              The bug this replaces: an unqualified `?? 'P3'` fallback. Almost
+ *              no stored call carries an explicit `priority_code`, so a P1
+ *              cardiac arrest — shown as P1 everywhere else on the console —
+ *              was silently assured against P3's 30-minute target instead of
+ *              P1's 8. Response assurance exists to catch a late response; it
+ *              was measuring against the wrong clock for nearly every call.
+ */
+function effectivePriority(call: EmergencyCall): PriorityCode {
+  const stored = call.dispatch_plan?.priority_code ?? call.priority_code;
+  if (stored) {
+    // Legacy "Code N" grades map onto the P-scale; see LEGACY_PRIORITY_CODES
+    // in lib/incident.ts, which normalises the same pairs for display.
+    if (stored === 'Code 3') return 'P1';
+    if (stored === 'Code 2') return 'P2';
+    if (stored === 'Code 1') return 'P3';
+    return stored;
+  }
+  if (call.severity === 'critical') return 'P1';
+  if (call.severity === 'high') return 'P2';
+  return 'P3';
+}
+
 export function assessDispatch(
   call: EmergencyCall,
   fleet: readonly TacticalUnit[],
 ): DispatchAssurance {
-  const priorityCode = call.dispatch_plan?.priority_code ?? call.priority_code ?? 'P3';
+  const priorityCode = effectivePriority(call);
   const targetMinutes = RESPONSE_TARGET_MINUTES[priorityCode] ?? 30;
   const location = call.caller_location;
   const base = {
