@@ -448,14 +448,18 @@ export default function DashboardPage() {
   const localCover = useMemo(() => {
     const point = selectedCall?.caller_location;
     if (typeof point?.latitude !== 'number' || typeof point?.longitude !== 'number') {
-      return { units: operationalUnits, mutualAid: false, radiusKm: 0 };
+      return { units: operationalUnits, mutualAid: false, radiusKm: 0, excluded: 0 };
     }
     const local = localFleet(operationalUnits, point.latitude, point.longitude);
     const shown = new Set(local.units.map((unit) => unit.id));
     const committed = operationalUnits.filter(
       (unit) => unit.assignedCallId === selectedCall?.id && !shown.has(unit.id),
     );
-    return { ...local, units: [...local.units, ...committed] };
+    const units = [...local.units, ...committed];
+    // Only claim a radius when one actually excluded something. On the
+    // single-city fleet nothing is filtered, and announcing a filter that did
+    // nothing is its own small lie.
+    return { ...local, units, excluded: operationalUnits.length - units.length };
   }, [operationalUnits, selectedCall]);
 
   const visibleUnits = localCover.units;
@@ -870,7 +874,9 @@ export default function DashboardPage() {
                           ? 'Select an incident to compare distance'
                           : localCover.mutualAid
                             ? `No local cover — nearest units to ${selectedCall.caller_location.address}`
-                            : `Within ${localCover.radiusKm} km of ${selectedCall.caller_location.address}`}
+                            : localCover.excluded > 0
+                              ? `Within ${localCover.radiusKm} km of ${selectedCall.caller_location.address}`
+                              : `Nearest to ${selectedCall.caller_location.address}`}
                       </p>
                     </div>
                     <button

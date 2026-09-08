@@ -168,29 +168,32 @@ test('no seeded unit is committed without a call to be committed to', () => {
 });
 
 /**
- * The cities the demo console serves, mirroring the incident coordinates in
- * lib/mock-data. Repeated here rather than imported because mock-data's own
- * imports are not extension-qualified and will not load under `node --test`.
+ * The Delhi districts the demo dispatches to, mirroring the incident
+ * coordinates in lib/mock-data. Repeated here rather than imported because
+ * mock-data's own imports are not extension-qualified and will not load under
+ * `node --test`.
  */
-const SERVICE_CITIES: ReadonlyArray<{ name: string; lat: number; lng: number }> = [
-  { name: 'Delhi', lat: 28.7196, lng: 77.1186 },
-  { name: 'Mumbai', lat: 18.9476, lng: 72.8343 },
-  { name: 'Bengaluru', lat: 12.9172, lng: 77.6229 },
-  { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
-  { name: 'Chennai', lat: 13.0499, lng: 80.2824 },
-  { name: 'Hyderabad', lat: 17.4474, lng: 78.3684 },
-  { name: 'Pune', lat: 18.5204, lng: 73.8567 },
-  { name: 'Ahmedabad', lat: 23.0258, lng: 72.5698 },
-  { name: 'Jaipur', lat: 26.9239, lng: 75.8267 },
+const SERVICE_AREAS: ReadonlyArray<{ name: string; lat: number; lng: number }> = [
+  { name: 'Rohini', lat: 28.7196, lng: 77.1186 },
+  { name: 'Shalimar Bagh', lat: 28.7049, lng: 77.1324 },
+  { name: 'Pitampura', lat: 28.6892, lng: 77.1310 },
+  { name: 'Chandni Chowk', lat: 28.6562, lng: 77.2300 },
+  { name: 'Anand Vihar', lat: 28.6469, lng: 77.3157 },
+  { name: 'Seelampur', lat: 28.6742, lng: 77.2673 },
+  { name: 'India Gate', lat: 28.6129, lng: 77.2295 },
+  { name: 'Nehru Place', lat: 28.5494, lng: 77.2501 },
+  { name: 'Moti Bagh', lat: 28.5772, lng: 77.1745 },
+  { name: 'Lajpat Nagar', lat: 28.5677, lng: 77.2433 },
+  { name: 'Gandhi Nagar', lat: 28.6560, lng: 77.2760 },
+  { name: 'Chhatarpur', lat: 28.5065, lng: 77.1750 },
 ];
 
-test('every city the console serves has a unit of every service within reach', () => {
-  // The bug this pins: the fleet was Delhi-only while the demo spanned nine
-  // cities, so a Kolkata building collapse was assured against a Delhi
-  // appliance and the console reported a 3,039-minute ETA in earnest. Response
-  // assurance cannot catch a late response while measuring against a fleet
-  // 1,300 km away.
-  for (const city of SERVICE_CITIES) {
+test('every district the console serves is reachable by every service', () => {
+  // The bug this pins: incidents once spanned nine cities against a Delhi-only
+  // fleet, so a collapse was assured against an appliance 1,300 km away and the
+  // console reported a 3,039-minute ETA in earnest. The demo is one city now,
+  // and every corner of it has to be inside a workable response time.
+  for (const city of SERVICE_AREAS) {
     for (const service of ['police', 'fire', 'ems'] as const) {
       const nearest = nearestAvailableUnit(TACTICAL_UNITS, city.lat, city.lng, service);
       assert.ok(nearest, `${city.name} has no ${service} unit at all`);
@@ -207,10 +210,10 @@ test('every city the console serves has a unit of every service within reach', (
   }
 });
 
-test('technical rescue is covered in every city, not only Delhi', () => {
+test('technical rescue is covered across the city, not only its north-west', () => {
   // A `rescue` request with no capable unit reports as uncovered, and building
   // collapse is exactly the incident that asks for one.
-  for (const city of SERVICE_CITIES) {
+  for (const city of SERVICE_AREAS) {
     const capable = TACTICAL_UNITS.filter(
       (u) =>
         (u.capabilities ?? []).includes('rescue') &&
@@ -220,45 +223,29 @@ test('technical rescue is covered in every city, not only Delhi', () => {
   }
 });
 
-test('a city sees its own units and nobody else’s', () => {
-  // The complaint this fixes: a Delhi incident listed Karnataka's appliances.
-  for (const city of SERVICE_CITIES) {
-    const local = localFleet(TACTICAL_UNITS, city.lat, city.lng);
-    assert.equal(local.mutualAid, false, `${city.name} should have local cover`);
-    assert.ok(local.units.length > 0);
+test('a Delhi incident sees the Delhi fleet, wherever in the city it is', () => {
+  // With one city the radius filters nothing on a normal call, which is the
+  // correct behaviour: a command desk works its whole fleet. What must not
+  // happen is a district falling outside its own cover.
+  for (const area of SERVICE_AREAS) {
+    const local = localFleet(TACTICAL_UNITS, area.lat, area.lng);
+    assert.equal(local.mutualAid, false, `${area.name} should have local cover`);
+    assert.equal(
+      local.units.length,
+      TACTICAL_UNITS.length,
+      `${area.name} should see the whole city fleet`,
+    );
     for (const unit of local.units) {
-      const km = haversineKm(unit.lat, unit.lng, city.lat, city.lng);
-      assert.ok(km <= LOCAL_COVER_RADIUS_KM, `${unit.id} is ${km.toFixed(0)} km from ${city.name}`);
-    }
-    // And every other city's units are excluded.
-    const localIds = new Set(local.units.map((u) => u.id));
-    for (const other of SERVICE_CITIES) {
-      if (other.name === city.name) continue;
-      const otherLocal = localFleet(TACTICAL_UNITS, other.lat, other.lng).units;
-      for (const unit of otherLocal) {
-        assert.ok(
-          !localIds.has(unit.id),
-          `${unit.id} covers both ${city.name} and ${other.name}`,
-        );
-      }
+      const km = haversineKm(unit.lat, unit.lng, area.lat, area.lng);
+      assert.ok(km <= LOCAL_COVER_RADIUS_KM, `${unit.id} is ${km.toFixed(0)} km from ${area.name}`);
     }
   }
 });
 
-test('the radius holds a metro together without reaching the next city', () => {
-  // Delhi NCR spans ~50 km, so its outer incidents must still see the fleet.
-  const outerDelhi = localFleet(TACTICAL_UNITS, 28.5065, 77.175);
-  assert.equal(outerDelhi.mutualAid, false);
-  assert.ok(outerDelhi.units.length > 0);
-
-  // Mumbai and Pune are the closest served pair (~118 km) and must not share.
-  const mumbai = new Set(localFleet(TACTICAL_UNITS, 18.9476, 72.8343).units.map((u) => u.id));
-  const pune = localFleet(TACTICAL_UNITS, 18.5204, 73.8567).units.map((u) => u.id);
-  assert.ok(pune.every((id) => !mumbai.has(id)), 'Pune and Mumbai must not share cover');
-});
-
-test('an incident outside every region falls back to mutual aid, never to nothing', () => {
-  // Mid-Bay-of-Bengal. "No units" and "no units nearby" are different answers.
+test('a call from outside the city falls back to mutual aid, never to nothing', () => {
+  // The voice intake accepts any location, so a call can arrive from well
+  // outside Delhi. "No units" and "no units nearby" are different answers, and
+  // the radius exists to stop the second being reported as the first.
   const adrift = localFleet(TACTICAL_UNITS, 15.0, 87.0);
   assert.equal(adrift.mutualAid, true);
   assert.ok(adrift.units.length > 0, 'the roster must never be empty');
