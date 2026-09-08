@@ -15,9 +15,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ChevronRight,
-  CheckCircle2,
-  CircleAlert,
-  CircleDot,
   MapPin,
   Radio,
   Search,
@@ -48,9 +45,6 @@ import {
   dashboardRegionVisibility,
   defaultMobileIncidentOpen,
   defaultUnitPanelOpen,
-  incidentActionChecklist,
-  type IncidentActionChecklist,
-  type IncidentActionChecklistItem,
   mobileNavigationInset,
   nextLiveCallPayload,
   presentLiveCall,
@@ -68,7 +62,7 @@ import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS, etaLabel, haversineKm, localFleet } from '@/lib/units';
 import { releaseUnit, reserveUnits } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
-import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
+import { assessDispatch, type DispatchAssignment } from '@/lib/dispatch-assurance';
 import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
 import {
   findFusionSuggestions,
@@ -852,6 +846,7 @@ export default function DashboardPage() {
               fusionDecision={selectedFusionDecision}
               linkedPrimaryCallId={selectedLinkedPrimary}
               onFusionDecision={(action) => selectedFusion && decideFusion(selectedFusion, action)}
+              onDispatchSuggestedUnit={handleNotifyUnit}
               onBack={() => setPanelView('queue')}
               onOpenTimeline={() => {
                 setSelectedCallId(selectedCall.id);
@@ -1243,6 +1238,7 @@ function IncidentDetail({
   fusionDecision,
   linkedPrimaryCallId,
   onFusionDecision,
+  onDispatchSuggestedUnit,
   onBack,
   onOpenTimeline,
 }: {
@@ -1251,6 +1247,7 @@ function IncidentDetail({
   fusionDecision?: FusionDecision;
   linkedPrimaryCallId?: string | null;
   onFusionDecision: (action: FusionDecisionAction) => void;
+  onDispatchSuggestedUnit: (unitId: string, callId: string, callsign: string) => void;
   onBack: () => void;
   onOpenTimeline: () => void;
 }) {
@@ -1271,6 +1268,7 @@ function IncidentDetail({
   // roster projected. This is what closes the loop: pressing Dispatch there has
   // to be visible here, or the operator cannot tell whether it worked.
   const incidentFleet = useReservedFleet(TACTICAL_UNITS, call.id);
+  const dispatchAssurance = assessDispatch(call, incidentFleet);
   const assignedUnits = incidentFleet
     .filter((unit) => unit.assignedCallId === call.id)
     .map((unit) => {
@@ -1281,10 +1279,8 @@ function IncidentDetail({
           : null;
       return { unit, eta: etaLabel(unit, km), distance: km === null ? null : `${km.toFixed(1)} km` };
     });
-  const operatorQuestions = call.operator_questions ?? [];
   const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
-  const actionChecklist = incidentActionChecklist(call);
   const guidance = selectPreArrivalGuidance({
     incidentType: call.incident_type,
     severity: call.severity ?? 'low',
@@ -1330,8 +1326,6 @@ function IncidentDetail({
             </div>
           </div>
         </div>
-
-        <IncidentActionChecklistPanel checklist={actionChecklist} />
 
         <SectionHeading>Where and caller</SectionHeading>
 
@@ -1438,102 +1432,16 @@ function IncidentDetail({
             both said "nothing yet" one after the other. They answer one
             question and now sit under one label. */}
         <Field label="Dispatch">
-          {dispatchPlan ? (
-            <div className="rounded-[6px] border border-rule bg-panel p-2">
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                <Chip tone={severityTone(call.severity)}>{dispatchPlan.priority_code}</Chip>
-                <Chip tone={dispatchPlan.eta_risk === 'high' ? 'critical' : dispatchPlan.eta_risk === 'medium' ? 'mild' : 'safe'}>
-                  ETA risk {dispatchPlan.eta_risk}
-                </Chip>
-                <Chip tone={dispatchPlan.operator_confirmation_required ? 'mild' : 'safe'}>
-                  {dispatchPlan.operator_confirmation_required ? 'Confirm before dispatch' : 'Auto-ready'}
-                </Chip>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {dispatchPlan.units.map((unit) => (
-                  <div key={`${unit.service}-${unit.unit}`} className="rounded-[4px] border border-rule bg-ground px-2 py-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-ink">{unit.unit}</span>
-                      <span className="label">{unit.service}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-ink-3">{unit.reason}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : units.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {units.map((unit) => (
-                <Chip key={unit} tone="accent">
-                  {unit}
-                </Chip>
-              ))}
-            </div>
-          ) : standardResponse.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap gap-1.5">
-                {standardResponse.map((unit) => (
-                  <Chip key={unit} tone="neutral">
-                    {unit}
-                  </Chip>
-                ))}
-              </div>
-              {/* Labelled, because this is what a control room sends to this
-                  kind of incident - not a decision anyone has taken on this
-                  call. Printing "No units recommended yet" instead was true
-                  and useless: every cardiac arrest wants an ALS ambulance
-                  whether or not a plan has been filled in. */}
-              <span className="text-2xs text-ink-4">
-                Standard response for this incident type · not yet confirmed
-              </span>
-            </div>
-          ) : (
-            <span className="text-sm text-ink-3">No units recommended yet.</span>
-          )}
-
-          {assignedUnits.length > 0 && (
-            <div className="mt-2 flex flex-col gap-1.5">
-              <span className="label">Dispatched from roster</span>
-              {assignedUnits.map(({ unit, eta, distance }) => (
-                <div
-                  key={unit.id}
-                  className="rounded-[4px] border border-accent/40 bg-accent/5 px-2 py-1.5"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-ink">{unit.callsign}</span>
-                    <span className="tnum text-2xs text-accent-bright">ETA {eta}</span>
-                  </div>
-                  <p className="tnum mt-0.5 text-2xs text-ink-4">
-                    {unit.agency} · {unit.id}
-                    {distance ? ` · ${distance}` : ''}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Response assurance grounds the generic service advice above in the
-              live fleet: it is the check that the recommendation can actually
-              be met on the clock this priority is held to. */}
-          <div className="mt-2">
-            <ResponseAssurancePanel call={call} linkedPrimaryCallId={linkedPrimaryCallId} />
-          </div>
+          <DispatchSuggestedUnitsPanel
+            call={call}
+            assurance={dispatchAssurance}
+            assignedUnits={assignedUnits}
+            fallbackUnits={dispatchPlan ? [] : units.length > 0 ? units : standardResponse}
+            linkedPrimaryCallId={linkedPrimaryCallId}
+            onDispatchUnit={onDispatchSuggestedUnit}
+          />
         </Field>
 
-
-        <SectionHeading>Operator actions</SectionHeading>
-
-        {/* Missing info assistant */}
-        <Field label="Operator next questions">
-          {operatorQuestions.length > 0 ? (
-            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-ink-2">
-              {operatorQuestions.map((question) => (
-                <li key={question}>{question}</li>
-              ))}
-            </ol>
-          ) : (
-            <span className="text-sm text-ink-3">No blocking questions identified.</span>
-          )}
-        </Field>
 
         {/* Primary action → incident timeline (Task 13 overlay) */}
         <button
@@ -1549,46 +1457,127 @@ function IncidentDetail({
   );
 }
 
-function IncidentActionChecklistPanel({ checklist }: { checklist: IncidentActionChecklist }) {
-  const blockedCount = checklist.items.filter((item) => item.state === 'blocked').length;
-
-  return (
-    <section className="rounded-[6px] border border-rule bg-panel p-2.5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <span className="label">Next action</span>
-          <p className="mt-1 text-sm font-semibold text-ink">{checklist.nextAction}</p>
-        </div>
-        <Chip tone={blockedCount > 0 ? 'critical' : 'safe'}>
-          {blockedCount > 0 ? `${blockedCount} blocker${blockedCount === 1 ? '' : 's'}` : 'Ready path'}
-        </Chip>
+function DispatchSuggestedUnitsPanel({
+  call,
+  assurance,
+  assignedUnits,
+  fallbackUnits,
+  linkedPrimaryCallId,
+  onDispatchUnit,
+}: {
+  call: EmergencyCall;
+  assurance: ReturnType<typeof assessDispatch>;
+  assignedUnits: Array<{ unit: (typeof TACTICAL_UNITS)[number]; eta: string; distance: string | null }>;
+  fallbackUnits: string[];
+  linkedPrimaryCallId?: string | null;
+  onDispatchUnit: (unitId: string, callId: string, callsign: string) => void;
+}) {
+  if (linkedPrimaryCallId) {
+    return (
+      <div className="rounded-[6px] border border-accent bg-accent/5 p-2.5">
+        <Chip tone="accent">Shared response #{linkedPrimaryCallId}</Chip>
       </div>
-      <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-        {checklist.items.map((item) => (
-          <ChecklistItemRow key={item.id} item={item} />
+    );
+  }
+
+  if (assurance.assignments.length > 0) {
+    const statusTone = assurance.status === 'on_target' ? 'safe' : assurance.status === 'at_risk' ? 'mild' : 'critical';
+
+    return (
+      <div className="rounded-[6px] border border-rule bg-panel p-2">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <Chip tone={statusTone}>
+            {assurance.status === 'on_target' ? 'On target' : assurance.status === 'at_risk' ? 'At risk' : 'Check needed'}
+          </Chip>
+          <Chip tone="accent">{assurance.priority_code} target {assurance.target_minutes} min</Chip>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {assurance.assignments.map((assignment) => (
+            <SuggestedDispatchRow
+              key={`${assignment.requested_service}-${assignment.unit_id}`}
+              callId={call.id}
+              assignment={assignment}
+              assigned={assignedUnits.some(({ unit }) => unit.id === assignment.unit_id)}
+              onDispatchUnit={onDispatchUnit}
+            />
+          ))}
+        </div>
+        {assurance.uncovered_services.length > 0 && (
+          <p className="mt-2 text-xs font-medium text-critical-bright">
+            Mutual aid needed: {assurance.uncovered_services.join(', ')}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (assignedUnits.length > 0) {
+    return (
+      <div className="flex flex-col gap-1.5 rounded-[6px] border border-rule bg-panel p-2">
+        {assignedUnits.map(({ unit, eta, distance }) => (
+          <div key={unit.id} className="flex items-center justify-between gap-2 rounded-[4px] bg-ground px-2 py-1.5">
+            <span className="min-w-0 text-sm font-medium text-ink">{unit.callsign}</span>
+            <span className="shrink-0 text-2xs font-semibold text-accent-bright">
+              En route · ETA {eta}{distance ? ` · ${distance}` : ''}
+            </span>
+          </div>
         ))}
       </div>
-    </section>
-  );
+    );
+  }
+
+  if (fallbackUnits.length > 0) {
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {fallbackUnits.map((unit) => (
+          <Chip key={unit} tone="neutral">{unit}</Chip>
+        ))}
+      </div>
+    );
+  }
+
+  if (assurance.status === 'location_required') {
+    return <span className="text-sm text-critical-bright">Verify location before dispatch.</span>;
+  }
+
+  return <span className="text-sm text-ink-3">No units suggested yet.</span>;
 }
 
-function ChecklistItemRow({ item }: { item: IncidentActionChecklistItem }) {
-  const Icon =
-    item.state === 'done' ? CheckCircle2 : item.state === 'blocked' ? CircleAlert : CircleDot;
-  const tone =
-    item.state === 'done'
-      ? 'border-safe/30 bg-safe/5 text-safe'
-      : item.state === 'blocked'
-        ? 'border-critical/35 bg-critical/5 text-critical'
-        : 'border-mild/35 bg-mild/5 text-mild';
-
+function SuggestedDispatchRow({
+  callId,
+  assignment,
+  assigned,
+  onDispatchUnit,
+}: {
+  callId: string;
+  assignment: DispatchAssignment;
+  assigned: boolean;
+  onDispatchUnit: (unitId: string, callId: string, callsign: string) => void;
+}) {
   return (
-    <div className={cn('flex min-w-0 items-start gap-2 rounded-[4px] border px-2 py-1.5', tone)}>
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-[4px] border border-rule bg-ground px-2 py-1.5">
       <div className="min-w-0">
-        <div className="text-xs font-semibold text-ink">{item.label}</div>
-        <div className="mt-0.5 text-2xs leading-snug text-ink-3">{item.detail}</div>
+        <div className="truncate text-sm font-semibold text-ink">{assignment.callsign}</div>
+        <div className="tnum mt-0.5 text-2xs text-ink-4">
+          {assignment.requested_service} · {assignment.distance_km.toFixed(1)} km · ETA {assignment.eta_minutes} min
+        </div>
       </div>
+      {assigned ? (
+        <span className="shrink-0 rounded-[4px] border border-safe/40 bg-safe/10 px-2 py-1 text-2xs font-semibold uppercase tracking-wide text-safe">
+          En route
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onDispatchUnit(assignment.unit_id, callId, assignment.callsign)}
+          className={cn(
+            'shrink-0 rounded-[4px] px-2.5 py-1.5 text-xs font-semibold text-deep transition-colors',
+            assignment.status === 'on_target' ? 'bg-safe hover:bg-safe/80' : 'bg-mild hover:bg-mild/80',
+          )}
+        >
+          Dispatch
+        </button>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { HTMLAttributes } from 'react';
 import { EmergencyCall } from '@/lib/types';
 import { Chip, type ChipTone } from '@/components/ui/panel';
 import { Symbol } from '@/components/ui/symbol';
@@ -50,7 +51,7 @@ import {
   isComplete,
   emptyTimeline,
 } from '@/lib/timeline';
-import { X, Check, Pencil, AlertTriangle, Lock } from 'lucide-react';
+import { X, Check, Pencil, AlertTriangle } from 'lucide-react';
 
 interface IncidentTimelineProps {
   open: boolean;
@@ -404,7 +405,7 @@ export default function IncidentTimeline({
         </div>
 
         {/* Decision points */}
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {DECISION_POINTS.map((point) => {
             const record = decidedByPoint.get(point);
             const proposal = record?.proposal ?? proposalFor(point, call, operationalFleet, linkedPrimaryCallId);
@@ -413,11 +414,11 @@ export default function IncidentTimeline({
             const isUpcoming = !isDecided && !isCurrent;
 
             return (
-              <section
+              <DecisionStepRow
                 key={point}
                 aria-labelledby={`tl-${point}`}
                 className={
-                  'rounded-[6px] border p-3 ' +
+                  'rounded-[6px] border p-2.5 ' +
                   (isCurrent
                     ? 'border-accent bg-panel-raised'
                     : isUpcoming
@@ -437,17 +438,18 @@ export default function IncidentTimeline({
                       {ACTION_LABEL[record.action]}
                     </Chip>
                   ) : isUpcoming ? (
-                    <span className="flex items-center gap-1 text-2xs uppercase tracking-wide text-ink-4">
-                      <Lock className="h-3 w-3" aria-hidden /> Locked
+                    <span className="text-2xs uppercase tracking-wide text-ink-4">
+                      Pending
                     </span>
                   ) : (
                     <Chip tone="accent">Awaiting decision</Chip>
                   )}
                 </div>
 
-                {/* AI proposal — derived from this call */}
-                <div className="mt-2 rounded-[4px] border border-rule bg-deep/40 p-2.5">
-                  <p className="label mb-1">AI proposal</p>
+                {/* Recommendation — derived from this call */}
+                {!isUpcoming && (
+                <div className="mt-2 rounded-[4px] bg-deep/35 p-2">
+                  <p className="label mb-1">Recommendation</p>
                   <p className="text-sm font-medium text-ink">{proposal.heading}</p>
                   <p className="mt-1 text-sm leading-relaxed text-ink-2">{proposal.body}</p>
                   {proposal.items.length > 0 && (
@@ -463,6 +465,7 @@ export default function IncidentTimeline({
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Recorded decision detail */}
                 {isDecided && record?.note && (
@@ -515,7 +518,7 @@ export default function IncidentTimeline({
                         rows={2}
                         placeholder={
                           action === 'overridden'
-                            ? 'State why the AI proposal is being overridden…'
+                            ? 'State why the Recommendation is being overridden…'
                             : 'Add an operator note…'
                         }
                         aria-invalid={overrideMissingNote}
@@ -561,11 +564,23 @@ export default function IncidentTimeline({
                     </button>
                   </div>
                 )}
-              </section>
+              </DecisionStepRow>
             );
           })}
         </div>
       </div>
     </div>
+  );
+}
+
+function DecisionStepRow({
+  children,
+  className,
+  ...props
+}: HTMLAttributes<HTMLElement>) {
+  return (
+    <section {...props} className={className}>
+      {children}
+    </section>
   );
 }
