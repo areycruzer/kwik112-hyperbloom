@@ -700,19 +700,6 @@ function CallStation({
         <div className="grid grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-12">
           {/* Controls */}
           <div className="space-y-4 lg:col-span-5">
-            <div className="space-y-1.5">
-              <label htmlFor="caller-number" className="label">
-                Caller number
-              </label>
-              <input
-                id="caller-number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={phase === 'live' || phase === 'scripted' || phase === 'triaging'}
-                className="w-full rounded-md border border-rule-strong bg-deep px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none disabled:opacity-50"
-              />
-            </div>
-
             {phase === 'idle' || phase === 'error' ? (
               <>
                 <button

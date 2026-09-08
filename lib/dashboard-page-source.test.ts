@@ -68,6 +68,14 @@ test('voice station labels the live path as a demo call', async () => {
   assert.ok(!voiceSource.includes('Start live call'));
 });
 
+test('voice station does not show a caller number editor', async () => {
+  const voiceSource = await readFile(path.join(process.cwd(), 'components', 'StartEmergencyCall.tsx'), 'utf8');
+
+  assert.ok(!voiceSource.includes('htmlFor="caller-number"'));
+  assert.ok(!voiceSource.includes('id="caller-number"'));
+  assert.ok(!voiceSource.includes('Caller number'));
+});
+
 test('scripted playback still raises a backend-triaged incident event', async () => {
   const voiceSource = await readFile(path.join(process.cwd(), 'components', 'StartEmergencyCall.tsx'), 'utf8');
 
