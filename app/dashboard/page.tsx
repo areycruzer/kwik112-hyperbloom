@@ -20,6 +20,8 @@ import {
   Radio,
   Search,
   Shield,
+  Bell,
+  BellOff,
   X,
 } from 'lucide-react';
 
@@ -47,6 +49,7 @@ import {
   mobileNavigationInset,
   nextLiveCallPayload,
   presentLiveCall,
+  sortIncidentQueue,
 } from '@/lib/dashboard-presentation';
 import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
 import { selectPreArrivalGuidance } from '@/lib/first-aid';
@@ -341,6 +344,105 @@ export default function DashboardPage() {
     (id: string) => setSelectedUnitId((prev) => (prev === id ? null : id)),
     [],
   );
+  /* ---- NEW CRITICAL CALL ------------------------------------------------
+   * A P1 used to arrive in total silence: no sound, no announcement, no
+   * movement — it simply appeared somewhere in the queue. A console whose job
+   * is to be watched has to be able to interrupt the person watching it.
+   * ---------------------------------------------------------------------- */
+  const [announcement, setAnnouncement] = useState('');
+  const [arrivedCriticalIds, setArrivedCriticalIds] = useState<string[]>([]);
+  const [soundOn, setSoundOn] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  /**
+   * Null until the first batch of calls lands. Opening the console must not
+   * announce the seventeen incidents already on the board — only what arrives
+   * while someone is watching.
+   */
+  const seenCallIds = useRef<Set<string> | null>(null);
+
+  /** Two short notes through Web Audio, so there is no asset to ship or fail to load. */
+  const playAlertTone = useCallback(() => {
+    try {
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      const ctx = audioContextRef.current ?? new Ctor();
+      audioContextRef.current = ctx;
+      // Autoplay policy suspends a context created before a gesture; the sound
+      // toggle is that gesture, and this resumes what it unlocked.
+      void ctx.resume?.();
+      [0, 0.18].forEach((offset, index) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = index === 0 ? 880 : 1174;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
+        gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.16);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + offset);
+        osc.stop(ctx.currentTime + offset + 0.18);
+      });
+    } catch {
+      // Audio is a courtesy. The live region and the row highlight carry the
+      // alert on their own, so a blocked or unavailable context changes nothing
+      // that matters.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (calls.length === 0) return;
+    if (seenCallIds.current === null) {
+      seenCallIds.current = new Set(calls.map((call) => call.id));
+      return;
+    }
+    const seen = seenCallIds.current;
+    const arrived = calls.filter((call) => !seen.has(call.id));
+    if (arrived.length === 0) return;
+    for (const call of arrived) seen.add(call.id);
+
+    const critical = arrived.filter((call) => (call.severity ?? '').toLowerCase() === 'critical');
+    if (critical.length === 0) return;
+
+    setArrivedCriticalIds(critical.map((call) => call.id));
+    setAnnouncement(
+      critical.length === 1
+        ? `New critical incident: ${critical[0].incident_subtype || critical[0].incident_type || 'unclassified'}` +
+          `${critical[0].caller_location?.address ? ` at ${critical[0].caller_location.address}` : ''}.`
+        : `${critical.length} new critical incidents.`,
+    );
+    playAlertTone();
+
+    // The highlight is an arrival cue, not a status. It clears itself so a row
+    // sitting unactioned does not keep flashing for the rest of the shift.
+    const settle = setTimeout(() => setArrivedCriticalIds([]), 12000);
+    return () => clearTimeout(settle);
+  }, [calls, playAlertTone]);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((on) => {
+      const next = !on;
+      // Turning it on IS the user gesture the autoplay policy wants, so unlock
+      // the context here rather than at the next incident — otherwise the first
+      // critical call after enabling sound would still be silent.
+      if (next) {
+        try {
+          const Ctor =
+            window.AudioContext ??
+            (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (Ctor) {
+            audioContextRef.current = audioContextRef.current ?? new Ctor();
+            void audioContextRef.current.resume?.();
+          }
+        } catch {
+          /* Left silent; the visual alert is unaffected. */
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const handleDispatchUnit = useCallback(() => setWorkflowOpen(true), []);
 
   /**
@@ -504,7 +606,10 @@ export default function DashboardPage() {
 
   const headerMetrics = dashboardHeaderMetrics(calls, alerts.length);
 
-  const filteredCalls = calls.filter((call) => {
+  // Ordered, not merely filtered: open before closed, then by priority, then
+  // oldest first within a grade. See `compareIncidentsForQueue`. Memoised
+  // because the header clock re-renders this component every second.
+  const filteredCalls = useMemo(() => sortIncidentQueue(calls.filter((call) => {
     const haystack = [
       call.ai_summary,
       call.chief_complaint,
@@ -526,7 +631,7 @@ export default function DashboardPage() {
         : call.severity === 'medium' || call.severity === 'low';
 
     return matchesSearch && matchesSeverity;
-  });
+  })), [calls, searchQuery, severityFilter]);
 
   // Every rail module now renders in the main region (no full-screen overlays).
   // Selecting one is a pure activeModule switch, consistent across Monitoring,
@@ -656,6 +761,25 @@ export default function DashboardPage() {
             </button>
           )}
 
+          {/* Sound is off until asked for: a console that starts making noise on
+              load gets muted permanently, and the click that enables it is also
+              the gesture the browser autoplay policy requires. */}
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={soundOn}
+            title={soundOn ? 'Alert sound on for new critical calls' : 'Alert sound off'}
+            aria-label={soundOn ? 'Turn alert sound off' : 'Turn alert sound on for new critical calls'}
+            className={cn(
+              'hidden items-center justify-center rounded-[4px] border px-2 py-1.5 transition-colors sm:inline-flex',
+              soundOn
+                ? 'border-accent bg-accent/10 text-accent-bright'
+                : 'border-rule bg-panel text-ink-3 hover:border-rule-strong hover:text-ink',
+            )}
+          >
+            {soundOn ? <Bell className="h-3.5 w-3.5" aria-hidden /> : <BellOff className="h-3.5 w-3.5" aria-hidden />}
+          </button>
+
           {/* Main-area view switch keeps the map and the incident board reachable.
               Only meaningful for the Monitoring module, which owns the main area. */}
           <div
@@ -784,6 +908,7 @@ export default function DashboardPage() {
                       <li key={call.id}>
                         <IncidentRow
                           call={call}
+                          arrived={arrivedCriticalIds.includes(call.id)}
                           fusion={fusionByCall.get(call.id)}
                           fusionDecision={fusionDecisionFor(
                             call.id,
@@ -968,6 +1093,20 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- OVERLAYS ------------------------------------------------------ */}
+
+      {/* Spoken announcement of a new critical call. Assertive because a P1 is
+          exactly the interruption a screen-reader user must not have to wait
+          for; `aria-atomic` so the whole sentence is read, not just the words
+          that changed.
+
+          Deliberately last in the shell, not next to the header. A live region
+          is read wherever it sits, and scripts/check-dashboard-layout measures
+          `header.nextElementSibling` as the dashboard body — parking a 1px
+          hidden node there does not fail the check, it silently redirects it at
+          something that can never overflow. */}
+      <p aria-live="assertive" aria-atomic="true" className="visually-hidden">
+        {announcement}
+      </p>
       <IncidentTimeline
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
@@ -985,12 +1124,15 @@ function IncidentRow({
   fusion,
   fusionDecision,
   selected,
+  arrived,
   onSelect,
 }: {
   call: EmergencyCall;
   fusion?: FusionSuggestion;
   fusionDecision?: FusionDecision;
   selected: boolean;
+  /** Just landed and critical — draw attention to it for a few seconds. */
+  arrived?: boolean;
   onSelect: () => void;
 }) {
   const glyph: IncidentGlyph = glyphForIncidentType(call.incident_type);
@@ -1002,6 +1144,7 @@ function IncidentRow({
       className={cn(
         'flex flex-col rounded-[6px] border bg-panel transition-colors',
         selected ? 'border-accent' : 'border-rule hover:border-rule-strong',
+        arrived && 'incident-arrived',
       )}
     >
       {/* Selecting the body opens the incident in the in-panel detail view. */}

@@ -323,7 +323,7 @@ export const mockCalls: EmergencyCall[] = [
     top_emotion: 'distress',
     emotion_intensity: 0.86,
     caller_condition: 'distressed',
-    ai_summary: 'BMTC bus overturned at Anand Vihar ISBT. Multiple passengers injured, children crying inside vehicle.',
+    ai_summary: 'DTC bus overturned at Anand Vihar ISBT. Multiple passengers injured, children crying inside vehicle.',
     ai_confidence: 0.91,
     persons_involved: 35,
     immediate_threats: ['overturned vehicle', 'trapped passengers', 'fuel leak', 'traffic chaos'],

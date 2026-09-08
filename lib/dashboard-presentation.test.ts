@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   compactIncidentSummary,
+  compareIncidentsForQueue,
+  sortIncidentQueue,
   dashboardHeaderMetrics,
   dashboardRegionVisibility,
   defaultMobileIncidentOpen,
@@ -272,4 +274,83 @@ test('a valid event recovers deterministically from an invalid current timestamp
   assert.equal(nextLiveCallPayload(current, sameCallUpdate), sameCallUpdate);
   assert.equal(nextLiveCallPayload(current, newerStart), newerStart);
   assert.equal(nextLiveCallPayload(current, unknownUpdate), current);
+});
+
+/** A queue fixture: only the fields the ordering actually reads. */
+function queueCall(over: Partial<EmergencyCall> & { id: string }): EmergencyCall {
+  return {
+    caller_number: '+91112',
+    status: 'pending',
+    severity: 'high',
+    created_at: '2026-09-08T10:00:00.000Z',
+    updated_at: '2026-09-08T10:00:00.000Z',
+    ...over,
+  } as EmergencyCall;
+}
+
+test('the queue puts critical incidents above everything else', () => {
+  // The defect this pins: the queue rendered in array order, so a P1 cardiac
+  // arrest sat below two P2s on the console's highest-traffic surface.
+  const ordered = sortIncidentQueue([
+    queueCall({ id: 'p2-a', severity: 'high' }),
+    queueCall({ id: 'p2-b', severity: 'high' }),
+    queueCall({ id: 'p1', severity: 'critical' }),
+    queueCall({ id: 'p3', severity: 'medium' }),
+  ]).map((c) => c.id);
+
+  assert.equal(ordered[0], 'p1');
+  assert.equal(ordered[ordered.length - 1], 'p3');
+});
+
+test('within one grade the longest-waiting caller comes first', () => {
+  // Two P1s are equally urgent by grade; the one closer to breaching its
+  // response target is the one to work.
+  const ordered = sortIncidentQueue([
+    queueCall({ id: 'newer', severity: 'critical', created_at: '2026-09-08T10:09:00.000Z' }),
+    queueCall({ id: 'older', severity: 'critical', created_at: '2026-09-08T10:01:00.000Z' }),
+  ]).map((c) => c.id);
+
+  assert.deepEqual(ordered, ['older', 'newer']);
+});
+
+test('a resolved incident sinks below open work, whatever its grade', () => {
+  const ordered = sortIncidentQueue([
+    queueCall({ id: 'closed-p1', severity: 'critical', status: 'resolved' }),
+    queueCall({ id: 'open-p3', severity: 'low' }),
+  ]).map((c) => c.id);
+
+  assert.deepEqual(ordered, ['open-p3', 'closed-p1']);
+});
+
+test('an ungraded incident ranks below graded work but above closed work', () => {
+  const ordered = sortIncidentQueue([
+    queueCall({ id: 'closed', severity: 'critical', status: 'closed' }),
+    queueCall({ id: 'ungraded', severity: undefined }),
+    queueCall({ id: 'graded', severity: 'low' }),
+  ]).map((c) => c.id);
+
+  assert.deepEqual(ordered, ['graded', 'ungraded', 'closed']);
+});
+
+test('an incident with an unreadable timestamp surfaces, never sinks', () => {
+  // We cannot tell how long this caller has been waiting. On a dispatch queue
+  // the safe reading of "unknown" is "possibly the longest" — burying it is the
+  // one outcome that must not happen.
+  const ordered = sortIncidentQueue([
+    queueCall({ id: 'known', severity: 'critical', created_at: '2026-09-08T10:00:00.000Z' }),
+    queueCall({ id: 'broken', severity: 'critical', created_at: 'not-a-date' }),
+  ]).map((c) => c.id);
+
+  assert.equal(ordered[0], 'broken');
+});
+
+test('queue order is stable, so the list does not reshuffle on a re-render', () => {
+  const calls = [
+    queueCall({ id: 'b', severity: 'high' }),
+    queueCall({ id: 'a', severity: 'high' }),
+  ];
+  assert.deepEqual(sortIncidentQueue(calls).map((c) => c.id), ['a', 'b']);
+  assert.equal(compareIncidentsForQueue(calls[0], calls[0]), 0);
+  // And sorting does not mutate the caller's array.
+  assert.deepEqual(calls.map((c) => c.id), ['b', 'a']);
 });
