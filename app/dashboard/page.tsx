@@ -15,8 +15,10 @@ import {
   AlertTriangle,
   ArrowLeft,
   ChevronRight,
+  CheckCircle2,
+  CircleAlert,
+  CircleDot,
   MapPin,
-  Phone,
   Radio,
   Search,
   Shield,
@@ -46,6 +48,9 @@ import {
   dashboardRegionVisibility,
   defaultMobileIncidentOpen,
   defaultUnitPanelOpen,
+  incidentActionChecklist,
+  type IncidentActionChecklist,
+  type IncidentActionChecklistItem,
   mobileNavigationInset,
   nextLiveCallPayload,
   presentLiveCall,
@@ -53,7 +58,7 @@ import {
 } from '@/lib/dashboard-presentation';
 import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
 import { selectPreArrivalGuidance } from '@/lib/first-aid';
-import { shouldAutoLaunchVoiceStation, VOICE_STATION_HREF } from '@/lib/voice-launch';
+import { shouldAutoLaunchVoiceStation } from '@/lib/voice-launch';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
@@ -687,24 +692,6 @@ export default function DashboardPage() {
           </p>
         </div>
       </noscript>
-      {/* ---- CITIZEN-FIRST BAND --------------------------------------------
-          The official Top-250 link opens /dashboard directly, and reviewers
-          are told to test the citizen experience first. This band puts the
-          caller's path above the operator chrome; the console below is the
-          dispatcher's half of the same journey. */}
-      <Link
-        href={VOICE_STATION_HREF}
-        className="group flex w-full shrink-0 items-center justify-center gap-3 border-b border-critical/40 bg-critical/15 px-4 py-2.5 text-center hover:bg-critical/25"
-      >
-        <Phone className="h-4 w-4 shrink-0 text-critical" aria-hidden />
-        <span className="text-xs font-bold uppercase tracking-wide text-ink sm:text-sm">
-          Place a 112 call — start here
-        </span>
-        <span className="hidden text-2xs text-ink-3 sm:inline">
-          the citizen journey: speak in Hindi, Hinglish, or English · the console below shows what the dispatcher receives
-        </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-critical transition-transform group-hover:translate-x-0.5" aria-hidden />
-      </Link>
       {/* ---- COMMAND BAR ---------------------------------------------------- */}
       <header className="flex h-14 shrink-0 select-none items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4">
         <div className="flex items-center gap-4">
@@ -1294,6 +1281,7 @@ function IncidentDetail({
   const operatorQuestions = call.operator_questions ?? [];
   const safetyAudit = call.safety_audit;
   const confidenceGrade = confidencePercent(call.ai_confidence ?? call.ai_triage?.confidence);
+  const actionChecklist = incidentActionChecklist(call);
   const guidance = selectPreArrivalGuidance({
     incidentType: call.incident_type,
     severity: call.severity ?? 'low',
@@ -1339,6 +1327,8 @@ function IncidentDetail({
             </div>
           </div>
         </div>
+
+        <IncidentActionChecklistPanel checklist={actionChecklist} />
 
         <SectionHeading>Where and caller</SectionHeading>
 
@@ -1551,6 +1541,50 @@ function IncidentDetail({
           Open incident timeline
           <ChevronRight className="h-4 w-4" aria-hidden />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function IncidentActionChecklistPanel({ checklist }: { checklist: IncidentActionChecklist }) {
+  const blockedCount = checklist.items.filter((item) => item.state === 'blocked').length;
+
+  return (
+    <section className="rounded-[6px] border border-rule bg-panel p-2.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <span className="label">Next action</span>
+          <p className="mt-1 text-sm font-semibold text-ink">{checklist.nextAction}</p>
+        </div>
+        <Chip tone={blockedCount > 0 ? 'critical' : 'safe'}>
+          {blockedCount > 0 ? `${blockedCount} blocker${blockedCount === 1 ? '' : 's'}` : 'Ready path'}
+        </Chip>
+      </div>
+      <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        {checklist.items.map((item) => (
+          <ChecklistItemRow key={item.id} item={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ChecklistItemRow({ item }: { item: IncidentActionChecklistItem }) {
+  const Icon =
+    item.state === 'done' ? CheckCircle2 : item.state === 'blocked' ? CircleAlert : CircleDot;
+  const tone =
+    item.state === 'done'
+      ? 'border-safe/30 bg-safe/5 text-safe'
+      : item.state === 'blocked'
+        ? 'border-critical/35 bg-critical/5 text-critical'
+        : 'border-mild/35 bg-mild/5 text-mild';
+
+  return (
+    <div className={cn('flex min-w-0 items-start gap-2 rounded-[4px] border px-2 py-1.5', tone)}>
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-ink">{item.label}</div>
+        <div className="mt-0.5 text-2xs leading-snug text-ink-3">{item.detail}</div>
       </div>
     </div>
   );

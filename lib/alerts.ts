@@ -32,7 +32,9 @@ export interface Alert {
   callId: string;
   code: AlertCode;
   severity: 'critical' | 'high' | 'medium' | 'low';
+  title: string;
   message: string;
+  impact: string;
 }
 
 const CLOSED_STATUSES = new Set(['resolved', 'completed', 'closed']);
@@ -80,15 +82,35 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
     // the alert fires rather than vanishing.
     const parsedAge = (nowMs - Date.parse(call.created_at)) / 1000;
     const ageSeconds = Number.isNaN(parsedAge) ? Infinity : parsedAge;
-    const push = (code: AlertCode, severity: Alert['severity'], message: string) =>
-      alerts.push({ key: `${call.id}:${code}`, callId: call.id, code, severity, message });
+    const push = (
+      code: AlertCode,
+      severity: Alert['severity'],
+      title: string,
+      message: string,
+      impact: string,
+    ) =>
+      alerts.push({
+        key: `${call.id}:${code}`,
+        callId: call.id,
+        code,
+        severity,
+        title,
+        message,
+        impact,
+      });
 
     const loc = call.caller_location;
     // Finiteness, not `typeof`: NaN is typeof 'number' but not a usable
     // coordinate, so a NaN lat/long must still count as unresolved. `0` is a
     // legitimate coordinate (equator / prime meridian) and stays resolved.
     if (!Number.isFinite(loc?.latitude) || !Number.isFinite(loc?.longitude)) {
-      push('LOCATION_UNRESOLVED', 'high', 'No coordinates resolved — responders cannot be routed.');
+      push(
+        'LOCATION_UNRESOLVED',
+        'high',
+        'Location not routable',
+        'No coordinates resolved.',
+        'Get usable coordinates before sending responders.',
+      );
     }
 
     if (
@@ -96,23 +118,43 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
       !ASSIGNED_STATUSES.has(status) &&
       ageSeconds > P1_GRACE_SECONDS
     ) {
-      push('P1_UNASSIGNED', 'critical', `Unassigned for ${humanDuration(ageSeconds)}.`);
+      push(
+        'P1_UNASSIGNED',
+        'critical',
+        'No response unit assigned',
+        `Unassigned for ${humanDuration(ageSeconds)}.`,
+        'Dispatch attention needed for this critical incident.',
+      );
     }
 
     if (call.model_escalated) {
-      push('MODEL_ESCALATED', 'medium', 'Model refinement raised severity above the local grade.');
+      push(
+        'MODEL_ESCALATED',
+        'medium',
+        'Severity raised by model',
+        'Model refinement raised severity above the local grade.',
+        'Review the escalation before committing dispatch decisions.',
+      );
     }
 
     if (typeof call.ai_confidence === 'number' && call.ai_confidence < LOW_CONFIDENCE) {
       push(
         'LOW_CONFIDENCE',
         'medium',
+        'Low triage confidence',
         `Triage confidence ${Math.round(call.ai_confidence * 100)}% — verify before dispatch.`,
+        'Confirm key details before relying on the automated grade.',
       );
     }
 
     if (ageSeconds > STALE_SECONDS) {
-      push('STALE_INCIDENT', 'low', `Open for ${humanDuration(ageSeconds)} with no resolution.`);
+      push(
+        'STALE_INCIDENT',
+        'low',
+        'Resolution overdue',
+        `Open for ${humanDuration(ageSeconds)} with no resolution.`,
+        'Check whether the incident still needs operator follow-up.',
+      );
     }
   }
 

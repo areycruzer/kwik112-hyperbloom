@@ -11,6 +11,7 @@ import {
   defaultUnitPanelOpen,
   mobileNavigationInset,
   nextLiveCallPayload,
+  incidentActionChecklist,
   presentLiveCall,
   unitRosterAccessibleLabel,
 } from './dashboard-presentation.ts';
@@ -353,4 +354,56 @@ test('queue order is stable, so the list does not reshuffle on a re-render', () 
   assert.equal(compareIncidentsForQueue(calls[0], calls[0]), 0);
   // And sorting does not mutate the caller's array.
   assert.deepEqual(calls.map((c) => c.id), ['b', 'a']);
+});
+
+test('incident action checklist blocks dispatch until location is routable', () => {
+  const checklist = incidentActionChecklist(
+    queueCall({
+      id: 'loc-missing',
+      severity: 'critical',
+      incident_type: 'medical_emergency',
+      caller_location: { address: 'Near Gate 2' },
+      operator_questions: ['Is the patient breathing normally?'],
+    }),
+  );
+
+  assert.equal(checklist.nextAction, 'Verify routable location');
+  assert.deepEqual(
+    checklist.items.map((item) => [item.id, item.state]),
+    [
+      ['location', 'blocked'],
+      ['incident', 'done'],
+      ['injuries', 'needs_action'],
+      ['response', 'needs_action'],
+      ['unit', 'blocked'],
+      ['decision', 'needs_action'],
+    ],
+  );
+});
+
+test('incident action checklist recognizes dispatched units and resolved decisions', () => {
+  const checklist = incidentActionChecklist(
+    queueCall({
+      id: 'resolved',
+      severity: 'high',
+      status: 'resolved',
+      incident_type: 'fire',
+      caller_location: {
+        address: 'Johari Bazaar, Jaipur',
+        latitude: 26.9239,
+        longitude: 75.8267,
+      },
+      persons_involved: 2,
+      dispatch_plan: {
+        priority_code: 'P2',
+        eta_risk: 'low',
+        operator_confirmation_required: false,
+        units: [{ service: 'fire', unit: 'Engine 1', reason: 'Nearest fire engine' }],
+      },
+      dispatched_units: ['Engine 1'],
+    }),
+  );
+
+  assert.equal(checklist.nextAction, 'Monitor or close incident');
+  assert.equal(checklist.items.every((item) => item.state === 'done'), true);
 });

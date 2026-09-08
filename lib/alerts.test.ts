@@ -35,6 +35,23 @@ test('a critical call unassigned beyond 90s raises P1_UNASSIGNED', () => {
   assert.equal(fresh.filter((a) => a.code === 'P1_UNASSIGNED').length, 0);
 });
 
+test('critical unassigned alert explains the operator action in plain language', () => {
+  const [alert] = deriveAlerts([call({ severity: 'critical', created_at: ago(22 * 60) })], NOW)
+    .filter((a) => a.code === 'P1_UNASSIGNED');
+
+  assert.equal(alert.title, 'No response unit assigned');
+  assert.equal(alert.message, 'Unassigned for 22 min.');
+  assert.equal(alert.impact, 'Dispatch attention needed for this critical incident.');
+});
+
+test('location alert names the routing risk without exposing rule codes', () => {
+  const [alert] = deriveAlerts([call({ caller_location: {} })], NOW)
+    .filter((a) => a.code === 'LOCATION_UNRESOLVED');
+
+  assert.equal(alert.title, 'Location not routable');
+  assert.equal(alert.impact, 'Get usable coordinates before sending responders.');
+});
+
 test('a dispatched critical call does not raise P1_UNASSIGNED', () => {
   const alerts = deriveAlerts(
     [call({ severity: 'critical', status: 'dispatched', created_at: ago(600) })],
