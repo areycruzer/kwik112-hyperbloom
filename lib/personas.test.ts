@@ -28,6 +28,19 @@ test('judge caller presets are directly playable by the scripted voice station',
   }
 });
 
+test('every scripted caller has high emotional pressure for the demo', () => {
+  for (const preset of JUDGE_CALLER_PRESETS) {
+    const peakEmotion = Math.max(
+      ...preset.lines
+        .filter((line) => line.role === 'user')
+        .flatMap((line) => Object.values(line.emotions ?? {})),
+    );
+
+    assert.ok(peakEmotion >= 0.95, preset.name);
+    assert.ok(preset.lines.some((line) => /Help is on the way/i.test(line.text)), preset.name);
+  }
+});
+
 test('every recorded caller has concise visible context and speech audio metadata', () => {
   assert.deepEqual(
     JUDGE_CALLER_PRESETS.map(({ name, description, speechLanguage }) => ({
@@ -38,17 +51,17 @@ test('every recorded caller has concise visible context and speech audio metadat
     [
       {
         name: 'Ramesh',
-        description: 'Road accident near Moolchand Metro',
+        description: 'Panicked bike crash near Moolchand Metro',
         speechLanguage: 'hi-IN',
       },
       {
         name: 'John',
-        description: 'Tourist with heatstroke at India Gate',
+        description: 'Smoke and collapse risk at Chandni Chowk',
         speechLanguage: 'en-IN',
       },
       {
         name: 'Sharma ji',
-        description: 'Unresponsive patient at a metro entrance',
+        description: 'Crying cardiac arrest call at Shalimar Bagh',
         speechLanguage: 'hi-IN',
       },
     ],
@@ -77,26 +90,24 @@ test('presets preserve the approved caller-to-scenario mapping', () => {
   const sharmaText = sharma.lines.map((line) => line.text).join(' ');
 
   assert.equal(ramesh.incidentType, 'accident');
-  assert.match(rameshText, /roadside|road.*accident|accident.*road/i);
-  assert.match(rameshText, /ke paas|k paas|ke pass/i);
+  assert.match(rameshText, /road|Ring Road|accident|takkar/i);
+  assert.match(rameshText, /Moolchand Metro|Gate 2/i);
 
-  assert.equal(john.incidentType, 'medical_emergency');
-  assert.match(johnText, /tourist/i);
-  assert.match(johnText, /heat ?stroke/i);
-  assert.doesNotMatch(johnText, /[^\x00-\x7F]/);
+  assert.equal(john.incidentType, 'fire');
+  assert.match(johnText, /Bhagirath Palace|Chandni Chowk/i);
+  assert.match(johnText, /smoke|burning|fire brigade/i);
 
   assert.equal(sharma.incidentType, 'medical_emergency');
-  assert.match(sharmaText, /नब्ज|सांस|बेहोश/);
-  assert.match(sharmaText, /नमूना मेट्रो गेट 1/);
-  assert.doesNotMatch(sharmaText, /[A-Za-z]/);
+  assert.match(sharmaText, /saans nahi|Pulse bhi nahi|respond nahi/i);
+  assert.match(sharmaText, /Shalimar Bagh Community Park/i);
 });
 
 test('every full caller transcript retains its scenario, severity floor, and useful location', () => {
   const severityRank = { low: 0, medium: 1, high: 2, critical: 3 } as const;
   const expectations = {
     ramesh: { type: 'accident', severity: 'high', location: /Moolchand Metro|Gate 2/i },
-    john: { type: 'medical_emergency', severity: 'high', location: /India Gate/i },
-    'sharma-ji': { type: 'medical_emergency', severity: 'critical', location: /नमूना मेट्रो गेट 1/ },
+    john: { type: 'fire', severity: 'critical', location: /Bhagirath Palace|Chandni Chowk/i },
+    'sharma-ji': { type: 'medical_emergency', severity: 'critical', location: /Shalimar Bagh Community Park/i },
   } as const;
 
   for (const preset of JUDGE_CALLER_PRESETS) {

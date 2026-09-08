@@ -178,6 +178,21 @@ test('live call presentation identifies a caller that has not produced a grade',
   });
 });
 
+test('live call presentation names simulated scripted calls explicitly', () => {
+  const payload: KwikLiveCallPayload = {
+    version: 1,
+    state: 'update',
+    callId: 'scripted-112',
+    at: '2026-09-07T10:00:03.000Z',
+    transcript: [{ role: 'user', text: 'meri wife behosh hai', timestamp: '2026-09-07T10:00:00.000Z' }],
+    detectedLanguage: 'hi',
+    prosodySource: 'simulated',
+    grade: null,
+  };
+
+  assert.equal(presentLiveCall(payload).prosody, 'Scripted call');
+});
+
 function livePayload(
   state: KwikLiveCallPayload['state'],
   callId: string,

@@ -56,7 +56,10 @@ export function presentLiveCall(
       text: turn.text,
     })),
     language: payload.detectedLanguage?.toUpperCase() ?? 'Detecting',
-    prosody: `${payload.prosodySource.charAt(0).toUpperCase()}${payload.prosodySource.slice(1)}`,
+    prosody:
+      payload.prosodySource === 'simulated'
+        ? 'Scripted call'
+        : `${payload.prosodySource.charAt(0).toUpperCase()}${payload.prosodySource.slice(1)}`,
     grade: payload.grade
       ? `Current grade: ${payload.grade.severity.toUpperCase()} (rules)`
       : 'Waiting for caller',

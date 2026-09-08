@@ -3,7 +3,7 @@
  * Sample emergency calls for demo and development
  */
 
-import { EmergencyCall, TranscriptSegment } from './types';
+import type { EmergencyCall, TranscriptSegment } from './types.ts';
 
 /**
  * Mock emergency calls focusing on Delhi NCR coordinates
@@ -72,8 +72,8 @@ export const mockCalls: EmergencyCall[] = [
       downgrade_blocked: false,
       reason: 'Final severity accepted because it did not fall below the local safety floor.',
     },
-    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+    created_at: new Date(Date.now() - 30 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 10 * 1000).toISOString(),
     ai_recommendation: {
       action_type: 'dispatch_multiple',
       primary_unit: 'Fire Engine 7',
@@ -111,8 +111,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.88,
     persons_involved: 3,
     immediate_threats: ['heavy smoke', 'people on balcony'],
-    created_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 30 * 1000).toISOString(),
+    created_at: new Date(Date.now() - 45 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 20 * 1000).toISOString(),
   },
   {
     id: 'delhi-2',
@@ -138,8 +138,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.9,
     persons_involved: 4,
     immediate_threats: ['blocked roadway', 'potential fuel leak'],
-    created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 90 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 40 * 1000).toISOString()
   },
   {
     id: 'delhi-3',
@@ -165,8 +165,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.93,
     persons_involved: 1,
     immediate_threats: ['cardiac arrest', 'crowd forming'],
-    created_at: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 50 * 1000).toISOString()
   },
   {
     id: 'delhi-4',
@@ -192,8 +192,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.88,
     persons_involved: 3,
     immediate_threats: ['armed suspects', 'crowd panic'],
-    created_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 80 * 1000).toISOString()
   },
   {
     id: 'delhi-5',
@@ -246,8 +246,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.89,
     persons_involved: 1,
     immediate_threats: ['respiratory distress', 'crowd interference'],
-    created_at: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 55 * 1000).toISOString()
   },
   {
     id: 'delhi-7',
@@ -273,8 +273,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.92,
     persons_involved: 1,
     immediate_threats: ['severe bleeding', 'high-speed traffic', 'head injury'],
-    created_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 75 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 35 * 1000).toISOString()
   },
   {
     id: 'delhi-9',
@@ -300,8 +300,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.95,
     persons_involved: 8,
     immediate_threats: ['active flames', 'trapped occupants', 'structural collapse risk', 'toxic smoke'],
-    created_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 45 * 1000).toISOString()
   },
   {
     id: 'delhi-10',
@@ -327,8 +327,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.91,
     persons_involved: 35,
     immediate_threats: ['overturned vehicle', 'trapped passengers', 'fuel leak', 'traffic chaos'],
-    created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-11',
@@ -354,8 +354,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.93,
     persons_involved: 15,
     immediate_threats: ['structural collapse', 'trapped victims', 'further collapse risk', 'dust inhalation'],
-    created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 90 * 1000).toISOString()
   },
   {
     id: 'delhi-12',
@@ -381,8 +381,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.88,
     persons_involved: 1,
     immediate_threats: ['heat exhaustion', 'dehydration', 'crowd gathering'],
-    created_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 70 * 1000).toISOString()
   },
   {
     id: 'delhi-13',
@@ -435,8 +435,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.86,
     persons_involved: 2,
     immediate_threats: ['head trauma', 'active bleeding', 'traffic obstruction'],
-    created_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 90 * 1000).toISOString()
   },
   {
     id: 'delhi-8',
@@ -462,8 +462,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.89,
     persons_involved: 50,
     immediate_threats: ['live electrical wire', 'electrocution risk', 'dense crowd', 'fire hazard'],
-    created_at: new Date(Date.now() - 13 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
     id: 'delhi-15',
@@ -489,8 +489,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.91,
     persons_involved: 1,
     immediate_threats: ['anaphylaxis', 'airway obstruction', 'respiratory failure'],
-    created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 80 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 30 * 1000).toISOString()
   },
   {
     id: 'delhi-16',
@@ -516,8 +516,8 @@ export const mockCalls: EmergencyCall[] = [
     ai_confidence: 0.87,
     persons_involved: 20,
     immediate_threats: ['spreading fire', 'narrow escape routes', 'trapped shoppers', 'valuable inventory'],
-    created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 8 * 60 * 1000).toISOString()
+    created_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   }
 ];
 
@@ -618,7 +618,7 @@ export function getTimeElapsed(timestamp: string): string {
   const diff = Date.now() - parsed;
   const minutes = Math.floor(diff / 60000);
 
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return 'Abhi abhi';
   if (minutes === 1) return '1 min ago';
   if (minutes < 60) return `${minutes} min ago`;
   
