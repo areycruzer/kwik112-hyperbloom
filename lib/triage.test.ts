@@ -388,3 +388,42 @@ test('severity band ceiling caps the emotion boost inside its band', async () =>
   const boosted = Math.round(base + 96 * 0.2);
   assert.equal(Math.min(severityBandCeiling(base), boosted), 79);
 });
+
+test('a named city with a sector is never lost to a generic landmark', async () => {
+  const { localTriage } = await import('./triage-local.ts');
+  // Regression shape from the live Noida report: the "ke paas" landmark used
+  // to win and the city + sector vanished from the card.
+  const t = localTriage(
+    'accident ho gaya, do gaadiyan takkar gayin Noida Sector 62 mein, Atlanti ke paas. ek driver ka khoon beh raha hai',
+  );
+  const address = (t.extraction.location?.address || '').toLowerCase();
+  assert.ok(address.includes('noida'), `address should keep the city, got: ${address}`);
+  assert.ok(address.includes('62'), `address should keep the sector number, got: ${address}`);
+});
+
+test('calm prosody on low-severity content flags a possible prank, never critical content', async () => {
+  const { prankMismatchFlag } = await import('./triage-local.ts');
+  // Amused, undistressed caller describing a nuisance → operator annotation.
+  assert.equal(prankMismatchFlag('low', 5, 'Amusement'), 'POSSIBLE_PRANK_PROSODY_MISMATCH');
+  assert.equal(prankMismatchFlag('medium', 10, 'Calmness'), 'POSSIBLE_PRANK_PROSODY_MISMATCH');
+  // The exact same prosody on high/critical content must NOT flag: composed
+  // reporting of a life-threatening situation is normal and stays critical.
+  assert.equal(prankMismatchFlag('critical', 5, 'Calmness'), null);
+  assert.equal(prankMismatchFlag('high', 5, 'Amusement'), null);
+  // Distressed callers are never pranks regardless of wording.
+  assert.equal(prankMismatchFlag('low', 40, 'Amusement'), null);
+  // No prosody (scripted call without frames) → no claim either way.
+  assert.equal(prankMismatchFlag('low', null, undefined), null);
+  // Composed-adjacent but distressed top emotion does not flag.
+  assert.equal(prankMismatchFlag('low', 10, 'Distress'), null);
+});
+
+test('the stopped-breathing Hindi variant escalates to critical', async () => {
+  const { localTriage } = await import('./triage-local.ts');
+  // Found by live adversarial probe: "saans ruk gaya" used to grade low while
+  // "saans nahi aa rahi" graded critical — the same emergency, one phrasing.
+  for (const phrase of ['saans ruk gaya hai', 'saans ruk gayi hai', 'सांस रुक गई है']) {
+    const result = localTriage(`meri patni ka ${phrase}, jaldi aao`);
+    assert.equal(result.extraction.severity, 'critical', `phrase must escalate: ${phrase}`);
+  }
+});
