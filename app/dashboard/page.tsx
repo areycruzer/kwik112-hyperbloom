@@ -60,7 +60,7 @@ import { DistressMeter } from '@/components/DistressMeter';
 import { ModuleRail, type ModuleId } from '@/components/ModuleRail';
 import { UnitRoster } from '@/components/UnitRoster';
 import { TACTICAL_UNITS, etaLabel, haversineKm, localFleet } from '@/lib/units';
-import { releaseUnit, reserveUnits } from '@/lib/dispatch-reservations';
+import { releaseUnit } from '@/lib/dispatch-reservations';
 import { useReservedFleet } from '@/lib/useReservedFleet';
 import { assessDispatch, type DispatchAssignment } from '@/lib/dispatch-assurance';
 import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
@@ -76,7 +76,6 @@ import {
 import { readTimeline, requiredDecisionPoints } from '@/lib/timeline';
 import { useFusionDecisions } from '@/lib/useFusionDecisions';
 import {
-  filterDelhiIncidents,
   isDelhiIncident,
   scopedIncidentSelection,
 } from '@/lib/incident-scope';
@@ -113,6 +112,15 @@ function awaitingRefinement(call: EmergencyCall): boolean {
   return call.refinable === true;
 }
 
+// Unlocated calls stay visible so an operator can establish their location.
+function visibleIncident(call: EmergencyCall): boolean {
+  if (!call || !call.id) return false;
+  const location = call.caller_location;
+  const unknown = !location?.city?.trim() && !location?.state?.trim() &&
+    !(Number.isFinite(location?.latitude) && Number.isFinite(location?.longitude));
+  return unknown || isDelhiIncident(call);
+}
+
 export default function DashboardPage() {
   const [calls, setCalls] = useState<EmergencyCall[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
@@ -134,26 +142,20 @@ export default function DashboardPage() {
   const [liveCall, setLiveCall] = useState<KwikLiveCallPayload | null>(null);
 
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [workflowProposal, setWorkflowProposal] = useState<{ callId: string; unitId: string } | null>(null);
   const [voiceLaunchSignal, setVoiceLaunchSignal] = useState(0);
   const consumedLaunchLocation = useRef<string | null>(null);
   // Bumped when an alert is acknowledged so the alert memo (and therefore the
   // rail badge) recomputes against the freshly-persisted acknowledgement set.
   const [ackVersion, setAckVersion] = useState(0);
 
-  const [clock, setClock] = useState('');
+  const [now, setNow] = useState(0);
+  const clock = now ? new Date(now).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
   const { decisions: fusionDecisions, decide: decideFusion } = useFusionDecisions();
 
   // Live clock, tabular so the digits do not jitter.
   useEffect(() => {
-    const tick = () =>
-      setClock(
-        new Date().toLocaleTimeString([], {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }),
-      );
+    const tick = () => setNow(Date.now());
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
@@ -202,7 +204,7 @@ export default function DashboardPage() {
   /** @description Stored calls shadow their mock counterpart instead of joining it. */
   const mergeCalls = (stored: EmergencyCall[]): EmergencyCall[] => {
     const byId = new Map<string, EmergencyCall>();
-    for (const call of filterDelhiIncidents([...stored, ...mockCalls])) {
+    for (const call of [...stored, ...mockCalls].filter(visibleIncident)) {
       if (call && call.id && !byId.has(call.id)) byId.set(call.id, call);
     }
     return [...byId.values()];
@@ -213,11 +215,7 @@ export default function DashboardPage() {
       const raw = localStorage.getItem('kwik_emergency_calls');
       const parsed = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(parsed)) return [];
-      const scoped = filterDelhiIncidents(parsed);
-      if (scoped.length !== parsed.length) {
-        localStorage.setItem('kwik_emergency_calls', JSON.stringify(scoped));
-      }
-      return scoped;
+      return parsed;
     } catch (e) {
       console.error('Error reading stored calls:', e);
       return [];
@@ -257,7 +255,7 @@ export default function DashboardPage() {
     const handleCallUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ call: EmergencyCall; isUpdate: boolean }>).detail;
       loadCalls();
-      if (detail && !detail.isUpdate && isDelhiIncident(detail.call)) {
+      if (detail && !detail.isUpdate && visibleIncident(detail.call)) {
         setSelectedCallId(detail.call.id);
       }
     };
@@ -378,6 +376,8 @@ export default function DashboardPage() {
   const [announcement, setAnnouncement] = useState('');
   const [arrivedCriticalIds, setArrivedCriticalIds] = useState<string[]>([]);
   const [soundOn, setSoundOn] = useState(false);
+  const soundOnRef = useRef(soundOn);
+  soundOnRef.current = soundOn;
   const audioContextRef = useRef<AudioContext | null>(null);
   /**
    * Null until the first batch of calls lands. Opening the console must not
@@ -438,7 +438,7 @@ export default function DashboardPage() {
           `${critical[0].caller_location?.address ? ` at ${critical[0].caller_location.address}` : ''}.`
         : `${critical.length} new critical incidents.`,
     );
-    playAlertTone();
+    if (soundOnRef.current) playAlertTone();
 
     // The highlight is an arrival cue, not a status. It clears itself so a row
     // sitting unactioned does not keep flashing for the rest of the shift.
@@ -507,16 +507,13 @@ export default function DashboardPage() {
   );
 
   const handleNotifyUnit = useCallback(
-    (unitId: string, callId: string, callsign: string) =>
-      runDispatchAction(async () => {
-        const result = await reserveUnits(callId, [unitId]);
-        return result.ok
-          ? `${callsign} notified · en route`
-          : // A conflict means another incident already has it. Say so rather
-            // than failing silently, because the operator must now pick again.
-            `${callsign} is already committed to another incident`;
-      }),
-    [runDispatchAction],
+    (unitId: string, callId: string, _callsign: string) => {
+      setWorkflowProposal({ callId, unitId });
+      setSelectedCallId(callId);
+      setPanelView('detail');
+      setWorkflowOpen(true);
+    },
+    [],
   );
 
   const handleRecallUnit = useCallback(
@@ -535,6 +532,7 @@ export default function DashboardPage() {
     setDispatchFailed(false);
   }, [selectedUnitId, selectedCallId]);
   const handleOpenWorkflow = useCallback((call: EmergencyCall) => {
+    setWorkflowProposal(null);
     setSelectedCallId(call.id);
     setWorkflowOpen(true);
   }, []);
@@ -614,7 +612,6 @@ export default function DashboardPage() {
   // Operational alerts are derived from call state, then reduced by whatever the
   // operator has already acknowledged. The count feeds the rail's Alerts badge.
   const alerts = useMemo(() => {
-    const now = Date.now();
     const input: AlertInput[] = calls.map((c) => ({
       id: c.id,
       severity: c.severity,
@@ -629,7 +626,7 @@ export default function DashboardPage() {
     // `calls` identity only changes when the fingerprint changes, so this is stable
     // between polls that see no real change. `ackVersion` forces a recompute the
     // moment an alert is acknowledged, so the rail badge decrements immediately.
-  }, [calls, ackVersion]);
+  }, [calls, ackVersion, now]);
 
   const headerMetrics = dashboardHeaderMetrics(calls, alerts.length);
 
@@ -873,6 +870,7 @@ export default function DashboardPage() {
               onDispatchSuggestedUnit={handleNotifyUnit}
               onBack={() => setPanelView('queue')}
               onOpenTimeline={() => {
+                setWorkflowProposal(null);
                 setSelectedCallId(selectedCall.id);
                 setWorkflowOpen(true);
               }}
@@ -945,6 +943,7 @@ export default function DashboardPage() {
           {activeModule === 'alerts' ? (
             <AlertsModule
               calls={calls}
+              now={now}
               onSelectCall={handleModuleSelectCall}
               onAckChange={handleAlertAck}
             />
@@ -1119,9 +1118,10 @@ export default function DashboardPage() {
       </p>
       <IncidentTimeline
         open={workflowOpen}
-        onClose={() => setWorkflowOpen(false)}
+        onClose={() => { setWorkflowOpen(false); setWorkflowProposal(null); }}
         call={selectedCall ?? null}
         linkedPrimaryCallId={selectedLinkedPrimary}
+        selectedUnitId={workflowProposal?.callId === selectedCall?.id ? workflowProposal?.unitId : undefined}
       />
     </div>
   );
