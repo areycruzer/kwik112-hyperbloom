@@ -19,6 +19,7 @@ import {
   CircleAlert,
   CircleDot,
   MapPin,
+  Phone,
   Radio,
   Search,
   Shield,
@@ -58,7 +59,7 @@ import {
 } from '@/lib/dashboard-presentation';
 import { KWIK_LIVE_CALL_EVENT, type KwikLiveCallPayload } from '@/lib/live-call';
 import { selectPreArrivalGuidance } from '@/lib/first-aid';
-import { shouldAutoLaunchVoiceStation } from '@/lib/voice-launch';
+import { shouldAutoLaunchVoiceStation, VOICE_STATION_HREF } from '@/lib/voice-launch';
 
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, DataRow } from '@/components/ui/panel';
@@ -692,6 +693,24 @@ export default function DashboardPage() {
           </p>
         </div>
       </noscript>
+      {/* ---- CITIZEN-FIRST BAND --------------------------------------------
+          The official Top-250 link opens /dashboard directly, and reviewers
+          are told to test the citizen experience first. This band puts the
+          caller's path above the operator chrome; the console below is the
+          dispatcher's half of the same journey. */}
+      <Link
+        href={VOICE_STATION_HREF}
+        className="group flex w-full shrink-0 items-center justify-center gap-3 border-b border-critical/40 bg-critical/15 px-4 py-2.5 text-center hover:bg-critical/25"
+      >
+        <Phone className="h-4 w-4 shrink-0 text-critical" aria-hidden />
+        <span className="text-xs font-bold uppercase tracking-wide text-ink sm:text-sm">
+          Place a 112 call — start here
+        </span>
+        <span className="hidden text-2xs text-ink-3 sm:inline">
+          the citizen journey: speak in Hindi, Hinglish, or English · the console below shows what the dispatcher receives
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-critical transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </Link>
       {/* ---- COMMAND BAR ---------------------------------------------------- */}
       <header className="flex h-14 shrink-0 select-none items-center justify-between gap-4 border-b border-rule-strong bg-deep px-4">
         <div className="flex items-center gap-4">
