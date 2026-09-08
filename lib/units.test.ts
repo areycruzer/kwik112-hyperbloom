@@ -26,11 +26,17 @@ test('the fleet is an Indian one, with no American CAD callsigns left', () => {
 
   // And every unit names the agency that owns it, spelled out. This is what
   // makes the roster legible as Indian at a glance: a callsign on its own reads
-  // as a codeword, "Delhi Fire Service" does not.
-  const AGENCY = { police: 'Delhi Police', fire: 'Delhi Fire Service', ems: 'CATS Delhi' };
+  // as a codeword, "West Bengal Fire Service" does not.
   for (const unit of TACTICAL_UNITS) {
-    assert.equal(unit.agency, AGENCY[unit.type], `${unit.id} must name its agency`);
+    assert.ok(unit.agency.trim().length > 0, `${unit.id} must name its agency`);
   }
+
+  // The Delhi units keep their specific agencies; the fleet is no longer
+  // single-agency, because it is no longer single-city.
+  const delhi = TACTICAL_UNITS.filter((u) => /^(PCR|DFS|CATS)-/.test(u.id));
+  assert.equal(delhi.find((u) => u.type === 'police')?.agency, 'Delhi Police');
+  assert.equal(delhi.find((u) => u.type === 'fire')?.agency, 'Delhi Fire Service');
+  assert.equal(delhi.find((u) => u.type === 'ems')?.agency, 'CATS Delhi');
 
   // Ids stay unique and service-prefixed, since dispatch reservations key on them.
   assert.equal(new Set(TACTICAL_UNITS.map((u) => u.id)).size, TACTICAL_UNITS.length);
@@ -157,4 +163,57 @@ test('no seeded unit is committed without a call to be committed to', () => {
     (u) => u.status === 'available' && speedKmh(u.speed) > 0,
   );
   assert.ok(rollingButFree.length > 0, 'keep at least one moving, uncommitted unit');
+});
+
+/**
+ * The cities the demo console serves, mirroring the incident coordinates in
+ * lib/mock-data. Repeated here rather than imported because mock-data's own
+ * imports are not extension-qualified and will not load under `node --test`.
+ */
+const SERVICE_CITIES: ReadonlyArray<{ name: string; lat: number; lng: number }> = [
+  { name: 'Delhi', lat: 28.7196, lng: 77.1186 },
+  { name: 'Mumbai', lat: 18.9476, lng: 72.8343 },
+  { name: 'Bengaluru', lat: 12.9172, lng: 77.6229 },
+  { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
+  { name: 'Chennai', lat: 13.0499, lng: 80.2824 },
+  { name: 'Hyderabad', lat: 17.4474, lng: 78.3684 },
+  { name: 'Pune', lat: 18.5204, lng: 73.8567 },
+  { name: 'Ahmedabad', lat: 23.0258, lng: 72.5698 },
+  { name: 'Jaipur', lat: 26.9239, lng: 75.8267 },
+];
+
+test('every city the console serves has a unit of every service within reach', () => {
+  // The bug this pins: the fleet was Delhi-only while the demo spanned nine
+  // cities, so a Kolkata building collapse was assured against a Delhi
+  // appliance and the console reported a 3,039-minute ETA in earnest. Response
+  // assurance cannot catch a late response while measuring against a fleet
+  // 1,300 km away.
+  for (const city of SERVICE_CITIES) {
+    for (const service of ['police', 'fire', 'ems'] as const) {
+      const nearest = nearestAvailableUnit(TACTICAL_UNITS, city.lat, city.lng, service);
+      assert.ok(nearest, `${city.name} has no ${service} unit at all`);
+      assert.equal(nearest!.type, service, `${city.name} has no local ${service} unit`);
+      const km = haversineKm(nearest!.lat, nearest!.lng, city.lat, city.lng);
+      assert.ok(
+        km < 25,
+        `nearest ${service} unit to ${city.name} is ${km.toFixed(0)} km away`,
+      );
+      // And the arrival it projects has to be a number a dispatcher can act on.
+      const minutes = etaMinutes(nearest!, km);
+      assert.ok(minutes <= 60, `${city.name} ${service} ETA is ${minutes} min`);
+    }
+  }
+});
+
+test('technical rescue is covered in every city, not only Delhi', () => {
+  // A `rescue` request with no capable unit reports as uncovered, and building
+  // collapse is exactly the incident that asks for one.
+  for (const city of SERVICE_CITIES) {
+    const capable = TACTICAL_UNITS.filter(
+      (u) =>
+        (u.capabilities ?? []).includes('rescue') &&
+        haversineKm(u.lat, u.lng, city.lat, city.lng) < 25,
+    );
+    assert.ok(capable.length > 0, `${city.name} has no rescue-capable appliance`);
+  }
 });

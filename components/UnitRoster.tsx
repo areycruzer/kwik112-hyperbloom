@@ -3,7 +3,7 @@
 import { Symbol } from '@/components/ui/symbol';
 import { Chip, type ChipTone } from '@/components/ui/panel';
 import { cn } from '@/lib/utils';
-import { etaLabel, haversineKm, type TacticalUnit } from '@/lib/units';
+import { etaLabel, etaMinutes, haversineKm, type TacticalUnit } from '@/lib/units';
 import type { EmergencyCall } from '@/lib/types';
 import { unitRosterAccessibleLabel } from '@/lib/dashboard-presentation';
 
@@ -50,9 +50,26 @@ export function UnitRoster({
 }: UnitRosterProps) {
   const point = incidentPoint(selectedCall);
 
+  /**
+   * Nearest first, by projected arrival. The fleet spans nine cities, so array
+   * order puts units 1,300 km away above the one down the road — and a
+   * dispatcher choosing an appliance is choosing on ETA, which is not the same
+   * ranking as distance once a heavy tender and a PCR van are compared. With no
+   * incident selected there is nothing to measure to, so the roster keeps its
+   * declared order rather than inventing one.
+   */
+  const ordered = point
+    ? [...units].sort((a, b) => {
+        const byEta =
+          etaMinutes(a, haversineKm(a.lat, a.lng, point.lat, point.lng)) -
+          etaMinutes(b, haversineKm(b.lat, b.lng, point.lat, point.lng));
+        return byEta !== 0 ? byEta : a.id.localeCompare(b.id);
+      })
+    : units;
+
   return (
     <ul className="flex flex-col gap-1.5">
-      {units.map((unit) => {
+      {ordered.map((unit) => {
         const status = STATUS_META[unit.status];
         const selected = unit.id === selectedUnitId;
         // Distance, current speed and projected arrival are shown together: the
