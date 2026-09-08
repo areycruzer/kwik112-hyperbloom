@@ -2,9 +2,9 @@
 
 This project was built by a two-person team working with Codex and coding agents
 throughout. This log records what the AI agents actually did, so the
-"meaningfully involved" requirement is verifiable rather than claimed. Human
-authors designed the product, wrote and reviewed all prompts, made every
-architectural decision, and validated every result.
+"meaningfully involved" requirement is verifiable rather than claimed. The team supplied the product requirements and approved direction. Agent-generated
+implementation and checks are documented below; this log does not establish that
+every prompt or result received independent human review.
 
 ## Architecture and safety core (Aug 2026, Round 1)
 
@@ -49,3 +49,13 @@ architectural decision, and validated every result.
   OpenAI-compatible provider works via `OPENAI_API_KEY` (+ `OPENAI_BASE_URL`).
 - Codex and coding agents (OpenAI Codex, ZCode/Claude) wrote and debugged
   code throughout; Hume EVI provides voice and prosody.
+
+## Final sweep (8 September 2026)
+
+Codex audited source, reproduced a deployed roster path that reserved a unit before checkpoints, and corrected it with human confirmation, exact unit receipts, dispatch amendments, lifecycle propagation, and storage-failure reconciliation. Behavioral regressions also cover cross-tab acknowledgements, timed alerts, muted arrivals, and recovery of a later-arriving call detail.
+
+The triage review found that a severity-only floor could erase required response services. The correction retains local and model-recognized service requirements, bounds unsupported model location/count fields, and keeps local call creation independent of remote geocoding. This is lexical grounding, not general factual verification. Scripted Delhi locations use approximate neighborhood pins.
+
+Independent agent reviews caught multi-service, replacement-dispatch, persistence, and mixed-hazard regressions before integration. The final reviewed suite passed 254 tests and TypeScript checking. Critical recall remained 9/9 on 30 synthetic development regression cases; the final ledger references source commit 503326b. No clinical effectiveness or field ranking was verified.
+
+Browser checks verified an already-open second console received a scripted call and an acknowledgement reduced the first console badge from 6 to 5. Mobile judge pages were inspected at 375px. A live deployed Hume attempt timed out without a caller exchange; no successful live conversation is claimed. The video still needs owner trimming and caption verification. Runtime architecture remains browser-local; Web Locks improve coordination but localStorage is not a transactional production database.
