@@ -19,7 +19,7 @@ const GLM_DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
  *  ("insufficient balance") until the account carries credit. */
 const GLM_DEFAULT_MODEL = 'glm-4.5-flash';
 
-const OPENAI_DEFAULT_MODEL = 'gpt-4-turbo-preview';
+const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
 export interface LlmConfig {
   provider: LlmProvider;
@@ -33,8 +33,12 @@ export interface LlmConfig {
 export function resolveLlm(): LlmConfig {
   const glmKey = process.env.GLM_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
+  // LLM_PROVIDER=glm|openai forces one provider regardless of which keys are
+  // present; the default 'auto' prefers GLM (free tier) and falls back to any
+  // OpenAI-compatible endpoint when GLM is unconfigured.
+  const forced = (process.env.LLM_PROVIDER || 'auto').toLowerCase();
 
-  if (glmKey) {
+  if (glmKey && forced !== 'openai') {
     return {
       provider: 'glm',
       client: new OpenAI({
@@ -46,7 +50,7 @@ export function resolveLlm(): LlmConfig {
     };
   }
 
-  if (openaiKey) {
+  if (openaiKey && forced !== 'glm') {
     return {
       provider: 'openai',
       client: new OpenAI({
