@@ -51,13 +51,29 @@ export interface TacticalUnit {
  */
 export const TACTICAL_UNITS: TacticalUnit[] = [
   { id: 'PCR-11', callsign: 'PCR Van 11', agency: 'Delhi Police', type: 'police', capabilities: ['police'], lat: 28.7180, lng: 77.1100, status: 'available', speed: '0 km/h' },
-  { id: 'DFS-204', callsign: 'Fire Tender 204', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire'], lat: 28.6920, lng: 77.0850, status: 'en-route', speed: '48 km/h' },
+  // Rolling at 48 km/h but uncommitted — returning to station. It is 'available',
+  // not 'en-route': see the status invariant below.
+  { id: 'DFS-204', callsign: 'Fire Tender 204', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire'], lat: 28.6920, lng: 77.0850, status: 'available', speed: '48 km/h' },
   { id: 'DFS-211', callsign: 'Fire Tender 211', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire'], lat: 28.7162, lng: 77.1125, status: 'available', speed: '0 km/h' },
   { id: 'DFS-206', callsign: 'Hydraulic Platform 206', agency: 'Delhi Fire Service', type: 'fire', capabilities: ['fire', 'rescue'], lat: 28.7241, lng: 77.1262, status: 'available', speed: '0 km/h' },
   { id: 'CATS-302', callsign: 'Ambulance 302', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7250, lng: 77.1350, status: 'available', speed: '0 km/h' },
   { id: 'PCR-24', callsign: 'PCR Van 24', agency: 'Delhi Police', type: 'police', capabilities: ['police'], lat: 28.6850, lng: 77.1200, status: 'available', speed: '12 km/h' },
   { id: 'CATS-309', callsign: 'ALS Ambulance 309', agency: 'CATS Delhi', type: 'ems', capabilities: ['ems', 'als'], lat: 28.7400, lng: 77.0900, status: 'available', speed: '0 km/h' },
 ];
+
+/* ---- STATUS INVARIANT -----------------------------------------------------
+ * A unit is 'en-route', 'on-scene' or 'busy' only when it is committed to a
+ * call — i.e. only when it carries an `assignedCallId`. `applyUnitReservations`
+ * maintains that when a dispatcher assigns one; the seed data above has to
+ * respect it too.
+ *
+ * DFS-204 used to be seeded 'en-route' with nothing to be en route TO, and
+ * three separate parts of the console believed it: the roster showed EN ROUTE
+ * beside a button offering to dispatch it, the map drew it dimmed as though
+ * committed, and — worst — `assessDispatch` filters candidates on
+ * `status === 'available'`, so a working fire tender was silently excluded
+ * from fire coverage. `no seeded unit is committed without a call` pins it.
+ * ------------------------------------------------------------------------- */
 
 const EARTH_RADIUS_KM = 6371;
 
