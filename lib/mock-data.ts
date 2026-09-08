@@ -277,7 +277,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
-    id: 'mumbai-1',
+    id: 'delhi-9',
     caller_number: '+919823456789',
     status: 'triage',
     call_status: 'in-progress',
@@ -287,8 +287,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 93,
     caller_location: {
       address: 'Bhagirath Palace Market, Chandni Chowk, Delhi',
-      city: 'Delhi',
-      state: 'Maharashtra',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.6562,
       longitude: 77.23,
       confidence: 0.90
@@ -304,7 +304,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString()
   },
   {
-    id: 'bangalore-1',
+    id: 'delhi-10',
     caller_number: '+919880123456',
     status: 'dispatched',
     call_status: 'in-progress',
@@ -314,8 +314,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 89,
     caller_location: {
       address: 'Anand Vihar ISBT, Road No. 56, Delhi',
-      city: 'Delhi',
-      state: 'Karnataka',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.6469,
       longitude: 77.3157,
       confidence: 0.88
@@ -331,7 +331,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
   },
   {
-    id: 'kolkata-1',
+    id: 'delhi-11',
     caller_number: '+919830567890',
     status: 'on_scene',
     call_status: 'in-progress',
@@ -341,8 +341,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 97,
     caller_location: {
       address: 'Gali No. 12, Old Seelampur, North East Delhi',
-      city: 'Delhi',
-      state: 'West Bengal',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.6742,
       longitude: 77.2673,
       confidence: 0.85
@@ -358,7 +358,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
   },
   {
-    id: 'chennai-1',
+    id: 'delhi-12',
     caller_number: '+919840234567',
     status: 'active',
     call_status: 'in-progress',
@@ -368,8 +368,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 79,
     caller_location: {
       address: 'India Gate Lawns, Kartavya Path, Delhi',
-      city: 'Delhi',
-      state: 'Tamil Nadu',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.6129,
       longitude: 77.2295,
       confidence: 0.89
@@ -385,7 +385,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 4 * 60 * 1000).toISOString()
   },
   {
-    id: 'hyderabad-1',
+    id: 'delhi-13',
     caller_number: '+919949876543',
     status: 'resolved',
     call_status: 'completed',
@@ -395,8 +395,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 58,
     caller_location: {
       address: 'Nehru Place Market, Outer Ring Road, Delhi',
-      city: 'Delhi',
-      state: 'Telangana',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.5494,
       longitude: 77.2501,
       confidence: 0.86
@@ -412,7 +412,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 7 * 60 * 1000).toISOString()
   },
   {
-    id: 'pune-1',
+    id: 'delhi-14',
     caller_number: '+919922567890',
     status: 'active',
     call_status: 'in-progress',
@@ -422,8 +422,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 73,
     caller_location: {
       address: 'Ring Road, Near Moti Bagh Flyover, Delhi',
-      city: 'Delhi',
-      state: 'Maharashtra',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.5772,
       longitude: 77.1745,
       confidence: 0.87
@@ -466,7 +466,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 6 * 60 * 1000).toISOString()
   },
   {
-    id: 'ahmedabad-1',
+    id: 'delhi-15',
     caller_number: '+919879123456',
     status: 'triage',
     call_status: 'in-progress',
@@ -476,8 +476,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 85,
     caller_location: {
       address: 'Lajpat Nagar Central Market, Near Food Stalls, Delhi',
-      city: 'Delhi',
-      state: 'Gujarat',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.5677,
       longitude: 77.2433,
       confidence: 0.88
@@ -493,7 +493,7 @@ export const mockCalls: EmergencyCall[] = [
     updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString()
   },
   {
-    id: 'jaipur-1',
+    id: 'delhi-16',
     caller_number: '+919829345678',
     status: 'on_scene',
     call_status: 'in-progress',
@@ -503,8 +503,8 @@ export const mockCalls: EmergencyCall[] = [
     severity_score: 80,
     caller_location: {
       address: 'Gandhi Nagar Cloth Market, Gali No. 4, Delhi',
-      city: 'Delhi',
-      state: 'Rajasthan',
+      city: 'New Delhi',
+      state: 'Delhi',
       latitude: 28.656,
       longitude: 77.276,
       confidence: 0.89

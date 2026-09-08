@@ -28,7 +28,7 @@ test('the fleet is an Indian one, with no American CAD callsigns left', () => {
 
   // And every unit names the agency that owns it, spelled out. This is what
   // makes the roster legible as Indian at a glance: a callsign on its own reads
-  // as a codeword, "West Bengal Fire Service" does not.
+  // as a codeword, "Delhi Fire Service" does not.
   for (const unit of TACTICAL_UNITS) {
     assert.ok(unit.agency.trim().length > 0, `${unit.id} must name its agency`);
   }
