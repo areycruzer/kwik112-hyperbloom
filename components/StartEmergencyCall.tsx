@@ -698,7 +698,7 @@ function CallStation({
                   <Phone className="h-4 w-4" />
                   Start live call
                 </button>
-                <p className="text-center text-2xs text-ink-4">Speak any language</p>
+                <p className="text-center text-2xs text-ink-4">Hindi · Hinglish · English</p>
 
                 <div className="space-y-2 border-t border-rule pt-3">
                   <span className="label block">Play a scripted caller</span>

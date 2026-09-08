@@ -309,3 +309,15 @@ test('persistence: SSR no-op when window is undefined', () => {
   staged = recordDecision(staged, { point: 'INTAKE', action: 'confirmed', at: 'x' });
   assert.doesNotThrow(() => writeTimeline(staged));
 });
+
+test('required decision points gate dispatch and resolution statuses', async () => {
+  const { requiredDecisionPoints } = await import('./timeline.ts');
+  // Queue organization implies no checkpoint.
+  assert.deepEqual(requiredDecisionPoints('incoming'), []);
+  assert.deepEqual(requiredDecisionPoints('triage'), []);
+  // Reaching a dispatch-stage status requires both human decisions.
+  assert.deepEqual(requiredDecisionPoints('dispatched'), ['INTAKE', 'DISPATCH']);
+  assert.deepEqual(requiredDecisionPoints('on_scene'), ['INTAKE', 'DISPATCH']);
+  // Closing a call requires the full chain.
+  assert.deepEqual(requiredDecisionPoints('resolved'), ['INTAKE', 'DISPATCH', 'RESOLUTION']);
+});
