@@ -538,10 +538,11 @@ export default function DashboardPage() {
   const operationalUnits = useReservedFleet(TACTICAL_UNITS, selectedCall?.id ?? '');
 
   /**
-   * The units on screen for the open incident. A dispatcher working a Delhi
-   * call has no business reading Karnataka's appliances, so the roster and the
-   * map show local cover only — everything else is noise that pushes the units
-   * that can actually respond off the bottom of the panel.
+   * The units on screen for the open incident: local cover only. On the
+   * single-city fleet this excludes nothing, and that is the point of keeping
+   * it — the voice intake geocodes whatever place the caller names, so a call
+   * from outside Delhi must show its units as the mutual aid they would be,
+   * not as though they were down the road.
    *
    * A unit committed to THIS call stays visible wherever it came from: mutual
    * aid has to remain recallable, and a unit you cannot see is a unit you
