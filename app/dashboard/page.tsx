@@ -75,6 +75,11 @@ import {
 } from '@/lib/incident-fusion';
 import { readTimeline, requiredDecisionPoints } from '@/lib/timeline';
 import { useFusionDecisions } from '@/lib/useFusionDecisions';
+import {
+  filterDelhiIncidents,
+  isDelhiIncident,
+  scopedIncidentSelection,
+} from '@/lib/incident-scope';
 
 import StartEmergencyCall from '@/components/StartEmergencyCall';
 import IncidentTimeline from '@/components/IncidentTimeline';
@@ -197,7 +202,7 @@ export default function DashboardPage() {
   /** @description Stored calls shadow their mock counterpart instead of joining it. */
   const mergeCalls = (stored: EmergencyCall[]): EmergencyCall[] => {
     const byId = new Map<string, EmergencyCall>();
-    for (const call of [...stored, ...mockCalls]) {
+    for (const call of filterDelhiIncidents([...stored, ...mockCalls])) {
       if (call && call.id && !byId.has(call.id)) byId.set(call.id, call);
     }
     return [...byId.values()];
@@ -207,7 +212,12 @@ export default function DashboardPage() {
     try {
       const raw = localStorage.getItem('kwik_emergency_calls');
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      const scoped = filterDelhiIncidents(parsed);
+      if (scoped.length !== parsed.length) {
+        localStorage.setItem('kwik_emergency_calls', JSON.stringify(scoped));
+      }
+      return scoped;
     } catch (e) {
       console.error('Error reading stored calls:', e);
       return [];
@@ -231,8 +241,9 @@ export default function DashboardPage() {
       setCalls(merged);
     }
 
-    if (!selectedCallIdRef.current && merged.length > 0) {
-      setSelectedCallId(merged[0].id);
+    const nextSelection = scopedIncidentSelection(selectedCallIdRef.current, merged);
+    if (nextSelection !== selectedCallIdRef.current) {
+      setSelectedCallId(nextSelection);
     }
   }, []);
 
@@ -246,7 +257,7 @@ export default function DashboardPage() {
     const handleCallUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ call: EmergencyCall; isUpdate: boolean }>).detail;
       loadCalls();
-      if (detail && !detail.isUpdate) {
+      if (detail && !detail.isUpdate && isDelhiIncident(detail.call)) {
         setSelectedCallId(detail.call.id);
       }
     };
