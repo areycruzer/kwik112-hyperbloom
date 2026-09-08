@@ -15,8 +15,8 @@ export default function GlobalError({
           <div style={{ maxWidth: 420 }}>
             <h2 style={{ fontSize: 18, margin: 0 }}>Kwik 112 hit an unexpected error</h2>
             <p style={{ color: '#c3cbc7', fontSize: 14, lineHeight: 1.5, marginTop: 8 }}>
-              This is an independent synthetic demonstration — nothing real is at risk. Reload to
-              recover the console.
+              Independent synthetic demonstration; not an official 112 service. Reload to
+              retry the console. Unsaved work may be lost.
             </p>
             {error.digest ? <p style={{ color: '#98a29d', fontSize: 11 }}>digest: {error.digest}</p> : null}
             <button type="button" onClick={reset} style={{ marginTop: 16, height: 36, padding: '0 16px', background: '#087b91', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>
