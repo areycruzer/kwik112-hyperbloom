@@ -960,7 +960,7 @@ function CallStation({
                               .map(([emotion, intensity]) => (
                                 <span
                                   key={emotion}
-                                  title="Measured by Hume EVI prosody on this utterance"
+                                  title={sessionKind === 'scripted' ? 'Simulated prosody for scripted playback; not measured' : 'Measured by Hume EVI prosody on this utterance'}
                                   className="rounded border border-rule bg-deep px-1 py-px text-2xs text-ink-3"
                                 >
                                   {emotion} {Math.round(intensity * 100)}%
