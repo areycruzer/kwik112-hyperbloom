@@ -161,7 +161,7 @@ export function deriveAlerts(calls: AlertInput[], nowMs: number): Alert[] {
   return alerts;
 }
 
-const ACK_STORAGE_KEY = 'dispatch_alert_acks';
+export const ACK_STORAGE_KEY = 'dispatch_alert_acks';
 
 /** @description Read acknowledged alert keys. Browser only; returns empty on the server. */
 export function readAcknowledged(): Set<string> {
