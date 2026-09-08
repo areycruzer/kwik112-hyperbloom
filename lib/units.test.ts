@@ -134,3 +134,27 @@ test('nearestAvailableUnit skips units reserved for other calls', () => {
   const own = nearestAvailableUnit(mine, 28.725, 77.135, 'ems', 'my-call');
   assert.equal(own?.id, 'CATS-302');
 });
+
+test('no seeded unit is committed without a call to be committed to', () => {
+  // 'en-route' means en route to something. A unit seeded into a committed
+  // status with no `assignedCallId` is a contradiction the whole console then
+  // acts on: the roster labels it EN ROUTE next to a button offering to
+  // dispatch it, the map dims it as unavailable, and assessDispatch — which
+  // filters on `status === 'available'` — drops it from coverage entirely.
+  const COMMITTED = ['en-route', 'on-scene', 'busy'];
+  for (const unit of TACTICAL_UNITS) {
+    if (COMMITTED.includes(unit.status)) {
+      assert.ok(
+        unit.assignedCallId,
+        `${unit.id} is seeded '${unit.status}' with no assignedCallId`,
+      );
+    }
+  }
+
+  // Movement is not commitment: a unit can be rolling and still available, and
+  // that combination is what exercises the measured-speed ETA path.
+  const rollingButFree = TACTICAL_UNITS.filter(
+    (u) => u.status === 'available' && speedKmh(u.speed) > 0,
+  );
+  assert.ok(rollingButFree.length > 0, 'keep at least one moving, uncommitted unit');
+});
