@@ -323,33 +323,59 @@ export default function DashboardPage() {
    * the incident's Dispatch section lists it with its projected arrival.
    */
   const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
+  const [dispatchFailed, setDispatchFailed] = useState(false);
 
-  const handleNotifyUnit = useCallback(
-    async (unitId: string, callId: string, callsign: string) => {
-      const result = await reserveUnits(callId, [unitId]);
-      setDispatchNotice(
-        result.ok
-          ? `${callsign} notified · en route`
-          : // A conflict means another incident already has it. Say so rather
-            // than failing silently, because the operator must now pick again.
-            `${callsign} is already committed to another incident`,
-      );
+  /**
+   * Both actions below run inside a try/catch that reports rather than throws.
+   * An unhandled rejection in a click handler surfaces as a full-page error
+   * overlay and leaves the React tree dead — every other control on the console
+   * then renders but does nothing, which reads as "the whole app broke" when
+   * one reservation write failed. Storage can be unavailable (private mode, a
+   * quota, a blocked origin) and `navigator.locks` is not everywhere, so this
+   * is a real path, not a theoretical one. A dispatcher must never lose the
+   * incident queue because a unit could not be reserved.
+   */
+  const runDispatchAction = useCallback(
+    async (action: () => Promise<string>) => {
+      try {
+        setDispatchNotice(await action());
+        setDispatchFailed(false);
+      } catch (error) {
+        console.error('Dispatch action failed:', error);
+        setDispatchNotice('Could not update this unit. The dispatch was not recorded.');
+        setDispatchFailed(true);
+      }
     },
     [],
   );
 
+  const handleNotifyUnit = useCallback(
+    (unitId: string, callId: string, callsign: string) =>
+      runDispatchAction(async () => {
+        const result = await reserveUnits(callId, [unitId]);
+        return result.ok
+          ? `${callsign} notified · en route`
+          : // A conflict means another incident already has it. Say so rather
+            // than failing silently, because the operator must now pick again.
+            `${callsign} is already committed to another incident`;
+      }),
+    [runDispatchAction],
+  );
+
   const handleRecallUnit = useCallback(
-    async (unitId: string, callId: string, callsign: string) => {
-      await releaseUnit(callId, unitId);
-      setDispatchNotice(`${callsign} stood down`);
-    },
-    [],
+    (unitId: string, callId: string, callsign: string) =>
+      runDispatchAction(async () => {
+        await releaseUnit(callId, unitId);
+        return `${callsign} stood down`;
+      }),
+    [runDispatchAction],
   );
 
   // The notice belongs to one unit-and-incident pairing; changing either makes
   // it stale, so it clears rather than describing a selection that is gone.
   useEffect(() => {
     setDispatchNotice(null);
+    setDispatchFailed(false);
   }, [selectedUnitId, selectedCallId]);
   const handleOpenWorkflow = useCallback((call: EmergencyCall) => {
     setSelectedCallId(call.id);
@@ -812,7 +838,13 @@ export default function DashboardPage() {
                         </button>
                       )}
                       {dispatchNotice && (
-                        <p role="status" className="mt-1.5 text-2xs text-accent-bright">
+                        <p
+                          role="status"
+                          className={cn(
+                            'mt-1.5 text-2xs',
+                            dispatchFailed ? 'text-critical-bright' : 'text-accent-bright',
+                          )}
+                        >
                           {dispatchNotice}
                         </p>
                       )}
