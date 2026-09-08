@@ -8,6 +8,7 @@ import {
   localFleet,
   LOCAL_COVER_RADIUS_KM,
   nearestAvailableUnit,
+  responseUnitsForIncident,
   serviceForIncidentType,
   speedKmh,
 } from './units.ts';
@@ -114,6 +115,51 @@ test('nearestAvailableUnit prefers the requested service over raw distance', () 
   const cardiac = nearestAvailableUnit(TACTICAL_UNITS, 28.7041, 77.1025, 'ems');
   assert.ok(cardiac, 'a unit must be found');
   assert.equal(cardiac!.type, 'ems');
+});
+
+test('every response unit belongs to the Delhi command area', () => {
+  for (const unit of TACTICAL_UNITS) {
+    assert.match(unit.agency, /Delhi/);
+    assert.ok(unit.lat >= 28.4 && unit.lat <= 28.9, `${unit.id} latitude is outside Delhi`);
+    assert.ok(unit.lng >= 76.8 && unit.lng <= 77.35, `${unit.id} longitude is outside Delhi`);
+  }
+});
+
+test('a cardiac arrest roster starts with ambulances and hides unrelated fire units', () => {
+  const ordered = responseUnitsForIncident(
+    TACTICAL_UNITS,
+    {
+      id: 'cardiac-1',
+      incident_type: 'other',
+      incident_subtype: 'cardiac arrest',
+      severity: 'critical',
+      dispatch_plan: {
+        priority_code: 'P1',
+        eta_risk: 'high',
+        operator_confirmation_required: true,
+        units: [
+          { service: 'ems', unit: 'Advanced Life Support Ambulance', reason: 'Cardiac arrest' },
+          { service: 'police', unit: 'Nearest Patrol Assist', reason: 'Scene access' },
+        ],
+      },
+    },
+    { lat: 28.7049, lng: 77.1324 },
+  );
+
+  assert.equal(ordered[0]?.type, 'ems');
+  assert.ok(ordered.slice(0, TACTICAL_UNITS.filter((unit) => unit.type === 'ems').length).every((unit) => unit.type === 'ems'));
+  assert.ok(!ordered.some((unit) => unit.type === 'fire'));
+});
+
+test('an incident without a dispatch plan shows only its lead service', () => {
+  const ordered = responseUnitsForIncident(
+    TACTICAL_UNITS,
+    { id: 'medical-1', incident_type: 'medical_emergency' },
+    { lat: 28.7049, lng: 77.1324 },
+  );
+
+  assert.ok(ordered.length > 0);
+  assert.ok(ordered.every((unit) => unit.type === 'ems'));
 });
 
 test('nearestAvailableUnit falls back to any service rather than to nothing', () => {

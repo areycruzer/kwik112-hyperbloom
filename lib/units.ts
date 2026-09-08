@@ -37,6 +37,18 @@ export interface TacticalUnit {
   capabilities?: Array<'police' | 'fire' | 'ems' | 'rescue' | 'als'>;
 }
 
+interface IncidentResponseContext {
+  id: string;
+  incident_type?: string;
+  incident_subtype?: string;
+  chief_complaint?: string;
+  ai_summary?: string;
+  severity?: string;
+  dispatch_plan?: {
+    units: Array<{ service: 'ems' | 'fire' | 'police' | 'rescue' | 'civic' }>;
+  };
+}
+
 /**
  * Delhi's First Responder Fleet.
  *
@@ -283,6 +295,76 @@ export function serviceForIncidentType(incidentType?: string): TacticalUnit['typ
   if (t.includes('flood') || t.includes('water') || t.includes('drown')) return 'fire';
   if (t.includes('public_safety') || t.includes('utility') || t.includes('civic')) return 'fire';
   return null;
+}
+
+function unitTypeForResponseService(
+  service: 'ems' | 'fire' | 'police' | 'rescue' | 'civic',
+): TacticalUnit['type'] | null {
+  if (service === 'ems' || service === 'fire' || service === 'police') return service;
+  if (service === 'rescue' || service === 'civic') return 'fire';
+  return null;
+}
+
+/** Return the relevant fleet for an incident, ordered for dispatch. */
+export function responseUnitsForIncident(
+  units: readonly TacticalUnit[],
+  call: IncidentResponseContext | null,
+  point: { lat: number; lng: number } | null,
+): TacticalUnit[] {
+  if (!call) return [...units];
+
+  const descriptor = [
+    call.incident_type,
+    call.incident_subtype,
+    call.chief_complaint,
+    call.ai_summary,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const leadService = serviceForIncidentType(descriptor);
+  const serviceOrder: TacticalUnit['type'][] = [];
+  const addService = (service: TacticalUnit['type'] | null) => {
+    if (service && !serviceOrder.includes(service)) serviceOrder.push(service);
+  };
+
+  addService(leadService);
+  for (const requirement of call.dispatch_plan?.units ?? []) {
+    addService(unitTypeForResponseService(requirement.service));
+  }
+
+  const relevant = serviceOrder.length
+    ? units.filter((unit) => serviceOrder.includes(unit.type))
+    : [...units];
+  const candidates = relevant.length ? relevant : [...units];
+
+  return candidates.sort((a, b) => {
+    const byService = serviceOrder.indexOf(a.type) - serviceOrder.indexOf(b.type);
+    if (byService !== 0) return byService;
+
+    const availabilityRank = (unit: TacticalUnit) => {
+      if (unit.assignedCallId === call.id) return 0;
+      if (unit.status === 'available' && !unit.assignedCallId) return 1;
+      return 2;
+    };
+    const byAvailability = availabilityRank(a) - availabilityRank(b);
+    if (byAvailability !== 0) return byAvailability;
+
+    if (leadService === 'ems' && call.severity === 'critical') {
+      const alsRank = (unit: TacticalUnit) =>
+        unit.type === 'ems' && (unit.capabilities ?? []).includes('als') ? 0 : 1;
+      const byAls = alsRank(a) - alsRank(b);
+      if (byAls !== 0) return byAls;
+    }
+
+    if (point) {
+      const byEta =
+        etaMinutes(a, haversineKm(a.lat, a.lng, point.lat, point.lng)) -
+        etaMinutes(b, haversineKm(b.lat, b.lng, point.lat, point.lng));
+      if (byEta !== 0) return byEta;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**

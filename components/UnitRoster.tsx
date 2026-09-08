@@ -5,9 +5,8 @@ import { Chip, type ChipTone } from '@/components/ui/panel';
 import { cn } from '@/lib/utils';
 import {
   etaLabel,
-  etaMinutes,
   haversineKm,
-  serviceForIncidentType,
+  responseUnitsForIncident,
   type TacticalUnit,
 } from '@/lib/units';
 import type { EmergencyCall } from '@/lib/types';
@@ -57,39 +56,10 @@ export function UnitRoster({
   const point = incidentPoint(selectedCall);
 
   /**
-   * The service this incident leads with — a fire wants tenders, a cardiac
-   * arrest wants an ambulance — or null when the type says nothing.
+   * Show only services requested by this incident. The lead service comes
+   * first, then requested support, with dispatchable units ordered by ETA.
    */
-  const leadService = serviceForIncidentType(selectedCall?.incident_type);
-
-  /**
-   * Ordered by what the dispatcher is about to do: the service this incident
-   * actually needs first, then everything else, each group nearest-first by
-   * projected arrival.
-   *
-   * Two decisions worth stating. Relevance outranks proximity, because a PCR
-   * van 400 m from a fire is not the unit being chosen and should not head the
-   * list; the other services stay visible below it rather than being filtered,
-   * since a fire with casualties still needs the ambulance. And the ranking is
-   * ETA, not distance — those are different orders once a heavy tender is
-   * compared against a PCR van over the same ground.
-   *
-   * With no incident selected there is nothing to measure to, so the roster
-   * keeps its declared order rather than inventing one.
-   */
-  const ordered = point
-    ? [...units].sort((a, b) => {
-        if (leadService) {
-          const rank = (unit: TacticalUnit) => (unit.type === leadService ? 0 : 1);
-          const byRelevance = rank(a) - rank(b);
-          if (byRelevance !== 0) return byRelevance;
-        }
-        const byEta =
-          etaMinutes(a, haversineKm(a.lat, a.lng, point.lat, point.lng)) -
-          etaMinutes(b, haversineKm(b.lat, b.lng, point.lat, point.lng));
-        return byEta !== 0 ? byEta : a.id.localeCompare(b.id);
-      })
-    : units;
+  const ordered = responseUnitsForIncident(units, selectedCall, point);
 
   return (
     <ul className="flex flex-col gap-1.5">
