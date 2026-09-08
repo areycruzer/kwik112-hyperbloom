@@ -7,10 +7,10 @@
 | Benchmark version | 1.0.0 |
 | Split | held_out |
 | Mode | local |
-| Evaluated at | 2026-09-08T15:15:56.389Z |
+| Evaluated at | 2026-09-08T15:16:44.366Z |
 | Provider | none |
 | Model |  |
-| Commit | dc323fa |
+| Commit | 503326b |
 | Node version | v22.18.0 |
 | Case count | 30 |
 | Model attempted | false |
@@ -29,8 +29,8 @@
 | Over-triage | 5 (0.167) |
 | Location accuracy | 1.000 (25 cases) |
 | Threat accuracy | 1.000 (3 cases) |
-| Latency p50 (ms) | 0.055 |
-| Latency p95 (ms) | 4.024 |
+| Latency p50 (ms) | 0.042 |
+| Latency p95 (ms) | 5.219 |
 | Fallback count | 0 |
 
 ## Language slices

@@ -80,9 +80,9 @@ export default function Home() {
           <dl className={styles.metrics}>
             <div><dt>Critical recall</dt><dd>100%</dd><p>9/9 held-out cases · Wilson 95% LB 0.70</p></div>
             <div><dt>Threat detection</dt><dd>100%</dd><p>3 of 3 held-out cases</p></div>
-            <div><dt>Local triage latency</dt><dd>0.048<span> ms</span></dd><p>Median on the benchmark</p></div>
+            <div><dt>Local triage latency</dt><dd>0.042<span> ms</span></dd><p>Median on the benchmark</p></div>
           </dl>
-          <p className={styles.evidenceNote}>Development regression suite, 30 synthetic calls: type and severity accuracy 60% each (18/30); under-triage 23.3% (7/30), over-triage 16.7% (5/30). Location text 100% (25/25), not coordinate accuracy. Local p95 3.79ms; timings exclude providers and vary by run. <Link href="/benchmark">Inspect the committed results</Link> · <a href="https://github.com/areycruzer/kwik-112/tree/main/evaluation/results">Raw evidence</a>.</p>
+          <p className={styles.evidenceNote}>Development regression suite, 30 synthetic calls: type and severity accuracy 60% each (18/30); under-triage 23.3% (7/30), over-triage 16.7% (5/30). Location text 100% (25/25), not coordinate accuracy. Local p95 5.219ms; timings exclude providers and vary by run. <Link href="/benchmark">Inspect the committed results</Link> · <a href="https://github.com/areycruzer/kwik-112/tree/main/evaluation/results">Raw evidence</a>.</p>
           <ul className={styles.problemSources} aria-label="Sourced emergency intake context">
             <li><strong>0.28% genuine</strong> of about 16 lakh daily combined 112/Dial 100 calls in Telangana. <a href="https://the420.in/telangana-emergency-calls-ai-tools-erss-dial-112-genuine-calls-dispatch-2026/">25 June 2026 report</a>.</li>
             <li><strong>Under 15 seconds</strong> is the MHA answer-speed target; the reported national response average is about 18 minutes. Different stages, not measured ring time. <a href="https://www.mha.gov.in/sites/default/files/2022-08/NERSGuideline_2100815%5B1%5D.pdf">MHA, 2015, p20</a>; <a href="https://www.newindianexpress.com/amp/story/states/telangana/2026/Aug/06/telangana-police-launch-30-faster-ai-driven-emergency-response-system-dial-112">DGP report, 6 August 2026</a>.</li>

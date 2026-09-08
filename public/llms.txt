@@ -20,7 +20,7 @@ Independent browser-based demonstration. Not an official 112, ERSS, Government o
 - Severity accuracy: 60% (18/30)
 - Under-triage: 23.3% (7/30) · Over-triage: 16.7% (5/30)
 - Location accuracy: 100% (25/25) · Threat detection: 100% (3/3)
-- Local latency: p50 ~0.048ms · p95 ~3.79ms
+- Local latency: p50 ~0.042ms · p95 ~5.219ms
 - Reproduce: `npm install && npm run evaluate:local`
 - CI re-runs tests, evaluation and build; critical recall must remain 1.0. Latency is from the committed run and varies by machine. This is not field or clinical validation.
 - Location accuracy measures expected words in extracted text, not GPS or geocoding accuracy. Threat detection measures required terms, not an unrestricted threat-recognition rate.

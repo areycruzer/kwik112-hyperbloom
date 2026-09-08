@@ -10,7 +10,7 @@
 | Incident type / severity accuracy | **60% (18/30) / 60% (18/30)** |
 | Under-triage / over-triage | **23.3% (7/30) / 16.7% (5/30)** |
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
-| Local latency | **p50 ~0.048ms / p95 ~3.79ms** |
+| Local latency | **p50 ~0.042ms / p95 ~5.219ms** |
 
 **Judge this build in 120 seconds:** [live demo](https://pulse112-dispatch-ai.vercel.app) · [place a test call](https://pulse112-dispatch-ai.vercel.app/dashboard?startCall=1#voice-station) · [judge guide](https://pulse112-dispatch-ai.vercel.app/for-judges) · [held-out results](https://pulse112-dispatch-ai.vercel.app/benchmark) · [video transcript](https://pulse112-dispatch-ai.vercel.app/transcript) · [demo video](https://youtu.be/JdzAXL08_24) · or run it locally below.
 
@@ -64,7 +64,7 @@ The multilingual context is grounded in India's official [2011 Census language t
 | Over-triage | 16.7% (5/30) |
 | Location accuracy | 100% (25/25 location cases) |
 | Threat accuracy | 100% (3/3 threat cases) |
-| Local latency | p50 ~0.048ms; p95 ~3.79ms |
+| Local latency | p50 ~0.042ms; p95 ~5.219ms |
 
 The fusion benchmark contains 40 cases: 20 true positives, 20 true negatives, 0 false positives, and 0 false negatives. Its AND gate requires matching incident type, no more than 750m, no more than 10 minutes, and at least one specific shared term. The approach is informed by the spatiotemporal clustering literature ([Birant and Kut, 2007](https://dblp.org/rec/journals/dke/BirantK07.html)), but this implementation is a conservative deterministic gate. Possible matches remain human-review candidates; the UI does not claim they are merged.
 
@@ -129,7 +129,7 @@ override notes, units, and resolution remain auditable.
 
 Held-out local benchmark: critical recall 100%, 9 of 9;
 type and severity 60%; under-triage 23.3%; over-triage 16.7%;
-p50 about 0.048ms and p95 about 3.79ms.
+p50 about 0.042ms and p95 about 5.219ms.
 
 Synthetic corpus, no live 112 integration. Codex assisted implementation
 and review; the OpenAI SDK supports optional structured refinement.
@@ -137,6 +137,6 @@ Human dispatch stays in command.
 
 ---
 
-**Evidence summary:** 30 held-out synthetic calls · critical recall **100% (9/9)** · type/severity **60% / 60%** · under/over-triage **23.3% / 16.7%** · location/threat **100% (25/25) / 100% (3/3)** · p50/p95 **~0.048ms / ~3.79ms**.
+**Evidence summary:** 30 held-out synthetic calls · critical recall **100% (9/9)** · type/severity **60% / 60%** · under/over-triage **23.3% / 16.7%** · location/threat **100% (25/25) / 100% (3/3)** · p50/p95 **~0.042ms / ~5.219ms**.
 
 MIT licensed.
