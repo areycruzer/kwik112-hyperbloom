@@ -686,7 +686,7 @@ function CallStation({
                   Kwik 112
                 </Chip>
               </div>
-              <p className="text-xs text-ink-3">AI call-taker with live dispatcher-side triage</p>
+              <p className="text-xs text-ink-3">Independent synthetic demo · not an official 112 service</p>
             </div>
           </div>
           <button
