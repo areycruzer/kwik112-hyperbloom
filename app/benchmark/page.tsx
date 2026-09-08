@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/benchmark" },
   title: "Benchmark — Kwik 112 held-out triage evaluation",
   description:
-    "Reproducible held-out results for the Kwik 112 deterministic triage engine: 100% critical recall (9/9), 60% type and severity accuracy, p50 latency ~0.05ms.",
+    "Reproducible held-out results for the Kwik 112 deterministic triage engine: 100% critical recall (9/9), 60% type and severity accuracy, p50 latency ~0.042ms.",
 };
 
 const m = results.metrics as unknown as Record<string, number>;
