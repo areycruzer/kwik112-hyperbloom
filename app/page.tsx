@@ -57,9 +57,9 @@ const problem = [
 ];
 
 const personas = [
-  ["Ramesh", "Hinglish bystander", "Roadside accident near Moolchand Metro — mixed Hindi and English, panicked but locatable."],
-  ["Sharma ji", "Hindi-only caller", "Wife unresponsive, not breathing, at a metro gate — pure Hindi, every second counts."],
-  ["John", "English tourist", "Heatstroke at India Gate — English, disoriented, unsure of the address."],
+  ["Ramesh", "Hinglish bystander", "Panicked bike crash near Moolchand Metro — mixed Hindi and English, injured callers, locatable."],
+  ["Sharma ji", "Hinglish family caller", "Crying cardiac arrest call at Shalimar Bagh — no breathing, no pulse, every second counts."],
+  ["John", "English market caller", "Fire and collapse risk at Chandni Chowk — smoke, trapped people, crowd panic."],
 ];
 
 export default function Home() {

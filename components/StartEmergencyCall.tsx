@@ -720,7 +720,7 @@ function CallStation({
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-critical px-3 py-3 text-xs font-bold uppercase tracking-wide text-ink hover:bg-critical-bright"
                 >
                   <Phone className="h-4 w-4" />
-                  Start live call
+                  Start live demo call
                 </button>
                 <p className="text-center text-2xs text-ink-4">Hindi · Hinglish · English</p>
 
@@ -948,7 +948,7 @@ function CallStation({
                 <div className="flex h-full items-center justify-center px-4 text-center text-xs text-ink-4">
                   {phase === 'live'
                     ? 'Connected. Speak into the microphone — the transcript appears here.'
-                    : 'Start a live call or play a scripted caller to see the transcript.'}
+                    : 'Start a live demo call or play a scripted caller to see the transcript.'}
                 </div>
               ) : (
                 <>

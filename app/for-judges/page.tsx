@@ -15,7 +15,7 @@ const paths = [
     icon: Mic,
     time: "~60 seconds",
     title: "1. Place a 112 call",
-    copy: "Opens the voice station. Play a scripted caller (Ramesh — Hinglish accident, John — English heatstroke, or Sharma ji — Hindi cardiac arrest) or start a live call and speak any language. Watch the transcript, emotion telemetry, and instant rules grade appear as the caller speaks.",
+    copy: "Opens the voice station. Play a scripted caller (Ramesh — Hinglish accident, John — English market fire, or Sharma ji — Hinglish cardiac arrest) or start a live demo call and speak any language. Watch the transcript, emotion telemetry, and instant rules grade appear as the caller speaks.",
     cta: "Place a test call",
     href: VOICE_STATION_HREF,
   },
@@ -39,7 +39,7 @@ const paths = [
 
 const realOrMock: [string, string, string][] = [
   ["Live Hume EVI voice sessions", "Real", "Browser WebRTC to Hume EVI 4-mini with your configured call-taker persona; per-utterance prosody scores labelled MEASURED"],
-  ["Scripted callers", "Simulated", "Demo personas with synthetic emotion frames, labelled SIMULATED in the UI — never dressed up as measurements"],
+  ["Scripted callers", "Simulated", "Demo personas with synthetic emotion frames, labelled Scripted call in the UI — never dressed up as measurements"],
   ["Triage engine", "Real", "Deterministic multilingual rules run locally in milliseconds; committed test suite covers the no-downgrade floor and injection cases"],
   ["Model refinement", "Real, optional", "LLM enrichment that may only escalate severity; falls back silently to the local grade on any failure"],
   ["Incidents, units, ETAs", "Synthetic", "A simulated Delhi fleet; ETAs use a simulated road-adjusted travel model and say so in the interface"],

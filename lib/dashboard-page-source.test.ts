@@ -60,3 +60,24 @@ test('voice station cannot stay forever on the opening socket state', async () =
     'timeout should give the caller an actionable fallback instead of a permanent spinner',
   );
 });
+
+test('voice station labels the live path as a demo call', async () => {
+  const voiceSource = await readFile(path.join(process.cwd(), 'components', 'StartEmergencyCall.tsx'), 'utf8');
+
+  assert.ok(voiceSource.includes('Start live demo call'));
+  assert.ok(!voiceSource.includes('Start live call'));
+});
+
+test('scripted playback still raises a backend-triaged incident event', async () => {
+  const voiceSource = await readFile(path.join(process.cwd(), 'components', 'StartEmergencyCall.tsx'), 'utf8');
+
+  assert.match(voiceSource, /triageAndPublish\(script\.phone,\s*built,\s*collectedFrames,\s*seconds,\s*'simulated'/s);
+  assert.ok(voiceSource.includes("publishLiveCallEvent('end', built, 'simulated', language)"));
+});
+
+test('scripted incidents are labelled as scripted calls in shared provenance', async () => {
+  const incidentSource = await readFile(path.join(process.cwd(), 'lib', 'incident.ts'), 'utf8');
+
+  assert.ok(incidentSource.includes("? 'Scripted call' : 'Kwik 112 voice'"));
+  assert.ok(!incidentSource.includes("? 'Simulated demo' : 'Kwik 112 voice'"));
+});
