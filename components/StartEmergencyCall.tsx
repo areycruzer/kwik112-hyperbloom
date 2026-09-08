@@ -63,6 +63,8 @@ interface TranscriptLine {
   emotions?: Record<string, number>;
 }
 
+const VOICE_CONNECT_TIMEOUT_MS = 15000;
+
 function createLiveCallId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -93,13 +95,26 @@ function describeTriageMethod(method: string): string {
 function explainVoiceError(reason?: string): string {
   const raw = reason?.trim();
   if (!raw) return 'The voice session could not start. Run a scripted call instead, or try again.';
+  if (/timed out|taking too long/i.test(raw)) {
+    return 'The live voice session is taking too long to open. Run a scripted call now, or try live again after checking microphone permission.';
+  }
   if (/permission|denied|notallowed|microphone|audio/i.test(raw)) {
-    return 'Microphone access was blocked. Allow the mic for this site in your browser, then try again — or run a scripted call, which needs no microphone.';
+    return 'Microphone access was blocked. Allow the mic for this site in your browser, then try again, or run a scripted call, which needs no microphone.';
   }
   if (/token|auth|401|403/i.test(raw)) {
     return 'Hume rejected the session credentials. Check HUME_API_KEY and HUME_SECRET_KEY on the server.';
   }
   return raw;
+}
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  return Promise.race([promise, deadline]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 /**
@@ -418,17 +433,25 @@ function CallStation({
     setSessionKind('live');
     setPhase('connecting');
     try {
-      const res = await fetch('/api/hume/token', { cache: 'no-store' });
+      const res = await withTimeout(
+        fetch('/api/hume/token', { cache: 'no-store' }),
+        VOICE_CONNECT_TIMEOUT_MS,
+        'The live voice session timed out while requesting credentials.',
+      );
       const data = await res.json();
       if (!res.ok || !data.accessToken) {
         throw new Error(data.error || 'Could not get a Hume access token.');
       }
       if (attempt !== connectionAttemptRef.current) return;
-      await connect({
-        auth: { type: 'accessToken', value: data.accessToken },
-        configId: data.configId ?? undefined,
-        sessionSettings: emergencyVoiceConnectSettings(),
-      });
+      await withTimeout(
+        connect({
+          auth: { type: 'accessToken', value: data.accessToken },
+          configId: data.configId ?? undefined,
+          sessionSettings: emergencyVoiceConnectSettings(),
+        }),
+        VOICE_CONNECT_TIMEOUT_MS,
+        'The live voice session timed out while opening the microphone.',
+      );
       if (attempt !== connectionAttemptRef.current) {
         await disconnect();
         return;
@@ -441,6 +464,7 @@ function CallStation({
       logger.info('EVI session connected');
     } catch (error) {
       if (attempt !== connectionAttemptRef.current) return;
+      void disconnect();
       setErrorText(
         explainVoiceError(error instanceof Error ? error.message : undefined)
       );
@@ -731,7 +755,7 @@ function CallStation({
             {phase === 'connecting' && (
               <div className="flex items-center gap-2 py-3 text-xs text-accent">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Opening EVI socket and requesting the microphone…
+                Opening secure voice session…
               </div>
             )}
 
