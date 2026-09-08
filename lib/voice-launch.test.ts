@@ -55,7 +55,7 @@ test('live calls receive a short bootstrap and a complete emergency pre-intake p
   assert.match(prompt, /Help is on the way/i);
   assert.match(prompt, /language and emotion/i);
   assert.match(prompt, /Hindi|Hinglish/i);
-  assert.match(prompt, /never invent.*ETA/is);
+  assert.match(prompt, /never invent[\s\S]*ETA/i);
 });
 
 test('station auto-opens once per session, never for returning operators', async () => {
