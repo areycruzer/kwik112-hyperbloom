@@ -27,7 +27,7 @@ import {
 import { CallStatus, EmergencyCall } from '@/lib/types';
 import { mockCalls, getTimeElapsed } from '@/lib/mock-data';
 import { glyphForIncidentType, type IncidentGlyph } from '@/lib/design/symbols';
-import { deriveAlerts, readAcknowledged, type AlertInput } from '@/lib/alerts';
+import { ACK_STORAGE_KEY, deriveAlerts, readAcknowledged, type AlertInput } from '@/lib/alerts';
 import {
   severityTone,
   priorityCode,
@@ -252,6 +252,19 @@ export default function DashboardPage() {
     };
     window.addEventListener('kwik-call-updated', handleCallUpdated);
     return () => window.removeEventListener('kwik-call-updated', handleCallUpdated);
+  }, [loadCalls]);
+
+  // Cross-tab propagation: localStorage writes in another tab fire a `storage`
+  // event here. Without this, a call created or acknowledged in a second
+  // console tab only appeared after the 5-second poll — and acknowledgements
+  // never propagated at all, leaving the other tab's alert badge stale.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === 'kwik_emergency_calls') loadCalls();
+      if (event.key === null || event.key === ACK_STORAGE_KEY) setAckVersion((v) => v + 1);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [loadCalls]);
 
   useEffect(() => {

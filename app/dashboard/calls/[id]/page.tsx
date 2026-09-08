@@ -33,6 +33,7 @@ import { DistressMeter } from '@/components/DistressMeter';
 import { ResponseAssurancePanel } from '@/components/ResponseAssurancePanel';
 import { IncidentFusionPanel } from '@/components/IncidentFusionPanel';
 import {
+  FUSION_STORAGE_KEY,
   findFusionSuggestions,
   fusionDecisionFor,
   linkedPrimaryFor,
@@ -101,30 +102,58 @@ export default function CallDetailPage({ params }: PageProps) {
   const [fusionDecision, setFusionDecision] = useState<FusionDecision>();
   const [linkedPrimaryCallId, setLinkedPrimaryCallId] = useState<string | null>(null);
 
+  // Load the call, its fusion context, and its timeline. Runs on mount, on
+  // every cross-tab storage write (calls, timeline, fusion decisions — so a
+  // dispatch recorded in the console tab appears here instantly), and on a
+  // 3-second fallback poll for same-tab changes the storage event cannot see.
   useEffect(() => {
-    let found: EmergencyCall | undefined;
-    try {
-      const stored = localStorage.getItem('kwik_emergency_calls');
-      const all = stored ? JSON.parse(stored) : [];
-      const combined = [...(Array.isArray(all) ? all : []), ...mockCalls];
-      found = combined.find((c) => c?.id === callId);
-      const suggestion = findFusionSuggestions(combined).find((candidate) =>
-        [candidate.primary_call_id, ...candidate.related_call_ids].includes(callId),
-      );
-      const decisions = readFusionDecisions();
-      setFusion(suggestion);
-      setFusionDecision(fusionDecisionFor(callId, decisions, suggestion?.key));
-      setLinkedPrimaryCallId(linkedPrimaryFor(callId, decisions));
-    } catch (e) {
-      console.error(e);
-      found = mockCalls.find((c) => c.id === callId);
-    }
-    if (found) {
-      setCall(found);
-      setTimeline(readTimeline(callId));
-    } else {
-      setNotFound(true);
-    }
+    let cancelled = false;
+
+    const load = () => {
+      if (cancelled) return;
+      let found: EmergencyCall | undefined;
+      try {
+        const stored = localStorage.getItem('kwik_emergency_calls');
+        const all = stored ? JSON.parse(stored) : [];
+        const combined = [...(Array.isArray(all) ? all : []), ...mockCalls];
+        found = combined.find((c) => c?.id === callId);
+        const suggestion = findFusionSuggestions(combined).find((candidate) =>
+          [candidate.primary_call_id, ...candidate.related_call_ids].includes(callId),
+        );
+        const decisions = readFusionDecisions();
+        setFusion(suggestion);
+        setFusionDecision(fusionDecisionFor(callId, decisions, suggestion?.key));
+        setLinkedPrimaryCallId(linkedPrimaryFor(callId, decisions));
+      } catch (e) {
+        console.error(e);
+        found = mockCalls.find((c) => c.id === callId);
+      }
+      if (found) {
+        setCall(found);
+        setTimeline(readTimeline(callId));
+      } else {
+        setNotFound(true);
+      }
+    };
+
+    load();
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key === null ||
+        event.key === 'kwik_emergency_calls' ||
+        event.key === 'dispatch_timeline' ||
+        event.key === FUSION_STORAGE_KEY
+      ) {
+        load();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    const poll = window.setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(poll);
+    };
   }, [callId]);
 
   if (notFound) {
