@@ -29,13 +29,17 @@ A citizen on a keypad phone, on 2G, who cannot read an app, dials 112 — and wa
 
 ## Screenshots
 
-| Voice station — the call | Dispatcher console — the board |
+| Dispatcher console — queue, map, roster | Kanban board — the pipeline |
 |:---:|:---:|
-| <img src="docs/assets/screenshots/voice-station.png" width="440" alt="Voice station: live transcript, language, and prosody provenance"> | <img src="docs/assets/screenshots/console.png" width="440" alt="Dispatcher console: graded incident cards, map, roster"> |
+| <img src="docs/assets/screenshots/console.png" width="440" alt="Dispatcher console: graded incident queue, live map, response-unit roster"> | <img src="docs/assets/screenshots/kanban.png" width="440" alt="Five-lane Kanban board from AI triage to resolution"> |
 
-| Benchmark — failures included | Judge guide — what is real |
+| Incident detail — the audit trail | Voice station — the call |
 |:---:|:---:|
-| <img src="docs/assets/screenshots/benchmark.png" width="440" alt="Held-out benchmark page: critical recall, triage error rates, reproduction commands"> | <img src="docs/assets/screenshots/for-judges.png" width="440" alt="For-judges page: the real-vs-simulated table and provider disclosure"> |
+| <img src="docs/assets/screenshots/incident-detail.png" width="440" alt="Incident detail: transcript, why-this-priority audit, checkpoints, timeline"> | <img src="docs/assets/screenshots/voice-station.png" width="440" alt="Voice station: live transcript, language, and prosody provenance"> |
+
+| Benchmark — both runs, failures included | Judge guide — what is real |
+|:---:|:---:|
+| <img src="docs/assets/screenshots/benchmark.png" width="440" alt="Benchmark page: rules-only and hybrid GLM runs with triage error rates"> | <img src="docs/assets/screenshots/for-judges.png" width="440" alt="For-judges page: the real-vs-simulated table and provider disclosure"> |
 
 ## Why this exists
 
