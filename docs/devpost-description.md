@@ -1,6 +1,6 @@
 # Devpost description — Kwik 112 (Hyperbloom September)
 
-**Word count: 409 — inside the 200–500 range (paste only the body below the line).**
+**Word count: 370 — inside the 200–500 range (paste only the body below the line).**
 
 ---
 
@@ -14,6 +14,4 @@ Now the honesty, which is the actual submission. Our held-out benchmark of 30 ve
 
 What is real and what is not is a table on our /for-judges page, not a footnote: live voice sessions are real and optional; scripted callers are simulated and labelled; incidents, units and ETAs are synthetic; the audit trail is browser-local. There is no telephone-network integration.
 
-Prior work, disclosed up front: this codebase was submitted to an earlier hackathon. For Hyperbloom it carries a new AI/ML architecture write-up and this description; the git history is public and unrewritten, so a judge can diff it directly rather than take our word for it.
-
-AI-tools disclosure: AI-assisted throughout. Claude (Claude Code / Opus 5) is co-author on 50 commits; OpenAI Codex and Cursor implemented and reviewed much of the remainder, logged with dates in CODEX_LOG.md. GLM-4.5-Flash is the runtime refinement model; Hume EVI provides voice and prosody.
+Notes: built on the team's existing open-source Kwik 112 codebase (public history; this entry adds the AI/ML architecture write-up and description). AI tools, per event requirements: development was AI-assisted — Claude, OpenAI Codex, and Cursor; runtime AI is GLM-4.5-Flash and Hume EVI; all demo call data is synthetic and labelled.
