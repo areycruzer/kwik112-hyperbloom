@@ -17,7 +17,7 @@ every prompt or result received independent human review.
 - Codex built the evaluation harness (`lib/evaluation/`) and ran the versioned
   corpus splits that produced the committed held-out results.
 
-## Round 2 hardening (7–8 Sep 2026)
+## the second build pass hardening (7–8 Sep 2026)
 
 - A coding agent diagnosed and fixed a production-breaking render loop in the
   live voice path: an npm audit fix had silently bumped `@humeai/voice-react`

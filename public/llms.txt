@@ -36,7 +36,7 @@ Independent browser-based demonstration. Not an official 112, ERSS, Government o
 - Possible prank prosody is a human-review annotation only. Calls are not automatically discarded or removed from the queue by this flag.
 - Live audio goes to Hume. Optional refinement sends transcripts to the configured model provider; geocoding may send location text to Nominatim. Use synthetic scenarios only.
 
-## Built with Codex; runtime providers disclosed
+## AI tooling and providers, disclosed
 
 - Codex and coding agents assisted implementation and review; see CODEX_LOG.md and Git history.
 - GLM 4.5 Flash is the deliberate free-tier refinement choice. LLM_PROVIDER=auto|glm|openai selects the configured provider; the OpenAI path defaults to gpt-4o-mini with OPENAI_API_KEY. OPENAI_BASE_URL supports compatible endpoints. No OpenAI Realtime deployment is claimed.
@@ -62,4 +62,4 @@ Independent browser-based demonstration. Not an official 112, ERSS, Government o
 - README with reproduce commands: https://github.com/areycruzer/kwik112-hyperbloom/blob/main/README.md
 - Raw machine-readable results: https://github.com/areycruzer/kwik112-hyperbloom/blob/main/evaluation/results/local-held_out-latest.json
 - Codex/OpenAI contribution log: https://github.com/areycruzer/kwik112-hyperbloom/blob/main/CODEX_LOG.md
-- Video captions: /kwik-112-round2.vtt
+- Video captions: /kwik-112-round2.vtt (file name retained for the narration-alignment check; content current)

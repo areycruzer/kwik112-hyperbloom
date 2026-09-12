@@ -62,7 +62,7 @@ export default function Home() {
           <h1 id="hero-title">KWIK 112</h1>
           <p className={styles.heroStatement}>Use the ring time.<br />Prepare the human response.</p>
           <p className={styles.heroCopy}>Proposed middleware for the 112 queue. Hindi, Hinglish, and English intake; a safety floor the model cannot lower. The citizen would dial from a keypad phone on 2G—no app, URL, or reading. This browser demo emulates that call.</p>
-          <p className={styles.heroDisclosure}>Built with Codex. GLM 4.5 Flash is the free-tier primary; OpenAI refinement is optional. Independent synthetic demonstration, not an official 112 service.</p>
+          <p className={styles.heroDisclosure}>Built with AI assistance, disclosed in full. GLM 4.5 Flash is the free-tier primary; OpenAI refinement is optional. Independent synthetic demonstration, not an official 112 service.</p>
           <div className={styles.heroActions}>
             <Link id="place-a-call" href={VOICE_STATION_HREF} className={styles.primaryButton}><Headphones aria-hidden /> Start live demo call <ArrowRight aria-hidden /></Link>
             <Link href="/dashboard" className={styles.secondaryButton}>Open dispatch console <ArrowRight aria-hidden /></Link>
