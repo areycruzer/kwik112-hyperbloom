@@ -1,6 +1,6 @@
 # Kwik 112
 
-[![CI](https://github.com/areycruzer/kwik-112/actions/workflows/ci.yml/badge.svg)](https://github.com/areycruzer/kwik-112/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-087b91.svg)](LICENSE)
+[![CI](https://github.com/areycruzer/kwik112-hyperbloom/actions/workflows/ci.yml/badge.svg)](https://github.com/areycruzer/kwik112-hyperbloom/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-087b91.svg)](LICENSE)
 
 > Every Indian already knows how to use it: dial 112. Kwik 112 demonstrates a proposed multilingual call-taker for that call and the dispatch console behind it in a browser; there is no live telephone integration — the AI may only escalate severity, and a human makes every dispatch decision.
 
@@ -12,7 +12,11 @@
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
 | Local latency | **p50 ~0.042ms / p95 ~5.219ms** |
 
-**Judge this build in 120 seconds:** [live demo](https://pulse112-dispatch-ai.vercel.app) · [place a test call](https://pulse112-dispatch-ai.vercel.app/dashboard?startCall=1#voice-station) · [judge guide](https://pulse112-dispatch-ai.vercel.app/for-judges) · [held-out results](https://pulse112-dispatch-ai.vercel.app/benchmark) · [video transcript](https://pulse112-dispatch-ai.vercel.app/transcript) · [demo video](https://youtu.be/JdzAXL08_24) · or run it locally below.
+**Judge this build in 120 seconds:** [live demo](https://kwik112-hyperbloom.vercel.app) · [place a test call](https://kwik112-hyperbloom.vercel.app/dashboard?startCall=1#voice-station) · [judge guide](https://kwik112-hyperbloom.vercel.app/for-judges) · [held-out results](https://kwik112-hyperbloom.vercel.app/benchmark) · [video transcript](https://kwik112-hyperbloom.vercel.app/transcript) · [demo video](https://youtu.be/JdzAXL08_24) · or run it locally below.
+
+## AI/ML at the center
+
+Every decision in Kwik passes through a layered AI pipeline: a real-time voice AI (Hume EVI) transcribes the call and measures vocal emotion; a deterministic rule engine grades it instantly (life-safe by construction); and an LLM (GLM-4.5-Flash via an OpenAI-compatible path) refines incident structure in place — under a hard constraint that the model may escalate severity but never lower it, enforced in code and covered by prompt-injection tests. The full pipeline is benchmarked on a held-out set (`/benchmark`) and reproducible with one command.
 
 ## Working Build
 
@@ -105,7 +109,7 @@ The operator checkpoints align with the human-oversight principle in [EU AI Act 
 
 ## Presentation
 
-**The submitted video still needs owner trimming and caption verification:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the repository recording script as a page on this site](https://pulse112-dispatch-ai.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
+**The submitted video still needs owner trimming and caption verification:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the repository recording script as a page on this site](https://kwik112-hyperbloom.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
 
 ### Recording narration (not verified uploaded-video captions)
 

@@ -135,7 +135,7 @@ export default function ForJudgesPage() {
             evaluation harness behind every number on <Link href="/benchmark" className="font-semibold text-[#087b91] hover:underline">/benchmark</Link>,
             the live voice pipeline (a production render-loop was diagnosed and fixed via controlled
             repro in real Chromium), and this judge package. The dated, commit-linked log is{" "}
-            <a href="https://github.com/areycruzer/kwik-112/blob/main/CODEX_LOG.md" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">CODEX_LOG.md</a> in the repository.
+            <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/CODEX_LOG.md" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">CODEX_LOG.md</a> in the repository.
           </p>
           <div className="mt-4 overflow-x-auto border border-[#cfd4cf]">
             <table className="w-full min-w-[600px] border-collapse text-left">

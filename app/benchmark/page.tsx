@@ -84,10 +84,10 @@ export default function BenchmarkPage() {
           </div>
 
           <h2 className="mt-12 text-lg font-bold">Reproduce it yourself</h2>
-          <pre className="mt-3 overflow-x-auto rounded border border-[#cfd4cf] bg-[#202422] p-4 text-xs leading-6 text-[#e5e9e6]"><code>git clone https://github.com/areycruzer/kwik-112{"\n"}cd kwik-112{"\n"}npm install{"\n"}npm run evaluate:local   # regenerates every number above</code></pre>
+          <pre className="mt-3 overflow-x-auto rounded border border-[#cfd4cf] bg-[#202422] p-4 text-xs leading-6 text-[#e5e9e6]"><code>git clone https://github.com/areycruzer/kwik112-hyperbloom{"\n"}cd kwik-112{"\n"}npm install{"\n"}npm run evaluate:local   # regenerates every number above</code></pre>
           <p className="mt-3 text-sm text-[#555e59]">
             Raw machine-readable output:{" "}
-            <a href="https://github.com/areycruzer/kwik-112/blob/main/evaluation/results/local-held_out-latest.json" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">
+            <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/evaluation/results/local-held_out-latest.json" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">
               local-held_out-latest.json
             </a>{" "}
             (committed to the repository).

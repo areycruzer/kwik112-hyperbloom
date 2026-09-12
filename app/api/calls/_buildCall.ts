@@ -180,7 +180,7 @@ async function geocodeSpokenAddress(address: string): Promise<{ latitude: number
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Kwik112-demo/1.0 (independent emergency-dispatch demonstration; repo: github.com/areycruzer/kwik-112)' },
+      headers: { 'User-Agent': 'Kwik112-demo/1.0 (independent emergency-dispatch demonstration; repo: github.com/areycruzer/kwik112-hyperbloom)' },
       cache: 'no-store',
     });
     if (response.ok) {
