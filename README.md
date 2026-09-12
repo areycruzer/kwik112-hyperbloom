@@ -73,8 +73,9 @@ One scripted caller can traverse voice intake, instant local grading, asynchrono
 | Under-triage / over-triage | 23.3% (7/30) / 16.7% (5/30) |
 | Location / threat accuracy | 100% (25/25) / 100% (3/3) |
 | Local latency | p50 ~0.042 ms / p95 ~5.219 ms |
+| **Same 30 calls, + GLM refinement** | critical recall **9/9 held** · type **93.3%** · severity **76.7%** · under-triage **3.3%** · 2/30 model fallbacks |
 
-Those middling numbers ship in the same type size as the good one, because a triage system that hides its under-triage rate is the failure mode. Context: published US field-triage guidance targets under-triage ≤ 5% while accepting 25–35% over-triage ([Newgard et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35475939/)); observed ranges vary widely ([Lupton et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35191799/)) — context, not a baseline for this synthetic corpus. Fusion: 40 cases, 20 TP / 20 TN / 0 FP / 0 FN. See [`/benchmark`](https://kwik112-hyperbloom.vercel.app/benchmark).
+Those middling numbers ship in the same type size as the good one, because a triage system that hides its under-triage rate is the failure mode. With the refinement model in the loop, under-triage falls from 23.3% to 3.3% while critical recall holds at 9/9 — the AI's contribution is measured, not asserted, and two model timeouts fell back to the local grade exactly as designed. Context: published US field-triage guidance targets under-triage ≤ 5% while accepting 25–35% over-triage ([Newgard et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35475939/)); observed ranges vary widely ([Lupton et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35191799/)) — context, not a baseline for this synthetic corpus. Fusion: 40 cases, 20 TP / 20 TN / 0 FP / 0 FN. See [`/benchmark`](https://kwik112-hyperbloom.vercel.app/benchmark).
 
 ## What is real, and what is not
 
