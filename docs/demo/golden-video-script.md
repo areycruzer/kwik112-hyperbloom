@@ -28,7 +28,7 @@ Page failure: run `npm run dev` and use the local prep URL. Caller audio: golden
 
 ## R4 Captions and description
 
-Use [golden-captions.vtt](golden-captions.vtt). Caption lines are at most42characters. Description: Kwik112 — an independent synthetic emergency-intake demonstration built with Codex. Golden mode uses local rules and simulated caller/prosody data; live Hume voice and GLM4.5Flash refinement are separate optional paths. Demo: https://pulse112-dispatch-ai.vercel.app/dashboard?demo=golden · Code: https://github.com/areycruzer/kwik-112
+Use [golden-captions.vtt](golden-captions.vtt). Caption lines are at most42characters. Description: Kwik112 — an independent synthetic emergency-intake demonstration built with Codex. Golden mode uses local rules and simulated caller/prosody data; live Hume voice and GLM4.5Flash refinement are separate optional paths. Demo: https://kwik112-hyperbloom.vercel.app/dashboard?demo=golden · Code: https://github.com/areycruzer/kwik112-hyperbloom
 
 ## R5 End card
 
@@ -36,7 +36,7 @@ KWIK 112
 
 Independent demonstration. In an emergency, call 112.
 
-pulse112-dispatch-ai.vercel.app
+kwik112-hyperbloom.vercel.app
 
 Display1:48–1:54; keep all text readable.
 
@@ -46,7 +46,7 @@ Do not crop the independence or SIMULATED labels, show real phone numbers, claim
 
 ## R7 Sources and technique provenance
 
-This deadline pass skips the requested10–15search research exercise. Techniques are the user-specified human hook, early product reveal, contrast, attack, and human decision receipt; no invented research citations. Scope claims come from source and the committed [benchmark](https://pulse112-dispatch-ai.vercel.app/benchmark). Prior-art context: [VANKI report,30April2026](https://timesofindia.indiatimes.com/city/bengaluru/first-in-india-ai-powered-namma-112-goes-multilingual/amp_articleshow/130620599.cms). No telephone-wait statistic was included because previously verified MHA answer time and reported response time measure different stages.
+This deadline pass skips the requested10–15search research exercise. Techniques are the user-specified human hook, early product reveal, contrast, attack, and human decision receipt; no invented research citations. Scope claims come from source and the committed [benchmark](https://kwik112-hyperbloom.vercel.app/benchmark). Prior-art context: [VANKI report,30April2026](https://timesofindia.indiatimes.com/city/bengaluru/first-in-india-ai-powered-namma-112-goes-multilingual/amp_articleshow/130620599.cms). No telephone-wait statistic was included because previously verified MHA answer time and reported response time measure different stages.
 
 ## R8 Hook alternatives
 
