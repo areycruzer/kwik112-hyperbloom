@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Gauge } from "lucide-react";
 import results from "../../evaluation/results/local-held_out-latest.json";
+import hybridResults from "../../evaluation/results/hybrid-held_out-latest.json";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/benchmark" },
@@ -12,6 +13,19 @@ export const metadata: Metadata = {
 
 const m = results.metrics as unknown as Record<string, number>;
 const meta = results.metadata as unknown as Record<string, string | number | boolean | null>;
+
+const hm = hybridResults.metrics as unknown as Record<string, number>;
+const hmeta = hybridResults.metadata as unknown as Record<string, string | number | boolean | null>;
+
+const hybridRows: [string, string, string][] = [
+  ["Critical recall", `${Math.round(hm.critical_recall * 100)}%`, `${hm.critical_true_positives}/${hm.critical_true_positives + hm.critical_false_negatives} critical cases retained with the model in the loop`],
+  ["Type accuracy", `${Math.round(hm.type_accuracy * 100)}%`, `${hm.cases} held-out calls, rules + GLM-4.5-Flash refinement (provider: ${hmeta.provider})`],
+  ["Severity accuracy", `${Math.round(hm.severity_accuracy * 100)}%`, `${hm.cases} held-out calls`],
+  ["Under-triage", `${(hm.under_triage_rate * 100).toFixed(1)}%`, `${hm.under_triage_count}/${hm.cases} — refinement corrects nearly all rules-only under-triage`],
+  ["Over-triage", `${(hm.over_triage_rate * 100).toFixed(1)}%`, `${hm.over_triage_count}/${hm.cases} — the residual cost of an escalate-only floor`],
+  ["Model fallbacks", `${hm.fallback_count}/${hm.cases}`, "timeouts or malformed output preserved the deterministic local grade, as designed"],
+  ["Refinement latency", `p50 ${(hm.latency_p50_ms / 1000).toFixed(1)}s · p95 ${(hm.latency_p95_ms / 1000).toFixed(1)}s`, "asynchronous by design — the local grade reaches the console in ~0.04ms; refinement updates the card in place when it returns"],
+];
 
 const rows: [string, string, string][] = [
   ["Critical recall", `${Math.round(m.critical_recall * 100)}%`, `${m.critical_true_positives}/${m.critical_true_positives + m.critical_false_negatives} critical cases retained — Wilson 95% lower bound 0.70`],
@@ -70,6 +84,42 @@ export default function BenchmarkPage() {
             </table>
           </div>
 
+          <h2 className="mt-12 text-lg font-bold">With the model in the loop: rules + GLM-4.5-Flash refinement</h2>
+          <p className="mt-3 text-sm leading-6 text-[#555e59]">
+            The same held-out 30 calls, re-run with asynchronous LLM refinement active
+            (<code className="rounded bg-[#eef0ed] px-1.5 py-0.5 text-xs">npm run evaluate:held-out</code>, provider {`glm`}). The refinement layer may
+            escalate but never downgrade the deterministic floor, so critical recall holds at 9/9 while under-triage falls from 23.3% to 3.3% and type
+            accuracy rises from 60% to 93.3%. Two calls fell back to the local grade after model timeouts — the designed failure mode, not an anomaly.
+            Refinement latency is asynchronous by design: the local grade reaches the console in ~0.04ms and the card updates in place when refinement returns.
+          </p>
+          <div className="mt-5 overflow-x-auto border border-[#cfd4cf]">
+            <table className="w-full min-w-[640px] border-collapse text-left">
+              <thead className="bg-[#202422] text-white">
+                <tr>
+                  <th className="w-1/3 p-4 text-xs uppercase">Metric (hybrid run)</th>
+                  <th className="w-24 p-4 text-xs uppercase">Value</th>
+                  <th className="p-4 text-xs uppercase">Denominator</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hybridRows.map(([metric, value, note]) => (
+                  <tr key={metric} className="border-t border-[#cfd4cf]">
+                    <th className="p-4 text-sm font-bold">{metric}</th>
+                    <td className="p-4 text-lg font-bold text-[#087b91]">{value}</td>
+                    <td className="p-4 text-sm text-[#555e59]">{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-sm text-[#555e59]">
+            Raw output:{" "}
+            <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/evaluation/results/hybrid-held_out-latest.json" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">
+              hybrid-held_out-latest.json
+            </a>{" "}
+            (committed; provider, model, fallback count, and case-level predictions recorded).
+          </p>
+
           <h2 className="mt-12 text-lg font-bold">Context: human and protocol baselines</h2>
           <p className="mt-3 text-sm leading-6 text-[#555e59]">
             Published US field-triage guidance targets under-triage at 5% or less while accepting 25–35% over-triage; a systematic review observed real-world
@@ -84,7 +134,7 @@ export default function BenchmarkPage() {
           </div>
 
           <h2 className="mt-12 text-lg font-bold">Reproduce it yourself</h2>
-          <pre className="mt-3 overflow-x-auto rounded border border-[#cfd4cf] bg-[#202422] p-4 text-xs leading-6 text-[#e5e9e6]"><code>git clone https://github.com/areycruzer/kwik112-hyperbloom{"\n"}cd kwik-112{"\n"}npm install{"\n"}npm run evaluate:local   # regenerates every number above</code></pre>
+          <pre className="mt-3 overflow-x-auto rounded border border-[#cfd4cf] bg-[#202422] p-4 text-xs leading-6 text-[#e5e9e6]"><code>git clone https://github.com/areycruzer/kwik112-hyperbloom{"\n"}cd kwik-112{"\n"}npm install{"\n"}npm run evaluate:local     # rules-only run above{"\n"}npm run evaluate:held-out  # rules + GLM refinement run</code></pre>
           <p className="mt-3 text-sm text-[#555e59]">
             Raw machine-readable output:{" "}
             <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/evaluation/results/local-held_out-latest.json" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">
