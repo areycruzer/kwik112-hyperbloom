@@ -53,7 +53,7 @@ export default function ForJudgesPage() {
         <div className="mx-auto max-w-[980px] px-5 md:px-8">
           <p className="text-xs font-semibold uppercase text-[#78dcff]">Reviewer guide</p>
           <h1 className="mt-2 text-3xl font-bold md:text-4xl">Evaluate Kwik 112 in 120 seconds</h1>
-          <p className="mt-3 text-sm leading-6 text-[#e5e9e6]">Ring-time middleware, demonstrated in a browser: the citizen keeps the dial pad; the dispatcher receives a pre-graded call. Built with Codex. Optional refinement uses GLM 4.5 Flash; an OpenAI model path is supported. No live 112 integration.</p>
+          <p className="mt-3 text-sm leading-6 text-[#e5e9e6]">Ring-time middleware, demonstrated in a browser: the citizen keeps the dial pad; the dispatcher receives a pre-graded call. Optional refinement uses GLM 4.5 Flash; an OpenAI model path is supported. No live 112 integration.</p>
           <p className="mt-2 text-xs text-[#fabc1f]">Independent synthetic-data demonstration — not an official 112, ERSS, government, or C-DAC service.</p>
           <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-[#e5e9e6]">
             <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[#47ff85]" aria-hidden /> No login</span>
@@ -128,14 +128,17 @@ export default function ForJudgesPage() {
             </table>
           </div>
 
-          <h2 className="mt-14 text-lg font-bold">Built with Codex — the provider stack, disclosed</h2>
+          <h2 className="mt-14 text-lg font-bold">AI tooling and providers, disclosed</h2>
           <p className="mt-3 max-w-[760px] text-sm leading-6 text-[#555e59]">
-            Codex and coding agents implemented and reviewed the core of this build: the deterministic
-            triage engine and its no-downgrade floor (with regression and prompt-injection tests), the
-            evaluation harness behind every number on <Link href="/benchmark" className="font-semibold text-[#087b91] hover:underline">/benchmark</Link>,
+            This build is AI-assisted throughout, and we name it accurately. Claude (Claude Code /
+            Opus 5) is recorded as co-author on fifty commits in the public history; OpenAI Codex and
+            Cursor were used for implementation and review (the dated, commit-linked log is{" "}
+            <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/CODEX_LOG.md" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">CODEX_LOG.md</a>).
+            Together they built and reviewed the deterministic triage engine and its no-downgrade floor
+            (with regression and prompt-injection tests), the evaluation harness behind every number on{" "}
+            <Link href="/benchmark" className="font-semibold text-[#087b91] hover:underline">/benchmark</Link>,
             the live voice pipeline (a production render-loop was diagnosed and fixed via controlled
-            repro in real Chromium), and this judge package. The dated, commit-linked log is{" "}
-            <a href="https://github.com/areycruzer/kwik112-hyperbloom/blob/main/CODEX_LOG.md" target="_blank" rel="noreferrer" className="font-semibold text-[#087b91] hover:underline">CODEX_LOG.md</a> in the repository.
+            repro in real Chromium), and this judge package. Runtime AI is separate and listed below.
           </p>
           <div className="mt-4 overflow-x-auto border border-[#cfd4cf]">
             <table className="w-full min-w-[600px] border-collapse text-left">

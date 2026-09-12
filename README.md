@@ -12,11 +12,13 @@
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
 | Local latency | **p50 ~0.042ms / p95 ~5.219ms** |
 
+**Provenance:** Kwik 112 was first built for an earlier hackathon and is entered at Hyperbloom September as existing work with a new AI/ML architecture write-up. The git history is public and unedited, so the delta for this event is inspectable rather than asserted.
+
 **Judge this build in 120 seconds:** [live demo](https://kwik112-hyperbloom.vercel.app) · [place a test call](https://kwik112-hyperbloom.vercel.app/dashboard?startCall=1#voice-station) · [judge guide](https://kwik112-hyperbloom.vercel.app/for-judges) · [held-out results](https://kwik112-hyperbloom.vercel.app/benchmark) · [video transcript](https://kwik112-hyperbloom.vercel.app/transcript) · [demo video](https://youtu.be/JdzAXL08_24) · or run it locally below.
 
 ## AI/ML at the center
 
-Every decision in Kwik passes through a layered AI pipeline: a real-time voice AI (Hume EVI) transcribes the call and measures vocal emotion; a deterministic rule engine grades it instantly (life-safe by construction); and an LLM (GLM-4.5-Flash via an OpenAI-compatible path) refines incident structure in place — under a hard constraint that the model may escalate severity but never lower it, enforced in code and covered by prompt-injection tests. The full pipeline is benchmarked on a held-out set (`/benchmark`) and reproducible with one command.
+The AI is not a feature on top of a dashboard — it is the pipeline, and the engineering story is what the AI is *forbidden* to do. A real-time voice AI (Hume EVI) transcribes the call and measures vocal emotion. A deterministic rule engine grades it instantly. An LLM (GLM-4.5-Flash via an OpenAI-compatible path) then refines incident structure — under a hard constraint enforced in application code, not in a prompt: **the model may escalate severity, never lower it.** That floor is the mechanism that makes a generative model safe to place on an emergency line at all — its worst case is bounded by construction, covered by regression and prompt-injection tests, and gated in CI. The full pipeline is benchmarked on a held-out set (`/benchmark`) and reproducible with one command.
 
 ## Working Build
 
@@ -83,7 +85,7 @@ npm run build
 npm run check:raw-html
 ```
 
-Fresh triage outputs are written to `evaluation/results/local-held_out-latest.json` and `.md`. Each result records the benchmark version, split, mode, provider, source commit, Node.js runtime, case-level predictions, and latency distribution. Held-out labels were not changed during Round 2 location-cue tuning; benchmark contamination remains a known evaluation risk in language-model work ([Golchin and Surdeanu, TACL 2025](https://aclanthology.org/2025.tacl-1.37/)).
+Fresh triage outputs are written to `evaluation/results/local-held_out-latest.json` and `.md`. Each result records the benchmark version, split, mode, provider, source commit, Node.js runtime, case-level predictions, and latency distribution. Held-out labels were not changed during location-cue tuning; benchmark contamination remains a known evaluation risk in language-model work ([Golchin and Surdeanu, TACL 2025](https://aclanthology.org/2025.tacl-1.37/)).
 
 ### Scope facts
 
@@ -103,13 +105,13 @@ Kwik 112 is not affiliated with ERSS, 112, the Government of India, or C-DAC. It
 
 ### Codex and OpenAI contribution
 
-The repository history shows Codex-assisted Round 2 implementation and review in small, test-backed commits; the detailed, dated log of what the AI agents built — including the live-voice render-loop forensics and the GLM reasoning-latency fix — is committed as [CODEX_LOG.md](CODEX_LOG.md). The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. The provider is asked for a JSON-object response, which then passes application-side shape validation and explicit provider labeling, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
+The repository history shows AI-assisted implementation and review in small, test-backed commits — Claude (Claude Code / Opus 5) co-authors fifty of them, with OpenAI Codex and Cursor used for implementation and review as well. The detailed, dated log of what the AI agents built — including the live-voice render-loop forensics and the GLM reasoning-latency fix — is committed as [CODEX_LOG.md](CODEX_LOG.md). The code uses the OpenAI SDK as a provider-neutral client for GLM's OpenAI-compatible endpoint and as the fallback client when `OPENAI_API_KEY` is configured. The provider is asked for a JSON-object response, which then passes application-side shape validation and explicit provider labeling, an untrusted-transcript boundary, and a deterministic no-downgrade floor. The committed benchmark shown above is local rules-only (`provider: none`), so it is not presented as an OpenAI model result.
 
 The operator checkpoints align with the human-oversight principle in [EU AI Act Article 14](https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng). Risk documentation follows the general posture of the [NIST Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence); neither reference is presented as certification or regulatory compliance.
 
 ## Presentation
 
-**The submitted video still needs owner trimming and caption verification:** [watch it here](https://youtu.be/JdzAXL08_24) (being trimmed to the 120-second cap), with [the repository recording script as a page on this site](https://kwik112-hyperbloom.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
+**Optional recorded walkthrough (no video is required at this event):** [watch it here](https://youtu.be/JdzAXL08_24), with [the recording script as a page on this site](https://kwik112-hyperbloom.vercel.app/transcript), plus [the recording script](docs/kwik-112-round2-video.md) and [WebVTT captions](public/kwik-112-round2.vtt).
 
 ### Recording narration (not verified uploaded-video captions)
 
