@@ -12,7 +12,7 @@
 | Location / threat accuracy | **100% (25/25) / 100% (3/3)** |
 | Local latency | **p50 ~0.042ms / p95 ~5.219ms** |
 
-**Provenance:** Kwik 112 was first built for an earlier hackathon and is entered at Hyperbloom September as existing work with a new AI/ML architecture write-up. The git history is public and unedited, so the delta for this event is inspectable rather than asserted.
+**Provenance:** existing open-source project by the same team (public history); this entry adds the AI/ML architecture write-up.
 
 **Judge this build in 120 seconds:** [live demo](https://kwik112-hyperbloom.vercel.app) · [place a test call](https://kwik112-hyperbloom.vercel.app/dashboard?startCall=1#voice-station) · [judge guide](https://kwik112-hyperbloom.vercel.app/for-judges) · [held-out results](https://kwik112-hyperbloom.vercel.app/benchmark) · [video transcript](https://kwik112-hyperbloom.vercel.app/transcript) · [demo video](https://youtu.be/JdzAXL08_24) · or run it locally below.
 
