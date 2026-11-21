@@ -1,3 +1,5 @@
+> Earlier team build of Kwik 112 with @JAYATIAHUJA, kept for history. The current version is [kwik112-assemblyai](https://github.com/areycruzer/kwik112-assemblyai).
+
 <div align="center">
 
 # KWIK 112
